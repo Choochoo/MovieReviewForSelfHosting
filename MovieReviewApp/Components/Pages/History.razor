@@ -1,0 +1,63 @@
+﻿@page "/history"
+@attribute [StreamRendering]
+
+<PageTitle>History</PageTitle>
+
+<h1>History</h1>
+
+@if (pastevents == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Person</th>
+                <th>Movie</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var pastevent in pastevents)
+            {
+                <tr>
+                    <td>@pastevent.Date.ToShortDateString()</td>
+                    <td>@pastevent.Person</td>
+                    <td>@pastevent.Movie</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private MovieEvent[]? pastevents;
+    private Random rand = new Random(1337);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Simulate asynchronous loading to demonstrate streaming rendering
+        await Task.Delay(500);
+
+        var startDate = DateOnly.FromDateTime(DateTime.Now);
+        var names = new[] { "Jeremiah", "Lacey", "Jared", "Dave", "Keri" };
+        /*
+        pastevents = Enumerable.Range(1, 5).Select(index => new MovieEvent
+            {
+            Date = startDate.AddDays(index),
+            Person = Random.Shared.Next(-20, 55),
+            Summary = summaries[Random.Shared.Next(summaries.Length)],
+        Link
+        }).ToArray();*/
+    }
+
+    private class MovieEvent
+    {
+        public DateTime Date { get; set; }
+        public string Person { get; set; }
+        public string Movie { get; set; }
+        public string Link { get; set; }
+    }
+}
