@@ -1,7 +1,39 @@
 ﻿@page "/"
+@using MovieReviewApp.Components.Partials
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
 
-Welcome to your new app.
+<div class="row">
+    <div class="col-sm-6">
+        <h2>Current phase</h2>
+       <Phase MovieEvent="CurrentEvent" />
+    </div>
+    <div class="col-md-6">
+        <h2>Reminder</h2>
+        <p>Questions to answer every week:</p>
+        <ol>
+            <li>Did I like the movie?</li>
+            <li>Am I glad I watched the movie?</li>
+            <li>Do I think I'd ever watch it again?</li>
+        </ol>
+    </div>
+</div>
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<br />
+<div class="row">
+    <div class="col-sm-6">
+        <h2>Next phase</h2>
+        <Phase MovieEvent="NextEvent" />
+    </div>
+</div>
+
