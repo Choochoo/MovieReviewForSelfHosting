@@ -9,12 +9,11 @@ namespace MovieReviewApp.Components.Pages
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
 
-        private MovieEvent[]? pastevents;
         private Random rand = new Random(1337);
         private MongoDb db = new MongoDb();
 
         private String[] AllNames = new[] { "Jeremiah", "Lacey", "Jared", "Dave", "Keri" };
-        protected override async Task OnInitializedAsync()
+        protected override void OnInitialized()
         {
             DateTime EndOfCurrentPeriod = new DateTime(2024, 1, 1);
             var today = DateTime.Now;

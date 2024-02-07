@@ -21,14 +21,17 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var pastevent in Pastevents.Where(x => x != null))
+            @foreach (var pastevent in Pastevents)
             {
-                <tr>
-                    <td>@pastevent.StartDate.ToShortDateString() - @pastevent.EndDate.ToShortDateString()</td>
-                    <td>@pastevent.Person</td>
-                    <td>@pastevent.Movie</td>
-                    <td><a href="@pastevent.IMDb">link</a></td>
-                </tr>
+                @if (pastevent != null)
+                {
+                    <tr>
+                        <td>@pastevent.StartDate.ToShortDateString() - @pastevent.EndDate.ToShortDateString()</td>
+                        <td>@pastevent.Person</td>
+                        <td>@pastevent.Movie</td>
+                        <td><a href="@pastevent.IMDb">link</a></td>
+                    </tr>
+                }
             }
         </tbody>
     </table>

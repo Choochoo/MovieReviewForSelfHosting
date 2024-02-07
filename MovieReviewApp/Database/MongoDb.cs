@@ -15,13 +15,7 @@ namespace MovieReviewApp.Database
             database = client.GetDatabase("MovieReview");
         }
 
-        private IMongoCollection<MovieEvent> MovieEvents
-        {
-            get
-            {
-                return database.GetCollection<MovieEvent>("MovieReviewCluster");
-            }
-        }
+        private IMongoCollection<MovieEvent> MovieEvents => database.GetCollection<MovieEvent>("MovieReviewCluster");
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {
