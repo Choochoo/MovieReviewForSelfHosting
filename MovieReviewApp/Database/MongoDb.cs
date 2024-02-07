@@ -1,6 +1,8 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
 using MovieReviewApp.Models;
+using System;
+
 
 namespace MovieReviewApp.Database
 {
@@ -9,7 +11,11 @@ namespace MovieReviewApp.Database
         private IMongoDatabase? database;
         public MongoDb()
         {
-            var mongoUri = "mongodb+srv://jaredbrowne:CjjTcmNP92xiL3we@moviereviewcluster.oi47y0a.mongodb.net/\r\n";
+            string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI");
+            if (string.IsNullOrEmpty(mongoUri))
+            {
+                throw new ArgumentNullException("MongoDB connection string not found in environment variables");
+            }
             IMongoClient client;
             client = new MongoClient(mongoUri);
             database = client.GetDatabase("MovieReview");
