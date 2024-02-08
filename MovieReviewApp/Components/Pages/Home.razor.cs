@@ -1,6 +1,7 @@
 using MongoDB.Driver.Linq;
 using MovieReviewApp.Database;
 using MovieReviewApp.Models;
+using System.Threading;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -12,10 +13,17 @@ namespace MovieReviewApp.Components.Pages
         private Random rand = new Random(1337);
         private MongoDb db = new MongoDb();
 
-        private String[] AllNames = new[] { "Jeremiah", "Lacey", "Jared", "Dave", "Keri" };
+
+
         protected override void OnInitialized()
         {
-            DateTime EndOfCurrentPeriod = new DateTime(2024, 1, 1);
+            var settings = db.GetSettings();
+            var startDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
+            var timeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
+            var timePeriod = settings.First(x => x.Key == "TimePeriod").Value;
+            var allNames = db.GetAllPeople().Select(x => x.Name).ToArray();
+
+            DateTime endOfCurrentPeriod = startDate;
             var today = DateTime.Now;
             var dbCurrentEvent = db.GetMovieEventBetweenDate(today);
             if(dbCurrentEvent != null)
@@ -32,28 +40,39 @@ namespace MovieReviewApp.Components.Pages
                 }
             }
 
-            var listNames = AllNames.ToList();
+            var listNames = allNames.ToList();
             string person = "";
-            while (EndOfCurrentPeriod.Date < today.Date)
+            while (endOfCurrentPeriod.Date < today.Date)
             {
-                EndOfCurrentPeriod = EndOfCurrentPeriod.AddDays(14);
+                endOfCurrentPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
                 if (listNames.Count == 0)
-                    listNames = AllNames.ToList();
+                    listNames = allNames.ToList();
                 person = listNames.ElementAt(rand.Next(listNames.Count));
             }
             if (listNames.Count == 0)
-                listNames = AllNames.ToList();
+                listNames = allNames.ToList();
             string nextPerson = listNames.ElementAt(rand.Next(listNames.Count));
 
-            var StartOfPeriod = EndOfCurrentPeriod.AddDays(-14);
-            var EndOfPeriod = EndOfCurrentPeriod;
-            var EndOfNextPeriod = EndOfPeriod.AddDays(14);
+            DateTime startOfPeriod, endOfPeriod, endOfNextPeriod;
+            if(endOfCurrentPeriod.Date == startDate.Date)
+            {
+                startOfPeriod = startDate;
+                endOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
+                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount*2, timePeriod);
+            }
+            else
+            {
+                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -timeCount, timePeriod);
+                endOfPeriod = endOfCurrentPeriod;
+                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
+            }
 
-            if(CurrentEvent == null)
+
+            if (CurrentEvent == null)
             CurrentEvent = new MovieEvent
             {
-                StartDate = StartOfPeriod,
-                EndDate = EndOfPeriod.AddDays(-1),
+                StartDate = startOfPeriod,
+                EndDate = endOfPeriod.AddDays(-1),
                 Person = person,
                 FromDatabase = false,
                 IsEditing = true
@@ -61,12 +80,23 @@ namespace MovieReviewApp.Components.Pages
 
             NextEvent = new MovieEvent
             {
-                StartDate = EndOfPeriod,
-                EndDate = EndOfNextPeriod,
+                StartDate = endOfPeriod,
+                EndDate = endOfNextPeriod,
                 Person = nextPerson,
                 FromDatabase = false,
                 IsEditing = true
             };
+        }
+
+        private DateTime AddToDateTimeWithCountAndPeriod(DateTime date, int count, string period)
+        {
+            if (period == "Month")
+                return date.AddMonths(count);
+            if (period == "Week")
+                return date.AddDays(count * 7);
+            if (period == "Day")
+                return date.AddDays(count);
+            return date;
         }
     }
 }
