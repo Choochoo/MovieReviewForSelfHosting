@@ -9,18 +9,18 @@ namespace MovieReviewApp.Components.Pages
     {
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
+        public int? TimeCount = null;
+        public string? TimePeriod = null;
 
         private Random rand = new Random(1337);
         private MongoDb db = new MongoDb();
-
-
 
         protected override void OnInitialized()
         {
             var settings = db.GetSettings();
             var startDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
-            var timeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
-            var timePeriod = settings.First(x => x.Key == "TimePeriod").Value;
+            TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
+            TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
             var allNames = db.GetAllPeople().Select(x => x.Name).ToArray();
 
             DateTime endOfCurrentPeriod = startDate;
@@ -44,7 +44,7 @@ namespace MovieReviewApp.Components.Pages
             string person = "";
             while (endOfCurrentPeriod.Date < today.Date)
             {
-                endOfCurrentPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
+                endOfCurrentPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
                 if (listNames.Count == 0)
                     listNames = allNames.ToList();
                 person = listNames.ElementAt(rand.Next(listNames.Count));
@@ -61,14 +61,14 @@ namespace MovieReviewApp.Components.Pages
             if(endOfCurrentPeriod.Date == startDate.Date)
             {
                 startOfPeriod = startDate;
-                endOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
-                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount*2, timePeriod);
+                endOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
+                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value*2, TimePeriod);
             }
             else
             {
-                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -timeCount, timePeriod);
+                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -TimeCount.Value, TimePeriod);
                 endOfPeriod = endOfCurrentPeriod;
-                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, timeCount, timePeriod);
+                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
             }
 
 

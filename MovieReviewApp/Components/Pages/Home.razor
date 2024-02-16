@@ -11,11 +11,26 @@
     </div>
     <div class="col-md-6">
         <h2>Reminder</h2>
-        <p>Questions to answer every week:</p>
+            @{
+                var timeCountString = TimeCount.HasValue && TimeCount.Value > 1 ? TimeCount.Value.ToString() : string.Empty;
+                var timePeriodString = $" {TimePeriod}{(TimeCount.HasValue && TimeCount.Value > 1 ? "s" : string.Empty)}";
+            }
+
+        <p>
+            Questions to answer every @timeCountString@timePeriodString.ToLower()
+        </p>
+
         <ol>
             <li>Did I like the movie?</li>
             <li>Am I glad I watched the movie?</li>
             <li>Do I think I'd ever watch it again?</li>
+        </ol>
+        <p>How to play video on Xbox:</p>
+        <ol>
+            <li>Save download file from link to USB Drive</li>
+            <li>Plug USB stick back of Xbox</li>
+            <li>Download the app called VLC Player</li>
+            <li>Open the file in VLC player and play</li>
         </ol>
     </div>
 </div>
