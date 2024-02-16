@@ -51,6 +51,10 @@ namespace MovieReviewApp.Components.Pages
             }
             if (listNames.Count == 0)
                 listNames = allNames.ToList();
+            if (person == "")
+                person = listNames.ElementAt(rand.Next(listNames.Count));
+            if (listNames.Count == 0)
+                listNames = allNames.ToList();
             string nextPerson = listNames.ElementAt(rand.Next(listNames.Count));
 
             DateTime startOfPeriod, endOfPeriod, endOfNextPeriod;
