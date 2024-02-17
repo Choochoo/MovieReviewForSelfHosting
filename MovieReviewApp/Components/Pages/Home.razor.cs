@@ -25,20 +25,7 @@ namespace MovieReviewApp.Components.Pages
 
             DateTime endOfCurrentPeriod = startDate;
             var today = DateTime.Now;
-            var dbCurrentEvent = db.GetMovieEventBetweenDate(today);
-            if(dbCurrentEvent != null)
-            {
-                CurrentEvent = dbCurrentEvent;
-                CurrentEvent.FromDatabase = true;
-                var dbNextEvent = db.GetMovieEventBetweenDate(today.AddDays(14));
-                if(dbNextEvent != null)
-                {
-                    NextEvent = dbNextEvent;
-                    NextEvent.FromDatabase = true;
 
-                    return;
-                }
-            }
 
             var listNames = allNames.ToList();
             string person = "";
@@ -49,6 +36,24 @@ namespace MovieReviewApp.Components.Pages
                     listNames = allNames.ToList();
                 person = listNames.ElementAt(rand.Next(listNames.Count));
             }
+
+            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod);
+            if (dbCurrentEvent != null)
+            {
+                CurrentEvent = dbCurrentEvent;
+                CurrentEvent.FromDatabase = true;
+                var nextEventDate = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
+                var dbNextEvent = db.GetMovieEventBetweenDate(nextEventDate);
+                if (dbNextEvent != null)
+                {
+                    NextEvent = dbNextEvent;
+                    NextEvent.FromDatabase = true;
+
+                    return;
+                }
+            }
+
+
             if (listNames.Count == 0)
                 listNames = allNames.ToList();
             if (person == "")
