@@ -37,7 +37,7 @@ namespace MovieReviewApp.Components.Pages
                 person = listNames.ElementAt(rand.Next(listNames.Count));
             }
 
-            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod);
+            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod.AddDays(-2));
             if (dbCurrentEvent != null)
             {
                 CurrentEvent = dbCurrentEvent;
