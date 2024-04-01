@@ -46,4 +46,10 @@
         <Phase MovieEvent="NextEvent" />
     </div>
 </div>
+<br />
+<br />
 
+@foreach (var item in Remaining)
+{
+    <p>Then... @item.Item1 (@item.Item2)</p>
+}

@@ -21,9 +21,11 @@ namespace MovieReviewApp.Database
             database = client.GetDatabase("MovieReview");
         }
 
-        private IMongoCollection<MovieEvent> MovieEvents => database.GetCollection<MovieEvent>("MovieReviews");
-        private IMongoCollection<Person> People => database.GetCollection<Person>("People");
-        private IMongoCollection<Setting> Settings => database.GetCollection<Setting>("Settings");
+        private IMongoCollection<MovieEvent>? MovieEvents => database?.GetCollection<MovieEvent>("MovieReviews");
+        private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
+        private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
+
+        
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {

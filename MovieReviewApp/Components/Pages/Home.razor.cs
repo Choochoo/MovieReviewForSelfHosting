@@ -11,6 +11,7 @@ namespace MovieReviewApp.Components.Pages
         public MovieEvent? NextEvent;
         public int? TimeCount = null;
         public string? TimePeriod = null;
+        public List<(string, string)> Remaining { get; set; } = new();
 
         private Random rand = new Random(1337);
         private MongoDb db = new MongoDb();
@@ -60,7 +61,7 @@ namespace MovieReviewApp.Components.Pages
             if (listNames.Count == 0)
                 listNames = allNames.ToList();
             string nextPerson = listNames.ElementAt(rand.Next(listNames.Count));
-
+            listNames = listNames.Where(x => x != nextPerson).ToList();
             DateTime startOfPeriod, endOfPeriod, endOfNextPeriod;
             if(endOfCurrentPeriod.Date == startDate.Date)
             {
@@ -77,14 +78,16 @@ namespace MovieReviewApp.Components.Pages
 
 
             if (CurrentEvent == null)
-            CurrentEvent = new MovieEvent
             {
-                StartDate = startOfPeriod,
-                EndDate = endOfPeriod.AddDays(-1),
-                Person = person,
-                FromDatabase = false,
-                IsEditing = true
-            };
+                CurrentEvent = new MovieEvent
+                {
+                    StartDate = startOfPeriod,
+                    EndDate = endOfPeriod.AddDays(-1),
+                    Person = person,
+                    FromDatabase = false,
+                    IsEditing = true
+                };
+            }
 
             NextEvent = new MovieEvent
             {
@@ -94,6 +97,16 @@ namespace MovieReviewApp.Components.Pages
                 FromDatabase = false,
                 IsEditing = true
             };
+
+
+            while (listNames.Any())
+            {
+                string sdate = endOfNextPeriod.ToString("MMMM d, yyyy");
+                person = listNames.ElementAt(rand.Next(listNames.Count));
+                listNames = listNames.Where(x => x != person).ToList();
+                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfNextPeriod, TimeCount.Value, TimePeriod);
+                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.ToString("MMMM d, yyyy")}"));
+            }
         }
 
         private DateTime AddToDateTimeWithCountAndPeriod(DateTime date, int count, string period)
