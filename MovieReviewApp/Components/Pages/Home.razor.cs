@@ -37,10 +37,10 @@ namespace MovieReviewApp.Components.Pages
                 listNames = listNames.Where(x => x != person).ToList();
             }
 
-            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod);
-            listNames = listNames.Where(x => x != dbCurrentEvent.Person).ToList();
+            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod.AddDays(-1));
             if (dbCurrentEvent != null)
             {
+                listNames = listNames.Where(x => x != dbCurrentEvent.Person).ToList();
                 CurrentEvent = dbCurrentEvent;
                 CurrentEvent.FromDatabase = true;
                 var nextEventDate = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
@@ -92,7 +92,7 @@ namespace MovieReviewApp.Components.Pages
             NextEvent = new MovieEvent
             {
                 StartDate = endOfPeriod,
-                EndDate = endOfNextPeriod,
+                EndDate = endOfNextPeriod.AddDays(-1),
                 Person = nextPerson,
                 FromDatabase = false,
                 IsEditing = true
@@ -102,10 +102,10 @@ namespace MovieReviewApp.Components.Pages
             while (listNames.Any())
             {
                 string sdate = endOfNextPeriod.ToString("MMMM d, yyyy");
-                person = listNames.ElementAt(rand.Next(listNames.Count));
+                person = listNames[rand.Next(listNames.Count)];
                 listNames = listNames.Where(x => x != person).ToList();
                 endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfNextPeriod, TimeCount.Value, TimePeriod);
-                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.ToString("MMMM d, yyyy")}"));
+                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.AddDays(-1).ToString("MMMM d, yyyy")}"));
             }
         }
 

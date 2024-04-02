@@ -3,7 +3,7 @@
 
 @if (MovieEvent != null)
 {
-    <p>@MovieEvent.StartDate.ToString("dddd MMMM dd'th' yyyy") - @MovieEvent.EndDate.ToString("dddd MMMM dd'th' yyyy")</p>
+    <p>@MovieEvent.StartDate.ToString("MMMM d, yyyy") - @MovieEvent.EndDate.ToString("MMMM d, yyyy")</p>
     <div><b>Person:</b> @MovieEvent.Person</div>
     @if (MovieEvent.IsEditing)
     {
