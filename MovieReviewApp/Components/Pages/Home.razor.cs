@@ -1,6 +1,7 @@
 using MongoDB.Driver.Linq;
 using MovieReviewApp.Database;
 using MovieReviewApp.Models;
+using System;
 using System.Threading;
 
 namespace MovieReviewApp.Components.Pages
@@ -56,14 +57,14 @@ namespace MovieReviewApp.Components.Pages
                 {
                     NextEvent = dbNextEvent;
                     NextEvent.FromDatabase = true;
+                    listNames.Remove(dbNextEvent.Person);
+                    FinishRemainingNames(listNames, nextEventDate);
                     return;
                 }
             }
 
             person = listNames[rand.Next(listNames.Count)];
             listNames.Remove(person);
-            string nextPerson = listNames[rand.Next(listNames.Count)];
-            listNames.Remove(nextPerson);
 
             var (startOfPeriod, endOfPeriod, endOfNextPeriod) = CalculatePeriods(endOfCurrentPeriod, startDate);
 
@@ -72,29 +73,37 @@ namespace MovieReviewApp.Components.Pages
                 CurrentEvent = new MovieEvent
                 {
                     StartDate = startOfPeriod,
-                    EndDate = endOfPeriod.AddDays(-1),
+                    EndDate = endOfPeriod,
                     Person = person,
                     FromDatabase = false,
                     IsEditing = true
                 };
+                person = listNames[rand.Next(listNames.Count)];
+                listNames.Remove(person);
             }
 
             NextEvent = new MovieEvent
             {
-                StartDate = endOfPeriod,
-                EndDate = endOfNextPeriod.AddDays(-1),
-                Person = nextPerson,
+                StartDate = endOfPeriod.AddDays(1),
+                EndDate = endOfNextPeriod,
+                Person = person,
                 FromDatabase = false,
                 IsEditing = true
             };
 
+            FinishRemainingNames(listNames,endOfNextPeriod);
+        }
+
+        private void FinishRemainingNames(List<string> listNames, DateTime endOfNextPeriod)
+        {
+            string person = string.Empty;
             while (listNames.Any())
             {
-                var sdate = endOfNextPeriod.ToString("MMMM d, yyyy");
+                var sdate = endOfNextPeriod.AddDays(1).ToString("MMMM d, yyyy");
                 person = listNames[rand.Next(listNames.Count)];
                 listNames.Remove(person);
                 endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfNextPeriod, TimeCount.Value, TimePeriod);
-                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.AddDays(-1).ToString("MMMM d, yyyy")}"));
+                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.ToString("MMMM d, yyyy")}"));
             }
         }
 
@@ -123,7 +132,7 @@ namespace MovieReviewApp.Components.Pages
             }
             else
             {
-                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -TimeCount.Value, TimePeriod);
+                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -TimeCount.Value, TimePeriod).AddDays(1);
                 endOfPeriod = endOfCurrentPeriod;
                 endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
             }
