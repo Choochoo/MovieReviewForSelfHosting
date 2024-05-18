@@ -12,6 +12,7 @@ namespace MovieReviewApp.Models
         public string? DownloadLink { get; set; }
         public string? PosterUrl { get; set; }
         public string? IMDb { get; set; }
+        public string? Reasoning { get; set; }
 
         [NotMapped]
         public bool FromDatabase { get; set; }

@@ -25,7 +25,7 @@ namespace MovieReviewApp.Database
         private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
         private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
 
-        
+
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {
@@ -38,16 +38,17 @@ namespace MovieReviewApp.Database
 
         public void AddOrUpdateMovieEvent(MovieEvent movieEvent)
         {
-                var filter = Builders<MovieEvent>.Filter.Eq("Id", movieEvent.Id);
-                var update = Builders<MovieEvent>.Update
-                    .Set("StartDate", movieEvent.StartDate)
-                    .Set("EndDate", movieEvent.EndDate)
-                    .Set("Person", movieEvent.Person)
-                    .Set("Movie", movieEvent.Movie)
-                    .Set("DownloadLink", movieEvent.DownloadLink)
-                    .Set("PosterUrl", movieEvent.PosterUrl)
-                    .Set("IMDb", movieEvent.IMDb);
-                MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+            var filter = Builders<MovieEvent>.Filter.Eq("Id", movieEvent.Id);
+            var update = Builders<MovieEvent>.Update
+                .Set("StartDate", movieEvent.StartDate)
+                .Set("EndDate", movieEvent.EndDate)
+                .Set("Person", movieEvent.Person)
+                .Set("Movie", movieEvent.Movie)
+                .Set("DownloadLink", movieEvent.DownloadLink)
+                .Set("PosterUrl", movieEvent.PosterUrl)
+                .Set("IMDb", movieEvent.IMDb)
+                .Set("Reasoning", movieEvent.Reasoning);
+            MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
 
         public List<MovieEvent?> GetAllMovieEvents()
