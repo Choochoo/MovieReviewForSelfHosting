@@ -13,6 +13,8 @@ namespace MovieReviewApp.Models
         public string? PosterUrl { get; set; }
         public string? IMDb { get; set; }
         public string? Reasoning { get; set; }
+        public bool AlreadySeen { get; set; }
+        public DateTime? SeenDate { get; set; } // Nullable DateTime for the optional field
 
         [NotMapped]
         public bool FromDatabase { get; set; }

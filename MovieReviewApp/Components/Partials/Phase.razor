@@ -12,6 +12,24 @@
         <div style="padding:10px 0"><b>Poster URL:</b><input style="width:70%" type="text" @bind="@MovieEvent.PosterUrl" /></div>
         <div style="padding:10px 0"><b>Download Link: </b><input style="width:70%" type="text" @bind="@MovieEvent.DownloadLink" /></div>
         <div style="padding:10px 0"><b>Reason:</b><textarea style="width:70%" placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" /></div>
+
+        <div style="padding:10px 0">
+            <b>Have you already seen it?</b>
+            <input type="checkbox" @bind="@MovieEvent.AlreadySeen" />
+        </div>
+        @if (MovieEvent.AlreadySeen)
+        {
+            <div style="padding:10px 0">
+                <b>When?</b>
+                <select @bind="selectedYear">
+                    @foreach (var year in Enumerable.Range(2000, DateTime.Now.Year - 1999))
+                    {
+                        <option value="@year">@year</option>
+                    }
+                </select>
+            </div>
+        }
+
         <button type="button" @onclick="Save">Save</button>
         <button type="button" @onclick="Cancel">Cancel</button>
     }
@@ -72,6 +90,16 @@
                 @MovieEvent.Reasoning
             }
         </div>
+        <div>
+            @if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
+            {
+                <b>I saw this movie in @MovieEvent.SeenDate.Value.Year</b>
+            }
+            else
+            {
+                <b>I have never seen this movie</b>
+            }
+        </div>
         <button type="submit" @onclick="Edit">Edit</button>
     }
 }
@@ -80,12 +108,24 @@ else
     <span>Loading...</span>
 }
 
-
 @code {
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
 
     private MongoDb db = new MongoDb();
+    private int selectedYear;
+
+    protected override void OnParametersSet()
+    {
+        if (MovieEvent != null && MovieEvent.SeenDate.HasValue)
+        {
+            selectedYear = MovieEvent.SeenDate.Value.Year;
+        }
+        else
+        {
+            selectedYear = DateTime.Now.Year;
+        }
+    }
 
     private void Edit()
     {
@@ -100,7 +140,13 @@ else
     private void Save()
     {
         if (MovieEvent != null)
+        {
+            if (MovieEvent.AlreadySeen)
+            {
+                MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
+            }
             db.AddOrUpdateMovieEvent(MovieEvent);
+        }
         this.Cancel();
     }
 }

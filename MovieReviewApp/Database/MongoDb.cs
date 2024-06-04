@@ -47,9 +47,12 @@ namespace MovieReviewApp.Database
                 .Set("DownloadLink", movieEvent.DownloadLink)
                 .Set("PosterUrl", movieEvent.PosterUrl)
                 .Set("IMDb", movieEvent.IMDb)
-                .Set("Reasoning", movieEvent.Reasoning);
+                .Set("Reasoning", movieEvent.Reasoning)
+                .Set("AlreadySeen", movieEvent.AlreadySeen)
+                .Set("SeenDate", movieEvent.SeenDate);
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
+
 
         public List<MovieEvent?> GetAllMovieEvents()
         {
