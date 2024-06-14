@@ -1,10 +1,31 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
 using MovieReviewApp.Components;
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Get the certificate password from environment variables
+var certPassword = Environment.GetEnvironmentVariable("CertPassword");
+
+if (string.IsNullOrEmpty(certPassword))
+{
+    throw new InvalidOperationException("Certificate password is not set in environment variables.");
+}
+
+// Configure Kestrel to use the HTTPS certificate
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(5000); // HTTP port
+    options.ListenAnyIP(5001, listenOptions =>
+    {
+        listenOptions.UseHttps("C:\\localhost.pfx", certPassword);
+    });
+});
 
 var app = builder.Build();
 
@@ -16,7 +37,8 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-//app.UseHttpsRedirection();
+// Enable HTTPS redirection
+app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();

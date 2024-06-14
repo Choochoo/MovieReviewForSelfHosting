@@ -1,0 +1,38 @@
+name: Deploy to Windows Server
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: '6.x' # or the version you are using
+
+      - name: Publish
+        run: dotnet publish -c Release -o ./published
+
+      - name: Copy files via SSH
+        uses: appleboy/scp-action@v0.1.5
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: './published/*'
+          target: 'C:/path/to/your/app'
+
+      - name: Restart application
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} -p 22 -o StrictHostKeyChecking=no << 'EOF'
+          powershell Stop-Process -Name "YourAppName" -Force
+          powershell Start-Process "C:/path/to/your/app/YourApp.exe"
+          EOF
