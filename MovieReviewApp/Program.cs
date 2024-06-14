@@ -61,11 +61,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
-}
 
-// Enable HTTPS redirection only in non-development environments
-if (!app.Environment.IsDevelopment())
-{
+    // Enable HTTPS redirection only in non-development environments
     app.UseHttpsRedirection();
 }
 
