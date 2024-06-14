@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
-using MovieReviewApp.Components;
+using Microsoft.Extensions.Configuration;
 using System;
+using MovieReviewApp.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,13 +19,27 @@ if (string.IsNullOrEmpty(certPassword))
 }
 
 // Configure Kestrel to use the HTTPS certificate
-builder.WebHost.ConfigureKestrel(options =>
+builder.WebHost.ConfigureKestrel((context, options) =>
 {
-    options.ListenAnyIP(5000); // HTTP port
-    options.ListenAnyIP(5001, listenOptions =>
+    var kestrelSection = context.Configuration.GetSection("Kestrel");
+
+    // Configure HTTP endpoint
+    var httpEndpoint = kestrelSection.GetSection("Endpoints:Http:Url").Value;
+    if (!string.IsNullOrEmpty(httpEndpoint))
     {
-        listenOptions.UseHttps("C:\\localhost.pfx", certPassword);
-    });
+        options.ListenAnyIP(new Uri(httpEndpoint).Port);
+    }
+
+    // Configure HTTPS endpoint with the certificate password from environment variables
+    var httpsEndpoint = kestrelSection.GetSection("Endpoints:Https:Url").Value;
+    var certPath = kestrelSection.GetSection("Endpoints:Https:Certificate:Path").Value;
+    if (!string.IsNullOrEmpty(httpsEndpoint) && !string.IsNullOrEmpty(certPath))
+    {
+        options.ListenAnyIP(new Uri(httpsEndpoint).Port, listenOptions =>
+        {
+            listenOptions.UseHttps(certPath, certPassword);
+        });
+    }
 });
 
 var app = builder.Build();
@@ -33,7 +48,6 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
