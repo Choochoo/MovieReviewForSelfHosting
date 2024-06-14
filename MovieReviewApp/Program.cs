@@ -17,7 +17,7 @@ int ExtractPort(string url)
     return uri.Port;
 }
 
-// Configure Kestrel to use HTTP for development and HTTPS for production
+// Configure Kestrel to use HTTP for development and optionally HTTPS for production
 builder.WebHost.ConfigureKestrel((context, options) =>
 {
     var kestrelSection = context.Configuration.GetSection("Kestrel");
@@ -30,27 +30,18 @@ builder.WebHost.ConfigureKestrel((context, options) =>
         options.ListenAnyIP(httpPort);
     }
 
-    // Configure HTTPS endpoint only in production
-    if (!context.HostingEnvironment.IsDevelopment())
-    {
-        // Get the certificate password from environment variables
-        var certPassword = Environment.GetEnvironmentVariable("CertPassword");
-        if (string.IsNullOrEmpty(certPassword))
-        {
-            throw new InvalidOperationException("Certificate password is not set in environment variables.");
-        }
+    // Configure HTTPS endpoint if SSL certificate details are provided
+    var httpsEndpoint = kestrelSection.GetSection("Endpoints:Https:Url").Value;
+    var certPath = kestrelSection.GetSection("Endpoints:Https:Certificate:Path").Value;
+    var certPassword = Environment.GetEnvironmentVariable("CertPassword");
 
-        // Configure HTTPS endpoint with the certificate password from environment variables
-        var httpsEndpoint = kestrelSection.GetSection("Endpoints:Https:Url").Value;
-        var certPath = kestrelSection.GetSection("Endpoints:Https:Certificate:Path").Value;
-        if (!string.IsNullOrEmpty(httpsEndpoint) && !string.IsNullOrEmpty(certPath))
+    if (!string.IsNullOrEmpty(httpsEndpoint) && !string.IsNullOrEmpty(certPath) && !string.IsNullOrEmpty(certPassword))
+    {
+        var httpsPort = ExtractPort(httpsEndpoint);
+        options.ListenAnyIP(httpsPort, listenOptions =>
         {
-            var httpsPort = ExtractPort(httpsEndpoint);
-            options.ListenAnyIP(httpsPort, listenOptions =>
-            {
-                listenOptions.UseHttps(certPath, certPassword);
-            });
-        }
+            listenOptions.UseHttps(certPath, certPassword);
+        });
     }
 });
 
@@ -62,8 +53,12 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 
-    // Enable HTTPS redirection only in non-development environments
-    app.UseHttpsRedirection();
+    // Enable HTTPS redirection only if SSL is configured
+    var certPassword = Environment.GetEnvironmentVariable("CertPassword");
+    if (!string.IsNullOrEmpty(certPassword))
+    {
+        app.UseHttpsRedirection();
+    }
 }
 
 app.UseStaticFiles();
