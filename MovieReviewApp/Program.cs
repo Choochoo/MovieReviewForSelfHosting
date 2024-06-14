@@ -10,15 +10,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Get the certificate password from environment variables
-var certPassword = Environment.GetEnvironmentVariable("CertPassword");
-
-if (string.IsNullOrEmpty(certPassword))
+// Function to extract port from URL string
+int ExtractPort(string url)
 {
-    throw new InvalidOperationException("Certificate password is not set in environment variables.");
+    var uri = new Uri(url.Replace("*", "localhost"));
+    return uri.Port;
 }
 
-// Configure Kestrel to use the HTTPS certificate
+// Configure Kestrel to use HTTP for development and HTTPS for production
 builder.WebHost.ConfigureKestrel((context, options) =>
 {
     var kestrelSection = context.Configuration.GetSection("Kestrel");
@@ -27,18 +26,31 @@ builder.WebHost.ConfigureKestrel((context, options) =>
     var httpEndpoint = kestrelSection.GetSection("Endpoints:Http:Url").Value;
     if (!string.IsNullOrEmpty(httpEndpoint))
     {
-        options.ListenAnyIP(new Uri(httpEndpoint).Port);
+        var httpPort = ExtractPort(httpEndpoint);
+        options.ListenAnyIP(httpPort);
     }
 
-    // Configure HTTPS endpoint with the certificate password from environment variables
-    var httpsEndpoint = kestrelSection.GetSection("Endpoints:Https:Url").Value;
-    var certPath = kestrelSection.GetSection("Endpoints:Https:Certificate:Path").Value;
-    if (!string.IsNullOrEmpty(httpsEndpoint) && !string.IsNullOrEmpty(certPath))
+    // Configure HTTPS endpoint only in production
+    if (!context.HostingEnvironment.IsDevelopment())
     {
-        options.ListenAnyIP(new Uri(httpsEndpoint).Port, listenOptions =>
+        // Get the certificate password from environment variables
+        var certPassword = Environment.GetEnvironmentVariable("CertPassword");
+        if (string.IsNullOrEmpty(certPassword))
         {
-            listenOptions.UseHttps(certPath, certPassword);
-        });
+            throw new InvalidOperationException("Certificate password is not set in environment variables.");
+        }
+
+        // Configure HTTPS endpoint with the certificate password from environment variables
+        var httpsEndpoint = kestrelSection.GetSection("Endpoints:Https:Url").Value;
+        var certPath = kestrelSection.GetSection("Endpoints:Https:Certificate:Path").Value;
+        if (!string.IsNullOrEmpty(httpsEndpoint) && !string.IsNullOrEmpty(certPath))
+        {
+            var httpsPort = ExtractPort(httpsEndpoint);
+            options.ListenAnyIP(httpsPort, listenOptions =>
+            {
+                listenOptions.UseHttps(certPath, certPassword);
+            });
+        }
     }
 });
 
@@ -51,8 +63,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// Enable HTTPS redirection
-app.UseHttpsRedirection();
+// Enable HTTPS redirection only in non-development environments
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseStaticFiles();
 app.UseAntiforgery();
