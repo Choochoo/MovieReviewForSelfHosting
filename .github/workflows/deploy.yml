@@ -21,18 +21,47 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o ./published
 
-      - name: Copy files via SSH
-        uses: appleboy/scp-action@v0.1.5
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          source: './published/*'
-          target: 'C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish'
+      - name: Copy files via SCP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $username = "${{ secrets.SERVER_USER }}"
+          $password = "${{ secrets.SERVER_PASSWORD }}"
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          $sourcePath = "./published/*"
+          $targetPath = "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish"
+
+          $sessionOptions = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
+
+          $session = New-PSSession -HostName "${{ secrets.SERVER_HOST }}" -UserName $username -Credential $credential -UseSSL -SessionOption $sessionOptions
+
+          Invoke-Command -Session $session -ScriptBlock {
+            param($sourcePath, $targetPath)
+            if (!(Test-Path -Path $targetPath)) {
+              New-Item -ItemType Directory -Force -Path $targetPath
+            }
+            Copy-Item -Path $using:sourcePath -Destination $targetPath -Recurse -Force
+          } -ArgumentList $sourcePath, $targetPath
+
+          Remove-PSSession -Session $session
 
       - name: Restart application
+        shell: pwsh
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} -p 22 -o StrictHostKeyChecking=no << 'EOF'
-          powershell Stop-Process -Name "MovieReviewApp" -Force
-          powershell Start-Process "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe"
-          EOF
+          $username = "${{ secrets.SERVER_USER }}"
+          $password = "${{ secrets.SERVER_PASSWORD }}"
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+
+          $sessionOptions = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
+
+          $session = New-PSSession -HostName "${{ secrets.SERVER_HOST }}" -UserName $username -Credential $credential -UseSSL -SessionOption $sessionOptions
+
+          Invoke-Command -Session $session -ScriptBlock {
+            Stop-Process -Name "MovieReviewApp" -Force -ErrorAction SilentlyContinue
+            Start-Process "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe"
+          }
+
+          Remove-PSSession -Session $session
