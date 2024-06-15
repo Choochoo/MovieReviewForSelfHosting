@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -21,26 +21,21 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o ./published
 
-      - name: Compress published files
-        run: tar -czf published.tar.gz -C ./published .
-
-      - name: Copy compressed file via SCP
-        shell: pwsh
+      - name: Install rsync
         run: |
-          $ErrorActionPreference = "Stop"
-          $username = "${{ secrets.SERVER_USER }}"
-          $password = "${{ secrets.SERVER_PASSWORD }}"
-          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+          sudo apt-get update
+          sudo apt-get install -y rsync
 
-          $sourcePath = "./published.tar.gz"
-          $targetPath = "C:/Users/Jared/Documents/GitHub/MovieReviewApp"
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-          Write-Host "Starting SCP file transfer with compression..."
-          scp -C -o StrictHostKeyChecking=no $sourcePath $username@${{ secrets.SERVER_HOST }}:$targetPath
-          Write-Host "SCP file transfer completed."
+      - name: Deploy with rsync
+        run: |
+          rsync -avz --delete ./published/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/cygdrive/c/Users/Jared/Documents/GitHub/MovieReviewApp
 
-      - name: Extract files on server and clean up
+      - name: Start application on server
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -54,10 +49,8 @@ jobs:
           # Establish SSH session and run commands with additional logging
           Write-Host "Establishing SSH session..."
           $sshCommand = @"
-          tar -xzf C:/Users/Jared/Documents/GitHub/MovieReviewApp/published.tar.gz -C C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish
-          Remove-Item -Force C:/Users/Jared/Documents/GitHub/MovieReviewApp/published.tar.gz
-          Stop-Process -Name "MovieReviewApp" -Force -ErrorAction SilentlyContinue
-          Start-Process "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe"
+          Stop-Process -Name 'MovieReviewApp' -Force -ErrorAction SilentlyContinue
+          Start-Process 'C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe'
           "@
 
           ssh $username@${{ secrets.SERVER_HOST }} -o StrictHostKeyChecking=no $sshCommand
