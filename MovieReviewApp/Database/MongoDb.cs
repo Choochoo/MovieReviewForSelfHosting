@@ -11,7 +11,7 @@ namespace MovieReviewApp.Database
         private IMongoDatabase? database;
         public MongoDb()
         {
-            string mongoUri = Environment.GetEnvironmentVariable("MONGO_URI");
+            string mongoUri = Environment.GetEnvironmentVariable("MOVIEREVIEW_MONGO");
             if (string.IsNullOrEmpty(mongoUri))
             {
                 throw new ArgumentNullException("MongoDB connection string not found in environment variables");
