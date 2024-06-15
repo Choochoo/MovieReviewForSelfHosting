@@ -10,14 +10,25 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
+// Middleware to redirect HTTPS to HTTP
+app.Use(async (context, next) =>
+{
+    if (context.Request.IsHttps)
+    {
+        var httpUrl = $"http://{context.Request.Host}{context.Request.Path}{context.Request.QueryString}";
+        context.Response.Redirect(httpUrl);
+    }
+    else
+    {
+        await next();
+    }
+});
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
-
-    // Enable HTTPS redirection
-    app.UseHttpsRedirection();
 }
 
 app.UseStaticFiles();

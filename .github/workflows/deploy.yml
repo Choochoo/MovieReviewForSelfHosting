@@ -16,7 +16,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v2
         with:
-          dotnet-version: '6.x' # or the version you are using
+          dotnet-version: '8.x' # or the version you are using
 
       - name: Publish
         run: dotnet publish -c Release -o ./published
@@ -28,11 +28,11 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: './published/*'
-          target: 'C:/path/to/your/app'
+          target: 'C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish'
 
       - name: Restart application
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} -p 22 -o StrictHostKeyChecking=no << 'EOF'
-          powershell Stop-Process -Name "YourAppName" -Force
-          powershell Start-Process "C:/path/to/your/app/YourApp.exe"
+          powershell Stop-Process -Name "MovieReviewApp" -Force
+          powershell Start-Process "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe"
           EOF
