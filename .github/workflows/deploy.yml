@@ -21,7 +21,10 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o ./published
 
-      - name: Copy files via SCP
+      - name: Compress published files
+        run: tar -czf published.tar.gz -C ./published .
+
+      - name: Copy compressed file via SCP
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -30,15 +33,14 @@ jobs:
           $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
           $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
 
-          $sourcePath = "./published/*"
-          $targetPath = "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish"
+          $sourcePath = "./published.tar.gz"
+          $targetPath = "C:/Users/Jared/Documents/GitHub/MovieReviewApp"
 
-          # Copy files using SCP with additional logging
-          Write-Host "Starting SCP file transfer..."
-          scp -r -o StrictHostKeyChecking=no $sourcePath $username@${{ secrets.SERVER_HOST }}:$targetPath
+          Write-Host "Starting SCP file transfer with compression..."
+          scp -C -o StrictHostKeyChecking=no $sourcePath $username@${{ secrets.SERVER_HOST }}:$targetPath
           Write-Host "SCP file transfer completed."
 
-      - name: Restart application
+      - name: Extract files on server and clean up
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -52,6 +54,8 @@ jobs:
           # Establish SSH session and run commands with additional logging
           Write-Host "Establishing SSH session..."
           $sshCommand = @"
+          tar -xzf C:/Users/Jared/Documents/GitHub/MovieReviewApp/published.tar.gz -C C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish
+          Remove-Item -Force C:/Users/Jared/Documents/GitHub/MovieReviewApp/published.tar.gz
           Stop-Process -Name "MovieReviewApp" -Force -ErrorAction SilentlyContinue
           Start-Process "C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe"
           "@
