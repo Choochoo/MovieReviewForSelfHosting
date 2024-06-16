@@ -1,4 +1,4 @@
-name: Deploy to Windows Server
+name: Deploy
 
 on:
   push:
@@ -7,50 +7,12 @@ on:
 
 jobs:
   deploy:
-    runs-on: windows-latest
-
+    runs-on: self-hosted
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v2
-        with:
-          dotnet-version: '8.x' # or the version you are using
-
-      - name: Publish
-        run: dotnet publish -c Release -o ./published
-
-      - name: Install rsync
+      - name: Run PowerShell script
         run: |
-          choco install rsync
-
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@v0.5.3
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Deploy with rsync
-        run: |
-          rsync -avz --delete ./published/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/cygdrive/c/Users/Jared/Documents/GitHub/MovieReviewApp
-
-      - name: Start application on server
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $username = "${{ secrets.SERVER_USER }}"
-          $password = "${{ secrets.SERVER_PASSWORD }}"
-          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
-
-          $sessionOptions = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
-
-          # Establish SSH session and run commands with additional logging
-          Write-Host "Establishing SSH session..."
-          $sshCommand = @"
-          Stop-Process -Name 'MovieReviewApp' -Force -ErrorAction SilentlyContinue
-          Start-Process 'C:/Users/Jared/Documents/GitHub/MovieReviewApp/publish/MovieReviewApp.exe'
-          "@
-
-          ssh $username@${{ secrets.SERVER_HOST }} -o StrictHostKeyChecking=no $sshCommand
-          Write-Host "SSH session completed."
+          powershell.exe -File C:\Users\Jared\Desktop\MovieReviewDeploy.ps1
