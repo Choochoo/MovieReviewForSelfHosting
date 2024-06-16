@@ -3,54 +3,52 @@
 
 <PageTitle>Movie Review Site</PageTitle>
 
-
-<div class="row">
-    <div class="col-sm-6">
-        <h2>Current phase</h2>
-       <Phase MovieEvent="CurrentEvent" />
-    </div>
-    <div class="col-md-6">
-        <h2>Reminder</h2>
+<div class="container">
+    <div class="row">
+        <div class="col-md-6">
+            <h2>Current Phase</h2>
+            <Phase MovieEvent="CurrentEvent" />
+        </div>
+        <div class="col-md-6">
+            <h2>Reminder</h2>
             @{
                 var timeCountString = TimeCount.HasValue && TimeCount.Value > 1 ? TimeCount.Value.ToString() : string.Empty;
                 var timePeriodString = $" {TimePeriod}{(TimeCount.HasValue && TimeCount.Value > 1 ? "s" : string.Empty)}";
             }
 
-        <p>
-            Questions to answer every @timeCountString@timePeriodString.ToLower()
-        </p>
+            <p>
+                Questions to answer every @timeCountString@timePeriodString.ToLower()
+            </p>
 
-        <ol>
-            <li>Did I like the movie?</li>
-            <li>Am I glad I watched the movie?</li>
-            <li>Do I think I'd ever watch it again?</li>
-            <li>Would you ever recommend this movie?</li>
-        </ol>
-        <p>How to play video on Xbox:</p>
-        <ol>
-            <li>Save download file from link to USB Drive</li>
-            <li>Plug USB stick back of Xbox</li>
-            <li>Download the app called VLC Player</li>
-            <li>Open the file in VLC player and play</li>
-        </ol>
+            <ol>
+                <li>Did I like the movie?</li>
+                <li>Am I glad I watched the movie?</li>
+                <li>Do I think I'd ever watch it again?</li>
+                <li>Would you ever recommend this movie?</li>
+            </ol>
+            <p>How to play video on Xbox:</p>
+            <ol>
+                <li>Save download file from link to USB Drive</li>
+                <li>Plug USB stick back of Xbox</li>
+                <li>Download the app called VLC Player</li>
+                <li>Open the file in VLC player and play</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <h2>Next Phase</h2>
+            <Phase MovieEvent="NextEvent" />
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-12">
+            @foreach (var item in Remaining)
+            {
+                <p>Then... @item.Item1 (@item.Item2)</p>
+            }
+        </div>
     </div>
 </div>
-<br />
-<br />
-<br />
-<br />
-<br />
-<br />
-<div class="row">
-    <div class="col-sm-6">
-        <h2>Next phase</h2>
-        <Phase MovieEvent="NextEvent" />
-    </div>
-</div>
-<br />
-<br />
-
-@foreach (var item in Remaining)
-{
-    <p>Then... @item.Item1 (@item.Item2)</p>
-}

@@ -3,105 +3,122 @@
 
 @if (MovieEvent != null)
 {
-    <p>@MovieEvent.StartDate.ToString("MMMM d, yyyy") - @MovieEvent.EndDate.ToString("MMMM d, yyyy")</p>
-    <div><b>Person:</b> @MovieEvent.Person</div>
-    @if (MovieEvent.IsEditing)
-    {
-        <div style="padding:10px 0"><b>Movie: </b><input style="width:70%" type="text" @bind="@MovieEvent.Movie" /></div>
-        <div style="padding:10px 0"><b>IMDb: </b><input style="width:70%" type="text" @bind="@MovieEvent.IMDb" /></div>
-        <div style="padding:10px 0"><b>Poster URL:</b><input style="width:70%" type="text" @bind="@MovieEvent.PosterUrl" /></div>
-        <div style="padding:10px 0"><b>Download Link: </b><input style="width:70%" type="text" @bind="@MovieEvent.DownloadLink" /></div>
-        <div style="padding:10px 0"><b>Reason:</b><textarea style="width:70%" placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" /></div>
-
-        <div style="padding:10px 0">
-            <b>Have you already seen it?</b>
-            <input type="checkbox" @bind="@MovieEvent.AlreadySeen" />
-        </div>
-        @if (MovieEvent.AlreadySeen)
-        {
-            <div style="padding:10px 0">
-                <b>When?</b>
-                <select @bind="selectedYear">
-                    @foreach (var year in Enumerable.Range(2000, DateTime.Now.Year - 1999))
+    <div class="card mb-3">
+        <div class="card-body">
+            <p>@MovieEvent.StartDate.ToString("MMMM d, yyyy") - @MovieEvent.EndDate.ToString("MMMM d, yyyy")</p>
+            <div><b>Person:</b> @MovieEvent.Person</div>
+            @if (MovieEvent.IsEditing)
+            {
+                <div class="form-group">
+                    <label><b>Movie: </b></label>
+                    <input type="text" @bind="@MovieEvent.Movie" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label><b>IMDb: </b></label>
+                    <input type="text" @bind="@MovieEvent.IMDb" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label><b>Poster URL:</b></label>
+                    <input type="text" @bind="@MovieEvent.PosterUrl" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label><b>Download Link: </b></label>
+                    <input type="text" @bind="@MovieEvent.DownloadLink" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label><b>Reason:</b></label>
+                    <textarea placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" class="form-control"></textarea>
+                </div>
+                <div class="form-group">
+                    <b>Have you already seen it?</b>
+                    <input type="checkbox" @bind="@MovieEvent.AlreadySeen" class="form-check-input" />
+                </div>
+                @if (MovieEvent.AlreadySeen)
+                {
+                    <div class="form-group">
+                        <b>When?</b>
+                        <select @bind="selectedYear" class="form-control">
+                            @foreach (var year in Enumerable.Range(2000, DateTime.Now.Year - 1999))
+                            {
+                                <option value="@year">@year</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <button type="button" class="btn btn-primary" @onclick="Save">Save</button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+            }
+            else
+            {
+                <div>
+                    <b>Movie: </b>
+                    @if (string.IsNullOrEmpty(MovieEvent.Movie))
                     {
-                        <option value="@year">@year</option>
+                        <span>none</span>
                     }
-                </select>
-            </div>
-        }
-
-        <button type="button" @onclick="Save">Save</button>
-        <button type="button" @onclick="Cancel">Cancel</button>
-    }
-    else
-    {
-        <div>
-            <b>Movie: </b>
-            @if (string.IsNullOrEmpty(MovieEvent.Movie))
-            {
-                <span>none</span>
-            }
-            else
-            {
-                @MovieEvent.Movie
-            }
-        </div>
-        <div>
-            <b>IMDb: </b>
-            @if (string.IsNullOrEmpty(MovieEvent.IMDb))
-            {
-                <span>none</span>
-            }
-            else
-            {
-                <a target="_blank" href="@MovieEvent.IMDb">link</a>
-            }
-        </div>
-        <div>
-            <b>Download Link: </b>
-            @if (string.IsNullOrEmpty(MovieEvent.DownloadLink))
-            {
-                <span>none</span>
-            }
-            else
-            {
-                <a target="_blank" href="@MovieEvent.DownloadLink">download movie</a>
-            }
-        </div>
-        <div>
-            @if (string.IsNullOrEmpty(MovieEvent.PosterUrl))
-            {
-                <span>none</span>
-            }
-            else
-            {
-                <img style="max-width: 400px; max-height: 400px;" src="@MovieEvent.PosterUrl" />
-            }
-            <br />
-        </div>
-        <div>
-            <b>Reason: </b>
-            @if (string.IsNullOrEmpty(MovieEvent.Reasoning))
-            {
-                <span>none</span>
-            }
-            else
-            {
-                @MovieEvent.Reasoning
+                    else
+                    {
+                        @MovieEvent.Movie
+                    }
+                </div>
+                <div>
+                    <b>IMDb: </b>
+                    @if (string.IsNullOrEmpty(MovieEvent.IMDb))
+                    {
+                        <span>none</span>
+                    }
+                    else
+                    {
+                        <a target="_blank" href="@MovieEvent.IMDb">link</a>
+                    }
+                </div>
+                <div>
+                    <b>Download Link: </b>
+                    @if (string.IsNullOrEmpty(MovieEvent.DownloadLink))
+                    {
+                        <span>none</span>
+                    }
+                    else
+                    {
+                        <a target="_blank" href="@MovieEvent.DownloadLink">download movie</a>
+                    }
+                </div>
+                <div>
+                    @if (string.IsNullOrEmpty(MovieEvent.PosterUrl))
+                    {
+                        <span>none</span>
+                    }
+                    else
+                    {
+                        <img style="max-width: 400px; max-height: 400px;" src="@MovieEvent.PosterUrl" />
+                    }
+                    <br />
+                </div>
+                <div>
+                    <b>Reason: </b>
+                    @if (string.IsNullOrEmpty(MovieEvent.Reasoning))
+                    {
+                        <span>none</span>
+                    }
+                    else
+                    {
+                        @MovieEvent.Reasoning
+                    }
+                </div>
+                <div>
+                    @if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
+                    {
+                        <b>I saw this movie in @MovieEvent.SeenDate.Value.Year</b>
+                    }
+                    else
+                    {
+                        <b>I have never seen this movie</b>
+                    }
+                </div>
+                <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
             }
         </div>
-        <div>
-            @if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
-            {
-                <b>I saw this movie in @MovieEvent.SeenDate.Value.Year</b>
-            }
-            else
-            {
-                <b>I have never seen this movie</b>
-            }
-        </div>
-        <button type="submit" @onclick="Edit">Edit</button>
-    }
+    </div>
 }
 else
 {

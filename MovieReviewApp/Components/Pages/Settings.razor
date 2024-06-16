@@ -5,77 +5,75 @@
 
 <h1>Settings</h1>
 
-<div class="row">
-    <div class="col-sm-12">
-        <label>Start Date:</label>
-        <div>
-            <InputDate @bind-Value="StartDate" />
-            <button type="button" @onclick="SaveDate">Save</button>
+<div class="container">
+    <div class="row">
+        <div class="col-sm-12">
+            <label>Start Date:</label>
+            <div>
+                <InputDate @bind-Value="StartDate" class="form-control d-inline-block w-auto" />
+                <button type="button" class="btn btn-primary" @onclick="SaveDate">Save</button>
+            </div>
         </div>
     </div>
-</div>
-<br />
-<hr />
-<br />
-<div class="row">
-    <div class="col-sm-12">
-        <label>Occurance:</label>
-        <div>
-            Every
-            <InputNumber @bind-Value="TimeCount" style="width:70px; display:inline-block" class="form-control" />
-            <InputSelect @bind-Value="TimePeriod" style="width:110px; display:inline-block" class="form-control">
-                <option value="">Time Period</option>
-                @foreach (var period in TimePeriods)
-                {
-                    <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
-                }
-            </InputSelect>
-            <button type="button" @onclick="SaveOccurance">Save</button>
+
+    <hr />
+
+    <div class="row">
+        <div class="col-sm-12">
+            <label>Occurrence:</label>
+            <div>
+                Every
+                <InputNumber @bind-Value="TimeCount" class="form-control d-inline-block w-auto" />
+                <InputSelect @bind-Value="TimePeriod" class="form-control d-inline-block w-auto">
+                    <option value="">Time Period</option>
+                    @foreach (var period in TimePeriods)
+                    {
+                        <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
+                    }
+                </InputSelect>
+                <button type="button" class="btn btn-primary" @onclick="SaveOccurance">Save</button>
+            </div>
         </div>
     </div>
-</div>
 
-<br />
-<hr />
-<br />
+    <hr />
 
-@if (People == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var person in People)
-            {
-                @if (person != null)
+    @if (People == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var person in People)
                 {
-                    <tr>
-                        <td>@person.Name</td>
-                        <td>
-                            <button type="submit" @onclick="() => Edit(person)">Edit</button>
-                            <button type="submit" @onclick="() => Delete(person)">Delete</button>
-                        </td>
-                    </tr>
+                    @if (person != null)
+                    {
+                        <tr>
+                            <td>@person.Name</td>
+                            <td>
+                                <button type="button" class="btn btn-secondary" @onclick="() => Edit(person)">Edit</button>
+                                <button type="button" class="btn btn-danger" @onclick="() => Delete(person)">Delete</button>
+                            </td>
+                        </tr>
+                    }
                 }
-            }
-            <tr>
-                <td>
-                    <input style="width:70%" type="text" @bind="@NewPerson" />
-                </td>
-                <td>
-                    <button type="submit" @onclick="AddPerson">Add</button>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-}
-
-
+                <tr>
+                    <td>
+                        <input style="width:70%" type="text" @bind="@NewPerson" class="form-control" />
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-primary" @onclick="AddPerson">Add</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    }
+</div>
