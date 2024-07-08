@@ -17,3 +17,40 @@
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
+
+<style>
+    .page {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .sidebar {
+        width: 250px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 1000;
+    }
+
+    main {
+        width: calc(100% - 250px);
+    }
+
+    @@media (max-width: 768px) {
+        .page {
+            flex-direction: column;
+        }
+
+        .sidebar {
+            width: 100%;
+            position: relative;
+            height: auto;
+        }
+
+        main {
+            margin-left: 0;
+            width: 100%;
+        }
+    }
+</style>
