@@ -38,7 +38,7 @@
                     <div class="form-group">
                         <b>When?</b>
                         <select @bind="selectedYear" class="form-control">
-                            @foreach (var year in Enumerable.Range(2000, DateTime.Now.Year - 1999))
+                            @foreach (var year in Enumerable.Range(1985, DateTime.Now.Year - 1999))
                             {
                                 <option value="@year">@year</option>
                             }
