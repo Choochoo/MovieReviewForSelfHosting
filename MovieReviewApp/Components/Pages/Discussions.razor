@@ -1,22 +1,31 @@
 ﻿@page "/discussions"
-@using MovieReviewApp.Components.Layout
+@using MovieReviewApp.Components.Partials
 
-<h3>Discussions</h3>
 
 <ul class="nav nav-tabs">
     <li class="nav-item">
-        <NavLink class="nav-link" href="discussions/list" Match="NavLinkMatch.Prefix">Discussions</NavLink>
+        <a class="nav-link @((activeTab == "list") ? "active" : "")" @onclick='() => activeTab = "list"'>Discussions</a>
     </li>
     <li class="nav-item">
-        <NavLink class="nav-link" href="discussions/upload" Match="NavLinkMatch.Prefix">Audio Upload</NavLink>
+        <a class="nav-link @((activeTab == "upload") ? "active" : "")" @onclick='() => activeTab = "upload"'>Audio Upload</a>
     </li>
 </ul>
+<br />
+@if (activeTab == "list")
+{
+    <DiscussionsList />
+}
+else if (activeTab == "upload")
+{
+    <AudioUpload />
+}
 
-<Router AppAssembly="@typeof(App).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="typeof(MainLayout)" />
-    </Found>
-    <NotFound>
-        <p>Sorry, there's nothing at this address.</p>
-    </NotFound>
-</Router>
+<style>
+    .nav-item{
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private string activeTab = "list"; // Default tab
+}
