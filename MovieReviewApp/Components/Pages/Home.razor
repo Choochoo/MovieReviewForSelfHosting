@@ -6,18 +6,13 @@
 <div class="container">
     <div class="row">
         <div class="col-md-6">
-            <h2>Current Phase</h2>
             <Phase MovieEvent="CurrentEvent" />
         </div>
         <div class="col-md-6">
             <h2>Reminder</h2>
-            @{
-                var timeCountString = TimeCount.HasValue && TimeCount.Value > 1 ? TimeCount.Value.ToString() : string.Empty;
-                var timePeriodString = $" {TimePeriod}{(TimeCount.HasValue && TimeCount.Value > 1 ? "s" : string.Empty)}";
-            }
 
             <p>
-                Questions to answer every @timeCountString@timePeriodString.ToLower()
+                Questions:
             </p>
 
             <ol>
@@ -33,16 +28,19 @@
 
     <div class="row mt-4">
         <div class="col-md-6">
-            <h2>Next Phase</h2>
             <Phase MovieEvent="NextEvent" />
         </div>
     </div>
 
     <div class="row mt-4">
         <div class="col-md-12">
-            @foreach (var item in Remaining)
+            @foreach (var phase in Phases.Where(x => x.EndDate >= DateTime.Now))
             {
-                <p>Then... @item.Item1 (@item.Item2)</p>
+                <p>Phase @phase.Number:</p>
+                @foreach (var movieEvent in phase.Events.Where(x => x.EndDate >= DateTime.Now))
+                {
+                    <p>@movieEvent.StartDate.ToString("MMMM, yyyy") - @movieEvent.Person</p>
+                }
             }
         </div>
     </div>

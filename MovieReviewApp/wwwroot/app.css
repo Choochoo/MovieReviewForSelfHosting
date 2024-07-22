@@ -105,10 +105,46 @@ h1:focus {
     padding: 1rem;
 }
 
-    .card-body label {
-        font-weight: bold;
-    }
+.card-body label {
+    font-weight: bold;
+}
 
-    .card-body .form-control {
-        margin-bottom: 0.5rem;
-    }
+.card-body .form-control {
+    margin-bottom: 0.5rem;
+}
+
+.nav-tabs .nav-link {
+    font-size: 1.1rem;
+    padding: 0.5rem 1rem;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+}
+
+.input-group .form-control,
+.input-group .form-control-file {
+    flex: 1;
+    margin-right: 10px;
+}
+
+.input-group .btn {
+    margin-left: 10px;
+}
+
+.input-group .form-control[style] {
+    width: auto;
+}
+
+.bi {
+    font-size: 1.6em;
+}
+
+.bi::before {
+    vertical-align: .8em !important;
+}

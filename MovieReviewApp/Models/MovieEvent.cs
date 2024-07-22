@@ -4,6 +4,7 @@ namespace MovieReviewApp.Models
 {
     public class MovieEvent
     {
+        public int? PhaseNumber { get; set; }
         public Guid Id { get; set; } = Guid.NewGuid();
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
