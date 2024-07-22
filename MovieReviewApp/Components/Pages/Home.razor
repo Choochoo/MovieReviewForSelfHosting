@@ -1,7 +1,7 @@
 ﻿@page "/"
 @using MovieReviewApp.Components.Partials
 
-<PageTitle>Movie Review Site</PageTitle>
+<PageTitle>Movie Review</PageTitle>
 
 <div class="container">
     <div class="row">
@@ -9,8 +9,6 @@
             <Phase MovieEvent="CurrentEvent" />
         </div>
         <div class="col-md-6">
-            <h2>Reminder</h2>
-
             <p>
                 Questions:
             </p>
@@ -41,6 +39,7 @@
                 {
                     <p>@movieEvent.StartDate.ToString("MMMM, yyyy") - @movieEvent.Person</p>
                 }
+                <br />
             }
         </div>
     </div>
