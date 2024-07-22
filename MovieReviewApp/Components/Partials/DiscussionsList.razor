@@ -1,0 +1,70 @@
+﻿@page "/discussions/list"
+
+@if (ProcessedData == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var data in ProcessedData)
+            {
+                <tr>
+                    <td>@data.Date.ToShortDateString()</td>
+                    <td>
+                        <button @onclick="() => Toggle(data.Id)" class="btn btn-secondary">Toggle</button>
+                    </td>
+                </tr>
+                @if (data.Expanded)
+                {
+                    <tr>
+                        <td colspan="2">
+                            <div>
+                                @* Display more detailed data here *@
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ProcessedDataModel> ProcessedData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProcessedData = await LoadProcessedData();
+    }
+
+    private async Task<List<ProcessedDataModel>> LoadProcessedData()
+    {
+        // Load processed data from the backend
+        return new List<ProcessedDataModel>(); // Replace with actual data
+    }
+
+    private void Toggle(int id)
+    {
+        var item = ProcessedData.FirstOrDefault(x => x.Id == id);
+        if (item != null)
+        {
+            item.Expanded = !item.Expanded;
+        }
+    }
+
+    private class ProcessedDataModel
+    {
+        public int Id { get; set; }
+        public DateTime Date { get; set; }
+        public bool Expanded { get; set; }
+        // Other properties for processed data
+    }
+}

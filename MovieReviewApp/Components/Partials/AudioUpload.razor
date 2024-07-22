@@ -1,0 +1,146 @@
+﻿@page "/discussions/upload"
+@using System.Globalization
+@inject IWebHostEnvironment WebHostEnvironment
+
+<h4>Upload Audio Clips</h4>
+
+<div class="form-group">
+    <div class="input-group mb-3">
+        @if (fileInputVisible)
+        {
+            <InputFile OnChange="HandleSelected" multiple class="form-control-file" />
+        }
+        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">Upload</button>
+    </div>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert alert-danger" role="alert">
+            @Error
+        </div>
+    }
+</div>
+
+<div class="form-group">
+    <h4>Process Files</h4>
+    <div class="input-group mb-3">
+        <select @bind="SelectedMonth" class="form-control mr-2" style="width: auto;">
+            @foreach (var month in Months)
+            {
+                <option value="@month">@month</option>
+            }
+        </select>
+
+        <select @bind="SelectedYear" class="form-control mr-2" style="width: auto;">
+            @foreach (var year in Years)
+            {
+                <option value="@year">@year</option>
+            }
+        </select>
+
+        <input type="password" @bind="PIN" placeholder="Enter PIN" class="form-control mr-2" style="width: auto;" />
+        <button @onclick="ProcessFiles" class="btn btn-primary" disabled="@Processing">Process</button>
+    </div>
+</div>
+
+@code {
+    private bool Processing = false;
+    private bool isUploadButtonDisabled = true;
+    private bool fileInputVisible = true;
+    private string SelectedMonth { get; set; } = DateTime.Now.ToString("MMMM");
+    private int SelectedYear { get; set; } = DateTime.Now.Year;
+    private List<string> Months = CultureInfo.CurrentCulture.DateTimeFormat.MonthNames.Take(12).ToList();
+    private List<int> Years = Enumerable.Range(DateTime.Now.Year - 20, 21).ToList();
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+    public string Error = string.Empty;
+    private string PIN { get; set; } = "";
+
+    private void HandleSelected(InputFileChangeEventArgs e)
+    {
+        selectedFiles = e.GetMultipleFiles().ToList();
+        isUploadButtonDisabled = !selectedFiles.Any();
+    }
+
+    private async Task UploadFiles()
+    {
+        const long maxFileSize = 2L * 1024 * 1024 * 1024; // 2 GB limit
+
+        foreach (var file in selectedFiles)
+        {
+            if (file.Size > maxFileSize)
+            {
+                Error = "File size exceeds the 2 GB limit.";
+                continue;
+            }
+
+            try
+            {
+                var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+                if (!Directory.Exists(uploadsFolder))
+                {
+                    Directory.CreateDirectory(uploadsFolder);
+                }
+
+                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+                var filePath = Path.Combine(uploadsFolder, fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.OpenReadStream(maxFileSize).CopyToAsync(stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                Error = $"An error occurred while uploading the file: {ex.Message}";
+            }
+        }
+
+        // Clear the file input and disable the upload button after upload
+        selectedFiles.Clear();
+        isUploadButtonDisabled = true;
+
+        // Hide and then show the file input to reset it
+        fileInputVisible = false;
+        StateHasChanged();
+        await Task.Delay(100); // Small delay to ensure the input is re-rendered
+        fileInputVisible = true;
+    }
+
+    private async Task ProcessFiles()
+    {
+        const string correctPIN = "9021";
+        if (PIN != correctPIN)
+        {
+            Error = "Invalid PIN.";
+            return;
+        }
+
+        Processing = true;
+        Error = "";
+
+        try
+        {
+            var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+            var targetFolder = Path.Combine(uploadsFolder, $"{SelectedMonth}-{SelectedYear}");
+            if (!Directory.Exists(targetFolder))
+            {
+                Directory.CreateDirectory(targetFolder);
+            }
+
+            foreach (var file in Directory.GetFiles(uploadsFolder))
+            {
+                var fileInfo = new FileInfo(file);
+                if (fileInfo.DirectoryName != targetFolder)
+                {
+                    var destFileName = Path.Combine(targetFolder, fileInfo.Name);
+                    System.IO.File.Move(fileInfo.FullName, destFileName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"An error occurred while processing the files: {ex.Message}";
+        }
+
+        Processing = false;
+    }
+}
