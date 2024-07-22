@@ -10,7 +10,7 @@
         {
             <InputFile OnChange="HandleSelected" multiple class="form-control-file" />
         }
-        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">Upload</button>
+        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">@uploadButtonText</button>
     </div>
     @if (!string.IsNullOrEmpty(Error))
     {
@@ -18,26 +18,32 @@
             @Error
         </div>
     }
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">
+            @SuccessMessage
+        </div>
+    }
 </div>
 
 <div class="form-group">
     <h4>Process Files</h4>
-    <div class="input-group mb-3">
-        <select @bind="SelectedMonth" class="form-control mr-2" style="width: auto;">
+    <div class="input-group mb-3 flex-column flex-sm-row">
+        <select @bind="SelectedMonth" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;">
             @foreach (var month in Months)
             {
                 <option value="@month">@month</option>
             }
         </select>
 
-        <select @bind="SelectedYear" class="form-control mr-2" style="width: auto;">
+        <select @bind="SelectedYear" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;">
             @foreach (var year in Years)
             {
                 <option value="@year">@year</option>
             }
         </select>
 
-        <input type="password" @bind="PIN" placeholder="Enter PIN" class="form-control mr-2" style="width: auto;" />
+        <input type="password" @bind="PIN" placeholder="Enter PIN" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;" />
         <button @onclick="ProcessFiles" class="btn btn-primary" disabled="@Processing">Process</button>
     </div>
 </div>
@@ -52,7 +58,9 @@
     private List<int> Years = Enumerable.Range(DateTime.Now.Year - 20, 21).ToList();
     private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
     public string Error = string.Empty;
+    public string SuccessMessage = string.Empty;
     private string PIN { get; set; } = "";
+    private string uploadButtonText = "Upload";
 
     private void HandleSelected(InputFileChangeEventArgs e)
     {
@@ -63,13 +71,19 @@
     private async Task UploadFiles()
     {
         const long maxFileSize = 2L * 1024 * 1024 * 1024; // 2 GB limit
+        uploadButtonText = "Please wait... Uploading";
+        isUploadButtonDisabled = true;
+        Error = string.Empty;
+        SuccessMessage = string.Empty;
 
         foreach (var file in selectedFiles)
         {
             if (file.Size > maxFileSize)
             {
                 Error = "File size exceeds the 2 GB limit.";
-                continue;
+                uploadButtonText = "Upload";
+                isUploadButtonDisabled = false;
+                return;
             }
 
             try
@@ -87,16 +101,22 @@
                 {
                     await file.OpenReadStream(maxFileSize).CopyToAsync(stream);
                 }
+
+                SuccessMessage = "File(s) uploaded successfully.";
             }
             catch (Exception ex)
             {
                 Error = $"An error occurred while uploading the file: {ex.Message}";
+                uploadButtonText = "Upload";
+                isUploadButtonDisabled = false;
+                return;
             }
         }
 
         // Clear the file input and disable the upload button after upload
         selectedFiles.Clear();
         isUploadButtonDisabled = true;
+        uploadButtonText = "Upload";
 
         // Hide and then show the file input to reset it
         fileInputVisible = false;
@@ -116,6 +136,7 @@
 
         Processing = true;
         Error = "";
+        SuccessMessage = "";
 
         try
         {
@@ -135,6 +156,8 @@
                     System.IO.File.Move(fileInfo.FullName, destFileName);
                 }
             }
+
+            SuccessMessage = "Files processed successfully.";
         }
         catch (Exception ex)
         {

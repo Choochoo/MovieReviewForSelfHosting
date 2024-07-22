@@ -36,7 +36,7 @@
         <div class="col-md-12">
             @foreach (var phase in Phases.Where(x => x.EndDate >= DateTime.Now))
             {
-                <p>Phase @phase.Number:</p>
+                <p>Cycle @phase.Number:</p>
                 @foreach (var movieEvent in phase.Events.Where(x => x.EndDate >= DateTime.Now))
                 {
                     <p>@movieEvent.StartDate.ToString("MMMM, yyyy") - @movieEvent.Person</p>
