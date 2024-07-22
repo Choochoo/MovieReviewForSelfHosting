@@ -14,7 +14,8 @@ else
     <table class="table table-striped">
         <thead>
             <tr>
-                <th>Date</th>
+                <th style="width:80px">Cycle #</th>
+                <th style="width:120px;">Date</th>
                 <th>Person</th>
                 <th>Movie</th>
                 <th>IMBd</th>
@@ -27,7 +28,8 @@ else
                 @if (pastevent != null)
                 {
                     <tr>
-                        <td>@pastevent.StartDate.ToShortDateString() - @pastevent.EndDate.ToShortDateString()</td>
+                        <td style="text-align:center">@pastevent.PhaseNumber</td>
+                        <td>@pastevent.StartDate.ToString("MMMM yyyy") </td>
                         <td>@pastevent.Person</td>
                         <td>@pastevent.Movie</td>
                         <td><a href="@pastevent.IMDb" target="_blank">link</a></td>

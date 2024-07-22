@@ -1,0 +1,22 @@
+﻿@page "/discussions"
+@using MovieReviewApp.Components.Layout
+
+<h3>Discussions</h3>
+
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <NavLink class="nav-link" href="discussions/list" Match="NavLinkMatch.Prefix">Discussions</NavLink>
+    </li>
+    <li class="nav-item">
+        <NavLink class="nav-link" href="discussions/upload" Match="NavLinkMatch.Prefix">Audio Upload</NavLink>
+    </li>
+</ul>
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="typeof(MainLayout)" />
+    </Found>
+    <NotFound>
+        <p>Sorry, there's nothing at this address.</p>
+    </NotFound>
+</Router>

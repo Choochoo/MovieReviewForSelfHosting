@@ -1,14 +1,17 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Driver;
+using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
 using System;
-
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MovieReviewApp.Database
 {
     public class MongoDb
     {
         private IMongoDatabase? database;
+
         public MongoDb()
         {
             string mongoUri = Environment.GetEnvironmentVariable("MOVIEREVIEW_MONGO");
@@ -21,11 +24,10 @@ namespace MovieReviewApp.Database
             database = client.GetDatabase("MovieReview");
         }
 
+        private IMongoCollection<Phase>? Phases => database?.GetCollection<Phase>("Phases");
         private IMongoCollection<MovieEvent>? MovieEvents => database?.GetCollection<MovieEvent>("MovieReviews");
         private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
         private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
-
-
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {
@@ -35,7 +37,6 @@ namespace MovieReviewApp.Database
             );
             return MovieEvents.Find<MovieEvent>(filter).FirstOrDefault();
         }
-
         public void AddOrUpdateMovieEvent(MovieEvent movieEvent)
         {
             var filter = Builders<MovieEvent>.Filter.Eq("Id", movieEvent.Id);
@@ -49,15 +50,20 @@ namespace MovieReviewApp.Database
                 .Set("IMDb", movieEvent.IMDb)
                 .Set("Reasoning", movieEvent.Reasoning)
                 .Set("AlreadySeen", movieEvent.AlreadySeen)
-                .Set("SeenDate", movieEvent.SeenDate);
+                .Set("SeenDate", movieEvent.SeenDate)
+                .Set("PhaseNumber", movieEvent.PhaseNumber); // Added PhaseNumber here
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
 
-
-        public List<MovieEvent?> GetAllMovieEvents()
+        public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)
         {
             var sortDefinition = Builders<MovieEvent>.Sort.Ascending(me => me.StartDate);
-            return MovieEvents.Find(_ => true)
+
+            var filter = phaseNumber.HasValue
+                ? Builders<MovieEvent>.Filter.Eq("PhaseNumber", phaseNumber.Value)
+                : Builders<MovieEvent>.Filter.Empty;
+
+            return MovieEvents.Find(filter)
                 .Sort(sortDefinition)
                 .ToList();
         }
@@ -115,13 +121,13 @@ namespace MovieReviewApp.Database
 
         public void AddPerson(Person person)
         {
-            People.InsertOne(person);
+            // People.InsertOne(person);
         }
 
         public void DeletePerson(Person person)
         {
-            var filter = Builders<Person>.Filter.Eq("Id", person.Id);
-            People.DeleteOne(filter);
+            // var filter = Builders<Person>.Filter.Eq("Id", person.Id);
+            //People.DeleteOne(filter);
         }
 
         internal void AddOrUpdatePerson(Person person)
@@ -130,6 +136,34 @@ namespace MovieReviewApp.Database
             var update = Builders<Person>.Update
                 .Set("Name", person.Name);
             People.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+        }
+
+        internal Phase GetPhase(int phaseNumber, List<string> listNames, DateTime startDate)
+        {
+            var filter = Builders<Phase>.Filter.Eq("Number", phaseNumber);
+            var foundPhase = Phases.Find(filter).FirstOrDefault();
+            var endDate = startDate.AddMonths(listNames.Count).EndOfDay();
+            var isCurrentPhase = DateTime.Now.IsWithinRange(startDate, endDate);
+
+            if (foundPhase == null)
+            {
+                foundPhase = new Phase { Number = phaseNumber, Events = new List<MovieEvent>(), People = string.Join(',', listNames), StartDate =  startDate, EndDate = endDate };
+                if (!isCurrentPhase)
+                    return foundPhase;
+                Phases.InsertOne(foundPhase);
+            }
+
+            if (foundPhase.People != string.Join(',', listNames) && isCurrentPhase)
+            {
+                foundPhase.People = string.Join(',', listNames);
+                foundPhase.EndDate = endDate;
+                Phases.ReplaceOne(filter, foundPhase);
+            }
+
+            foundPhase = Phases.Find(filter).FirstOrDefault();
+            foundPhase.Events = GetAllMovieEvents(phaseNumber);
+
+            return foundPhase;
         }
     }
 }

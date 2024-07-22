@@ -5,10 +5,11 @@
 {
     <div class="card mb-3">
         <div class="card-body">
-            <p>@MovieEvent.StartDate.ToString("MMMM d, yyyy") - @MovieEvent.EndDate.ToString("MMMM d, yyyy")</p>
-            <div><b>Person:</b> @MovieEvent.Person</div>
+            <p style="text-align:center;font-size:1.2em">@MovieEvent.StartDate.ToString("MMMM d, yyyy") - @MovieEvent.EndDate.ToString("MMMM d, yyyy")</p>
+            <hr />
             @if (MovieEvent.IsEditing)
             {
+                <div><b>Person:</b> @MovieEvent.Person</div>
                 <div class="form-group">
                     <label><b>Movie: </b></label>
                     <input type="text" @bind="@MovieEvent.Movie" class="form-control" />
@@ -20,10 +21,6 @@
                 <div class="form-group">
                     <label><b>Poster URL:</b></label>
                     <input type="text" @bind="@MovieEvent.PosterUrl" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label><b>Download Link: </b></label>
-                    <input type="text" @bind="@MovieEvent.DownloadLink" class="form-control" />
                 </div>
                 <div class="form-group">
                     <label><b>Reason:</b></label>
@@ -38,7 +35,7 @@
                     <div class="form-group">
                         <b>When?</b>
                         <select @bind="selectedYear" class="form-control">
-                            @foreach (var year in Enumerable.Range(1985, DateTime.Now.Year - 1999))
+                            @foreach (var year in Enumerable.Range(1980, (DateTime.Now.Year+1)-1980))
                             {
                                 <option value="@year">@year</option>
                             }
@@ -50,39 +47,29 @@
             }
             else
             {
-                <div>
-                    <b>Movie: </b>
+                <div style="margin-left:10%;width:80%;text-align:center">
                     @if (string.IsNullOrEmpty(MovieEvent.Movie))
                     {
-                        <span>none</span>
+                        <span>No movie selected.</span>
                     }
                     else
                     {
-                        @MovieEvent.Movie
+                        <span><b>@MovieEvent.Person</b> chose the movie <b>'@MovieEvent.Movie'</b></span>
+                        @if (MovieEvent.SeenDate != null)
+                        {
+                            <span> for the month of @MovieEvent.EndDate.ToString("MMMM")</span>
+                        }
+                        if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
+                        {
+                            <span> and last saw it in @MovieEvent.SeenDate.Value.Year.</span>
+                        }
+                        else
+                        {
+                            <span> and has never seen it before.</span>
+                        }
                     }
                 </div>
-                <div>
-                    <b>IMDb: </b>
-                    @if (string.IsNullOrEmpty(MovieEvent.IMDb))
-                    {
-                        <span>none</span>
-                    }
-                    else
-                    {
-                        <a target="_blank" href="@MovieEvent.IMDb">link</a>
-                    }
-                </div>
-                <div>
-                    <b>Download Link: </b>
-                    @if (string.IsNullOrEmpty(MovieEvent.DownloadLink))
-                    {
-                        <span>none</span>
-                    }
-                    else
-                    {
-                        <a target="_blank" href="@MovieEvent.DownloadLink">download movie</a>
-                    }
-                </div>
+                <br />
                 <div>
                     @if (string.IsNullOrEmpty(MovieEvent.PosterUrl))
                     {
@@ -90,29 +77,19 @@
                     }
                     else
                     {
-                        <img style="max-width: 400px; max-height: 400px;" src="@MovieEvent.PosterUrl" />
+                        <img style="width:100%" src="@MovieEvent.PosterUrl" />
+                        <br />
+                        <br />
                     }
-                    <br />
                 </div>
                 <div>
-                    <b>Reason: </b>
                     @if (string.IsNullOrEmpty(MovieEvent.Reasoning))
                     {
                         <span>none</span>
                     }
                     else
                     {
-                        @MovieEvent.Reasoning
-                    }
-                </div>
-                <div>
-                    @if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
-                    {
-                        <b>I saw this movie in @MovieEvent.SeenDate.Value.Year</b>
-                    }
-                    else
-                    {
-                        <b>I have never seen this movie</b>
+                        <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
                     }
                 </div>
                 <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>

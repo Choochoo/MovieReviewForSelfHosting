@@ -1,8 +1,8 @@
-using MongoDB.Driver.Linq;
+
+
 using MovieReviewApp.Database;
+using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
-using System;
-using System.Threading;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -10,133 +10,85 @@ namespace MovieReviewApp.Components.Pages
     {
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
-        public int? TimeCount = null;
-        public string? TimePeriod = null;
-        public List<(string, string)> Remaining { get; set; } = new();
-
-        private Random rand = new Random(1337);
+        public List<Phase> Phases { get; set; } = new();
+        private readonly Random _rand = new Random(1337);
         private MongoDb db = new MongoDb();
 
         protected override void OnInitialized()
         {
             var settings = db.GetSettings();
-            if (!DateTime.TryParse(settings.FirstOrDefault(x => x.Key == "StartDate")?.Value, out var startDate) ||
-                !int.TryParse(settings.FirstOrDefault(x => x.Key == "TimeCount")?.Value, out var timeCount) ||
-                (TimePeriod = settings.FirstOrDefault(x => x.Key == "TimePeriod")?.Value) == null)
+            if (!DateTime.TryParse(settings.FirstOrDefault(x => x.Key == "StartDate")?.Value, out var startDate))
             {
                 // Handle error: settings are missing or malformed
                 return;
             }
 
-            TimeCount = timeCount;
             var allNames = db.GetAllPeople().Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+            GeneratePhases(startDate, allNames);
+        }
 
-            var today = DateTime.Now;
-            List<string> listNames = [.. allNames];
-            var endOfCurrentPeriod = startDate;
-            string person = "";
-
-            while (endOfCurrentPeriod.Date < today.Date)
+        private void GeneratePhases(DateTime startDate, string?[]? allNames)
+        {
+            var listNames = allNames?.ToList();
+            var phase = GeneratePhase(1, startDate, listNames); // Always phase 1
+            Phases.Add(phase);
+            var isNextPhase = false;
+            while(!isNextPhase)
             {
-                endOfCurrentPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
-                if (listNames.Count == 0)
-                    listNames = [.. allNames];
-                person = listNames[rand.Next(listNames.Count)];
-                listNames.Remove(person);
+                startDate = phase.EndDate.AddDays(1);
+                phase = GeneratePhase(phase.Number.Value + 1, startDate, listNames);
+                Phases.Add(phase);
+                isNextPhase = phase.StartDate > DateTime.Now;
             }
-            var dbCurrentEvent = db.GetMovieEventBetweenDate(endOfCurrentPeriod);
-            if (dbCurrentEvent != null)
+        }
+
+        private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
+        {
+            var phase = db.GetPhase(phaseNumber, peopleNames, startDate);
+            var peopleUsed = phase.Events.Where(x => !string.IsNullOrEmpty(x.Person)).Select(x => x.Person).Distinct().ToList();
+            for (var i = 0; i < peopleUsed.Count; i++)
+                _rand.Next();//cycle to where we are in the seed.
+
+            var peopleLeftNotInDb = peopleNames.Where(x => !peopleUsed.Contains(x)).ToList();
+            GenerateMovieEvents(phaseNumber, startDate, phase, peopleUsed, peopleLeftNotInDb);
+            SetCurrentAndNextPhases(phase);
+
+            return phase;
+        }
+
+        private void GenerateMovieEvents(int phaseNumber, DateTime startDate, Phase phase, List<string?> peopleUsed, List<string> peopleLeftNotInDb)
+        {
+            var moveEventStartDate = startDate.AddMonths(peopleUsed.Count);
+            while (peopleLeftNotInDb.Count > 0)
             {
-                listNames.Remove(dbCurrentEvent.Person);
-                CurrentEvent = dbCurrentEvent;
-                CurrentEvent.FromDatabase = true;
-
-                var nextEventDate = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
-                var dbNextEvent = db.GetMovieEventBetweenDate(nextEventDate);
-                if (dbNextEvent != null)
+                var person = peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
+                phase.Events.Add(new MovieEvent
                 {
-                    NextEvent = dbNextEvent;
-                    NextEvent.FromDatabase = true;
-                    listNames.Remove(dbNextEvent.Person);
-                    FinishRemainingNames(listNames, nextEventDate);
-                    return;
-                }
-            }
-
-            person = listNames[rand.Next(listNames.Count)];
-            listNames.Remove(person);
-
-            var (startOfPeriod, endOfPeriod, endOfNextPeriod) = CalculatePeriods(endOfCurrentPeriod, startDate);
-
-            if (CurrentEvent == null)
-            {
-                CurrentEvent = new MovieEvent
-                {
-                    StartDate = startOfPeriod,
-                    EndDate = endOfPeriod,
+                    StartDate = moveEventStartDate,
+                    EndDate = moveEventStartDate.EndOfMonth(),
                     Person = person,
                     FromDatabase = false,
-                    IsEditing = true
-                };
-                person = listNames[rand.Next(listNames.Count)];
-                listNames.Remove(person);
-            }
-
-            NextEvent = new MovieEvent
-            {
-                StartDate = endOfPeriod.AddDays(1),
-                EndDate = endOfNextPeriod,
-                Person = person,
-                FromDatabase = false,
-                IsEditing = true
-            };
-
-            FinishRemainingNames(listNames,endOfNextPeriod);
-        }
-
-        private void FinishRemainingNames(List<string> listNames, DateTime endOfNextPeriod)
-        {
-            string person = string.Empty;
-            while (listNames.Any())
-            {
-                var sdate = endOfNextPeriod.AddDays(1).ToString("MMMM d, yyyy");
-                person = listNames[rand.Next(listNames.Count)];
-                listNames.Remove(person);
-                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfNextPeriod, TimeCount.Value, TimePeriod);
-                Remaining.Add((person, $"{sdate} - {endOfNextPeriod.ToString("MMMM d, yyyy")}"));
+                    IsEditing = false,
+                    PhaseNumber = phaseNumber
+                });
+                moveEventStartDate = moveEventStartDate.AddMonths(1);
+                peopleLeftNotInDb.Remove(person);
             }
         }
 
-        private DateTime AddToDateTimeWithCountAndPeriod(DateTime date, int count, string period)
+        private void SetCurrentAndNextPhases(Phase phase)
         {
-            switch (period)
+            var isCurrentPhase = DateTime.Now.IsWithinRange(phase.StartDate, phase.EndDate);
+            if (isCurrentPhase)
             {
-                case "Month":
-                    date = date.AddMonths(count);
-                    return new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)); ;
-                case "Week":
-                    return date.AddDays(count * 7);
-                default:
-                    return date.AddDays(count);
+                CurrentEvent = phase.Events.Single(x => DateTime.Now.IsWithinRange(x.StartDate, x.EndDate));
+                var nextMonth = DateTime.Now.AddMonths(1);
+                NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate));
+                return;
             }
-        }
 
-        private (DateTime, DateTime, DateTime) CalculatePeriods(DateTime endOfCurrentPeriod, DateTime startDate)
-        {
-            DateTime startOfPeriod, endOfPeriod, endOfNextPeriod;
-            if (endOfCurrentPeriod.Date == startDate.Date)
-            {
-                startOfPeriod = startDate;
-                endOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
-                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value * 2, TimePeriod);
-            }
-            else
-            {
-                startOfPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, -TimeCount.Value, TimePeriod).AddDays(1);
-                endOfPeriod = endOfCurrentPeriod;
-                endOfNextPeriod = AddToDateTimeWithCountAndPeriod(endOfCurrentPeriod, TimeCount.Value, TimePeriod);
-            }
-            return (startOfPeriod, endOfPeriod, endOfNextPeriod);
+            //Assume it must be first one of the next phase.
+            NextEvent = NextEvent == null ? phase.Events.OrderBy(x => x.StartDate).First() : NextEvent;
         }
     }
 }
