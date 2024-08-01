@@ -78,12 +78,12 @@ namespace MovieReviewApp.Components.Pages
 
         private void SetCurrentAndNextPhases(Phase phase)
         {
-            var isCurrentPhase = DateTime.Now.IsWithinRange(phase.StartDate, phase.EndDate);
+            var isCurrentPhase = DateTime.Now.IsWithinRange(phase.StartDate, phase.EndDate.EndOfDay());
             if (isCurrentPhase)
             {
-                CurrentEvent = phase.Events.Single(x => DateTime.Now.IsWithinRange(x.StartDate, x.EndDate));
+                CurrentEvent = phase.Events.Single(x => DateTime.Now.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
                 var nextMonth = DateTime.Now.AddMonths(1);
-                NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate));
+                NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
                 return;
             }
 
