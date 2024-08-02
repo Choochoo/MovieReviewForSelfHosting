@@ -33,7 +33,7 @@ namespace MovieReviewApp.Components.Pages
             var phase = GeneratePhase(1, startDate, listNames); // Always phase 1
             Phases.Add(phase);
             var isNextPhase = false;
-            while(!isNextPhase)
+            while (!isNextPhase)
             {
                 startDate = phase.EndDate.AddDays(1);
                 phase = GeneratePhase(phase.Number.Value + 1, startDate, listNames);

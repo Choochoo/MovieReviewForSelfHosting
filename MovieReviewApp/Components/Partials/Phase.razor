@@ -50,7 +50,7 @@
                 <div style="margin-left:10%;width:80%;text-align:center">
                     @if (string.IsNullOrEmpty(MovieEvent.Movie))
                     {
-                        <span>No movie selected.</span>
+                        <span>@MovieEvent.Person's turn to choose.</span>
                     }
                     else
                     {
@@ -71,11 +71,7 @@
                 </div>
                 <br />
                 <div>
-                    @if (string.IsNullOrEmpty(MovieEvent.PosterUrl))
-                    {
-                        <span>none</span>
-                    }
-                    else
+                    @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
                     {
                         <img style="width:100%" src="@MovieEvent.PosterUrl" />
                         <br />
@@ -83,16 +79,24 @@
                     }
                 </div>
                 <div>
-                    @if (string.IsNullOrEmpty(MovieEvent.Reasoning))
-                    {
-                        <span>none</span>
-                    }
-                    else
+                    @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
                     {
                         <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
                     }
                 </div>
-                <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
+                @if (string.IsNullOrEmpty(MovieEvent.Movie))
+                {
+                    <div style="text-align:center;width:100%">
+                        <button type="button" style="background-color: blue; margin:20px" class="btn btn-secondary" @onclick="Edit">ADD MOVIE FOR @MovieEvent.StartDate.ToString("MMMM").ToUpper()</button>
+                    </div>
+
+
+                }
+                else
+                {
+                    <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
+                }
+
             }
         </div>
     </div>
