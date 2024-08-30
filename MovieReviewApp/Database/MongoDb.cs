@@ -1,10 +1,6 @@
-﻿using MongoDB.Bson;
-using MongoDB.Driver;
+﻿using MongoDB.Driver;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace MovieReviewApp.Database
 {
@@ -143,7 +139,8 @@ namespace MovieReviewApp.Database
             var filter = Builders<Phase>.Filter.Eq("Number", phaseNumber);
             var foundPhase = Phases.Find(filter).FirstOrDefault();
             var endDate = startDate.AddMonths(listNames.Count).EndOfDay();
-            var isCurrentPhase = DateTime.Now.IsWithinRange(startDate, endDate);
+            //Minus a month so it adds a new phase 1 month before the current phase ends.
+            var isCurrentPhase = DateTime.Now.IsWithinRange(startDate.AddMonths(-1), endDate);
 
             if (foundPhase == null)
             {

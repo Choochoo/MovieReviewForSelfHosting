@@ -1,7 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
 using MovieReviewApp.Components;
-using MovieReviewApp.Components.Layout;
 
 var builder = WebApplication.CreateBuilder(args);
 
