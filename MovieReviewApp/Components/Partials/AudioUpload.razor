@@ -1,6 +1,11 @@
 ﻿@page "/discussions/upload"
 @using System.Globalization
+@using System.Security.Cryptography
+@using AssemblyAI;
+@using AssemblyAI.Transcripts;
+@using System.Text
 @inject IWebHostEnvironment WebHostEnvironment
+@inject IConfiguration Configuration
 
 <h4>Upload Audio Clips</h4>
 
@@ -61,6 +66,13 @@
     public string SuccessMessage = string.Empty;
     private string PIN { get; set; } = "";
     private string uploadButtonText = "Upload";
+    private AssemblyAIClient client;
+
+    protected override void OnInitialized()
+    {
+        var apiKey = Configuration["AssemblyAI:ApiKey"];
+        client = new AssemblyAIClient(apiKey);
+    }
 
     private void HandleSelected(InputFileChangeEventArgs e)
     {
@@ -113,15 +125,13 @@
             }
         }
 
-        // Clear the file input and disable the upload button after upload
         selectedFiles.Clear();
         isUploadButtonDisabled = true;
         uploadButtonText = "Upload";
 
-        // Hide and then show the file input to reset it
         fileInputVisible = false;
         StateHasChanged();
-        await Task.Delay(100); // Small delay to ensure the input is re-rendered
+        await Task.Delay(100);
         fileInputVisible = true;
     }
 
@@ -147,13 +157,48 @@
                 Directory.CreateDirectory(targetFolder);
             }
 
+            var processedHashes = new HashSet<string>();
+
             foreach (var file in Directory.GetFiles(uploadsFolder))
             {
                 var fileInfo = new FileInfo(file);
-                if (fileInfo.DirectoryName != targetFolder)
+                if (fileInfo.DirectoryName == targetFolder) continue;
+
+                var fileHash = await GetFileHashAsync(file);
+                if (processedHashes.Contains(fileHash))
                 {
-                    var destFileName = Path.Combine(targetFolder, fileInfo.Name);
-                    System.IO.File.Move(fileInfo.FullName, destFileName);
+                    File.Delete(file);
+                    continue;
+                }
+
+                processedHashes.Add(fileHash);
+
+                var uniqueGuid = Guid.NewGuid().ToString();
+                var newFileName = $"{SelectedMonth}-{SelectedYear}-{uniqueGuid}{fileInfo.Extension}";
+                var destFileName = Path.Combine(targetFolder, newFileName);
+
+                if (IsAudioFile(file))
+                {
+                    var transcript = await TranscribeAudioAsync(file);
+                    if (!string.IsNullOrEmpty(transcript))
+                    {
+                        var transcriptFileName = $"{SelectedMonth}-{SelectedYear}-{uniqueGuid}.txt";
+                        var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
+                        await File.WriteAllTextAsync(transcriptPath, transcript);
+
+                        // Move the audio file only after successful transcription
+                        File.Move(fileInfo.FullName, destFileName);
+                    }
+                    else
+                    {
+                        // If transcription failed, log an error but don't move the file
+                        Error += $"\nFailed to transcribe: {fileInfo.Name}";
+                    }
+                }
+                else
+                {
+                    // For non-audio files, move them immediately
+                    File.Move(fileInfo.FullName, destFileName);
                 }
             }
 
@@ -165,5 +210,79 @@
         }
 
         Processing = false;
+    }
+
+    private async Task<string> GetFileHashAsync(string filePath)
+    {
+        using var md5 = MD5.Create();
+        using var stream = File.OpenRead(filePath);
+        var hash = await md5.ComputeHashAsync(stream);
+        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+    }
+
+    private bool IsAudioFile(string filePath)
+    {
+        var audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Common audio file extensions
+            ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
+
+            // Video file extensions that may contain audio
+            ".mp4", ".mov", ".avi", ".mkv", ".webm",
+
+            // Apple-specific formats
+            ".m4v", ".3gp",
+
+            // Additional formats
+            ".aiff", ".ac3", ".amr"
+        };
+
+        return audioExtensions.Contains(Path.GetExtension(filePath));
+    }
+
+    private async Task<string> TranscribeAudioAsync(string filePath)
+    {
+        try
+        {
+            var uploadedFile = await client.Files.UploadAsync(new FileInfo(filePath));
+            var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
+                {
+                    AudioUrl = uploadedFile.UploadUrl,
+                    SpeakerLabels = true  // Enable speaker diarization
+                };
+
+            var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
+            transcript.EnsureStatusCompleted();
+
+            if (transcript.Status == AssemblyAI.Transcripts.TranscriptStatus.Completed)
+            {
+                return FormatTranscriptWithSpeakers(transcript);
+            }
+            else
+            {
+                Error += $"\nTranscription failed: {transcript.Status}";
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Error += $"\nTranscription error: {ex.Message}";
+            return null;
+        }
+    }
+
+    private string FormatTranscriptWithSpeakers(AssemblyAI.Transcripts.Transcript transcript)
+    {
+        if (transcript.Utterances == null || !transcript.Utterances.Any())
+        {
+            return transcript.Text; // Return the full text if no utterances are available
+        }
+
+        var formattedTranscript = new StringBuilder();
+        foreach (var utterance in transcript.Utterances)
+        {
+            formattedTranscript.AppendLine($"Speaker {utterance.Speaker}: {utterance.Text}");
+        }
+        return formattedTranscript.ToString();
     }
 }

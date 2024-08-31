@@ -57,7 +57,7 @@
                         <span><b>@MovieEvent.Person</b> chose the movie <b>'@MovieEvent.Movie'</b></span>
                         @if (MovieEvent.SeenDate != null)
                         {
-                            <span> for the month of @MovieEvent.EndDate.ToString("MMMM")</span>
+                            <span> for the month of @MovieEvent.EndDate.AddDays(-1).ToString("MMMM")</span>
                         }
                         if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
                         {

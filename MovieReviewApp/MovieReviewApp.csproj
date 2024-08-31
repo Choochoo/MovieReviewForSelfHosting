@@ -9,6 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AssemblyAI" Version="1.1.0" />
 		<PackageReference Include="MongoDB.Driver" Version="2.23.1" />
 	</ItemGroup>
 </Project>
