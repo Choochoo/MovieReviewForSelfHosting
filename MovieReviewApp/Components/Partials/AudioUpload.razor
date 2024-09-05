@@ -4,8 +4,10 @@
 @using AssemblyAI;
 @using AssemblyAI.Transcripts;
 @using System.Text
+@using NAudio.Wave
 @inject IWebHostEnvironment WebHostEnvironment
 @inject IConfiguration Configuration
+@inject IJSRuntime JSRuntime
 
 <h4>Upload Audio Clips</h4>
 
@@ -15,7 +17,7 @@
         {
             <InputFile OnChange="HandleSelected" multiple class="form-control-file" />
         }
-        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">@uploadButtonText</button>
+        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">Upload</button>
     </div>
     @if (!string.IsNullOrEmpty(Error))
     {
@@ -29,6 +31,11 @@
             @SuccessMessage
         </div>
     }
+    <div id="progressBarContainer" style="display: none;">
+        <div class="progress">
+            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+    </div>
 </div>
 
 <div class="form-group">
@@ -65,7 +72,6 @@
     public string Error = string.Empty;
     public string SuccessMessage = string.Empty;
     private string PIN { get; set; } = "";
-    private string uploadButtonText = "Upload";
     private AssemblyAIClient client;
 
     protected override void OnInitialized()
@@ -83,18 +89,22 @@
     private async Task UploadFiles()
     {
         const long maxFileSize = 2L * 1024 * 1024 * 1024; // 2 GB limit
-        uploadButtonText = "Please wait... Uploading";
         isUploadButtonDisabled = true;
         Error = string.Empty;
         SuccessMessage = string.Empty;
+
+        await JSRuntime.InvokeVoidAsync("showProgressBar");
+
+        long totalSize = selectedFiles.Sum(f => f.Size);
+        long uploadedSize = 0;
 
         foreach (var file in selectedFiles)
         {
             if (file.Size > maxFileSize)
             {
                 Error = "File size exceeds the 2 GB limit.";
-                uploadButtonText = "Upload";
                 isUploadButtonDisabled = false;
+                await JSRuntime.InvokeVoidAsync("hideProgressBar");
                 return;
             }
 
@@ -111,7 +121,20 @@
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
-                    await file.OpenReadStream(maxFileSize).CopyToAsync(stream);
+                    var buffer = new byte[4096];
+                    int bytesRead;
+                    long totalBytesRead = 0;
+                    var fileStream = file.OpenReadStream(maxFileSize);
+
+                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await stream.WriteAsync(buffer, 0, bytesRead);
+                        totalBytesRead += bytesRead;
+                        uploadedSize += bytesRead;
+
+                        double overallProgress = (double)uploadedSize / totalSize * 100;
+                        await JSRuntime.InvokeVoidAsync("updateProgressBar", Math.Round(overallProgress, 2));
+                    }
                 }
 
                 SuccessMessage = "File(s) uploaded successfully.";
@@ -119,20 +142,21 @@
             catch (Exception ex)
             {
                 Error = $"An error occurred while uploading the file: {ex.Message}";
-                uploadButtonText = "Upload";
                 isUploadButtonDisabled = false;
+                await JSRuntime.InvokeVoidAsync("hideProgressBar");
                 return;
             }
         }
 
         selectedFiles.Clear();
         isUploadButtonDisabled = true;
-        uploadButtonText = "Upload";
 
         fileInputVisible = false;
         StateHasChanged();
         await Task.Delay(100);
         fileInputVisible = true;
+
+        await JSRuntime.InvokeVoidAsync("hideProgressBar");
     }
 
     private async Task ProcessFiles()
@@ -157,32 +181,34 @@
                 Directory.CreateDirectory(targetFolder);
             }
 
-            var processedHashes = new HashSet<string>();
+            // Delete duplicate files before processing
+            await DeleteDuplicateFilesAsync(uploadsFolder);
 
             foreach (var file in Directory.GetFiles(uploadsFolder))
             {
                 var fileInfo = new FileInfo(file);
                 if (fileInfo.DirectoryName == targetFolder) continue;
 
-                var fileHash = await GetFileHashAsync(file);
-                if (processedHashes.Contains(fileHash))
-                {
-                    File.Delete(file);
-                    continue;
-                }
-
-                processedHashes.Add(fileHash);
-
-                var uniqueGuid = Guid.NewGuid().ToString();
-                var newFileName = $"{SelectedMonth}-{SelectedYear}-{uniqueGuid}{fileInfo.Extension}";
+                var duration = GetMediaDuration(file);
+                var durationString = FormatDuration(duration);
+                var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
                 var destFileName = Path.Combine(targetFolder, newFileName);
+
+                // Ensure the new filename is unique
+                int counter = 1;
+                while (File.Exists(destFileName))
+                {
+                    newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
+                    destFileName = Path.Combine(targetFolder, newFileName);
+                    counter++;
+                }
 
                 if (IsAudioFile(file))
                 {
                     var transcript = await TranscribeAudioAsync(file);
                     if (!string.IsNullOrEmpty(transcript))
                     {
-                        var transcriptFileName = $"{SelectedMonth}-{SelectedYear}-{uniqueGuid}.txt";
+                        var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
                         var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
                         await File.WriteAllTextAsync(transcriptPath, transcript);
 
@@ -210,6 +236,52 @@
         }
 
         Processing = false;
+    }
+
+    private TimeSpan GetMediaDuration(string filePath)
+    {
+        try
+        {
+            using (var reader = new MediaFoundationReader(filePath))
+            {
+                return reader.TotalTime;
+            }
+        }
+        catch
+        {
+            // If we can't determine the duration, return zero
+            return TimeSpan.Zero;
+        }
+    }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}hr_{duration.Minutes}min_{duration.Seconds}sec";
+        }
+        else
+        {
+            return $"{duration.Minutes}min_{duration.Seconds}sec";
+        }
+    }
+
+    private async Task DeleteDuplicateFilesAsync(string folderPath)
+    {
+        var fileHashes = new Dictionary<string, string>();
+        foreach (var file in Directory.GetFiles(folderPath))
+        {
+            var fileHash = await GetFileHashAsync(file);
+            if (fileHashes.ContainsKey(fileHash))
+            {
+                // This is a duplicate file, delete it
+                File.Delete(file);
+            }
+            else
+            {
+                fileHashes[fileHash] = file;
+            }
+        }
     }
 
     private async Task<string> GetFileHashAsync(string filePath)
@@ -284,5 +356,32 @@
             formattedTranscript.AppendLine($"Speaker {utterance.Speaker}: {utterance.Text}");
         }
         return formattedTranscript.ToString();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                function showProgressBar() {
+                    document.getElementById('progressBarContainer').style.display = 'block';
+                }
+
+                function hideProgressBar() {
+                    document.getElementById('progressBarContainer').style.display = 'none';
+                }
+
+                function updateProgressBar(percentage) {
+                    var progressBar = document.getElementById('progressBar');
+                    progressBar.style.width = percentage + '%';
+                    progressBar.setAttribute('aria-valuenow', percentage);
+                    progressBar.textContent = percentage + '%';
+                }
+
+                window.showProgressBar = showProgressBar;
+                window.hideProgressBar = hideProgressBar;
+                window.updateProgressBar = updateProgressBar;
+            ");
+        }
     }
 }
