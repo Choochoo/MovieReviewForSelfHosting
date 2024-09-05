@@ -58,6 +58,16 @@
         <input type="password" @bind="PIN" placeholder="Enter PIN" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;" />
         <button @onclick="ProcessFiles" class="btn btn-primary" disabled="@Processing">Process</button>
     </div>
+    @if (!FoundApiKey)
+    {
+        <small class="text-danger">API key not found. Please add your AssemblyAI API key to the appsettings.json file.</small>
+    }
+    @if (CurrentException.Length > 0)
+    {
+        <div class="alert alert-danger" role="alert">
+            Exception: @CurrentException
+        </div>
+    }
 </div>
 
 @code {
@@ -73,17 +83,38 @@
     public string SuccessMessage = string.Empty;
     private string PIN { get; set; } = "";
     private AssemblyAIClient client;
+    private bool FoundApiKey = false;
+    private string CurrentException = "";
+    private int CurrentFileNumber { get; set; }
+    private int TotalFiles { get; set; }
+    private string CurrentFileName { get; set; }
+    private int ProgressPercentage { get; set; }
 
     protected override void OnInitialized()
     {
-        var apiKey = Configuration["AssemblyAI:ApiKey"];
-        client = new AssemblyAIClient(apiKey);
+        try
+        {
+            var apiKey = Configuration["AssemblyAI:ApiKey"];
+            FoundApiKey = !string.IsNullOrEmpty(apiKey);
+            client = new AssemblyAIClient(apiKey);
+        }
+        catch (Exception ex)
+        {
+            CurrentException = $"Error initializing: {ex.Message}";
+        }
     }
 
     private void HandleSelected(InputFileChangeEventArgs e)
     {
-        selectedFiles = e.GetMultipleFiles().ToList();
-        isUploadButtonDisabled = !selectedFiles.Any();
+        try
+        {
+            selectedFiles = e.GetMultipleFiles().ToList();
+            isUploadButtonDisabled = !selectedFiles.Any();
+        }
+        catch (Exception ex)
+        {
+            CurrentException = $"Error selecting files: {ex.Message}";
+        }
     }
 
     private async Task UploadFiles()
@@ -92,71 +123,78 @@
         isUploadButtonDisabled = true;
         Error = string.Empty;
         SuccessMessage = string.Empty;
+        CurrentException = string.Empty;
 
-        await JSRuntime.InvokeVoidAsync("showProgressBar");
-
-        long totalSize = selectedFiles.Sum(f => f.Size);
-        long uploadedSize = 0;
-
-        foreach (var file in selectedFiles)
+        try
         {
-            if (file.Size > maxFileSize)
-            {
-                Error = "File size exceeds the 2 GB limit.";
-                isUploadButtonDisabled = false;
-                await JSRuntime.InvokeVoidAsync("hideProgressBar");
-                return;
-            }
+            await JSRuntime.InvokeVoidAsync("showProgressBar");
 
-            try
+            long totalSize = selectedFiles.Sum(f => f.Size);
+            long uploadedSize = 0;
+
+            foreach (var file in selectedFiles)
             {
-                var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
-                if (!Directory.Exists(uploadsFolder))
+                if (file.Size > maxFileSize)
                 {
-                    Directory.CreateDirectory(uploadsFolder);
+                    Error = "File size exceeds the 2 GB limit.";
+                    isUploadButtonDisabled = false;
+                    await JSRuntime.InvokeVoidAsync("hideProgressBar");
+                    return;
                 }
 
-                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
-                var filePath = Path.Combine(uploadsFolder, fileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                try
                 {
-                    var buffer = new byte[4096];
-                    int bytesRead;
-                    long totalBytesRead = 0;
-                    var fileStream = file.OpenReadStream(maxFileSize);
-
-                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+                    if (!Directory.Exists(uploadsFolder))
                     {
-                        await stream.WriteAsync(buffer, 0, bytesRead);
-                        totalBytesRead += bytesRead;
-                        uploadedSize += bytesRead;
-
-                        double overallProgress = (double)uploadedSize / totalSize * 100;
-                        await JSRuntime.InvokeVoidAsync("updateProgressBar", Math.Round(overallProgress, 2));
+                        Directory.CreateDirectory(uploadsFolder);
                     }
-                }
 
-                SuccessMessage = "File(s) uploaded successfully.";
-            }
-            catch (Exception ex)
-            {
-                Error = $"An error occurred while uploading the file: {ex.Message}";
-                isUploadButtonDisabled = false;
-                await JSRuntime.InvokeVoidAsync("hideProgressBar");
-                return;
+                    var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    using (var stream = new FileStream(filePath, FileMode.Create))
+                    {
+                        var buffer = new byte[4096];
+                        int bytesRead;
+                        long totalBytesRead = 0;
+                        var fileStream = file.OpenReadStream(maxFileSize);
+
+                        while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                        {
+                            await stream.WriteAsync(buffer, 0, bytesRead);
+                            totalBytesRead += bytesRead;
+                            uploadedSize += bytesRead;
+
+                            double overallProgress = (double)uploadedSize / totalSize * 100;
+                            await JSRuntime.InvokeVoidAsync("updateProgressBar", Math.Round(overallProgress, 2));
+                        }
+                    }
+
+                    SuccessMessage = "File(s) uploaded successfully.";
+                }
+                catch (Exception ex)
+                {
+                    Error += $"\nError uploading {file.Name}: {ex.Message}";
+                    CurrentException += $"\nException while uploading {file.Name}: {ex}";
+                }
             }
         }
-
-        selectedFiles.Clear();
-        isUploadButtonDisabled = true;
-
-        fileInputVisible = false;
-        StateHasChanged();
-        await Task.Delay(100);
-        fileInputVisible = true;
-
-        await JSRuntime.InvokeVoidAsync("hideProgressBar");
+        catch (Exception ex)
+        {
+            Error = "An error occurred during the upload process.";
+            CurrentException = $"Upload process exception: {ex}";
+        }
+        finally
+        {
+            selectedFiles.Clear();
+            isUploadButtonDisabled = true;
+            fileInputVisible = false;
+            StateHasChanged();
+            await Task.Delay(100);
+            fileInputVisible = true;
+            await JSRuntime.InvokeVoidAsync("hideProgressBar");
+        }
     }
 
     private async Task ProcessFiles()
@@ -171,6 +209,7 @@
         Processing = true;
         Error = "";
         SuccessMessage = "";
+        CurrentException = "";
 
         try
         {
@@ -181,76 +220,78 @@
                 Directory.CreateDirectory(targetFolder);
             }
 
-            // Delete duplicate files before processing
             await DeleteDuplicateFilesAsync(uploadsFolder);
 
-            foreach (var file in Directory.GetFiles(uploadsFolder))
+            var files = Directory.GetFiles(uploadsFolder);
+            TotalFiles = files.Length;
+            CurrentFileNumber = 0;
+
+            foreach (var file in files)
             {
-                var fileInfo = new FileInfo(file);
-                if (fileInfo.DirectoryName == targetFolder) continue;
-
-                var duration = GetMediaDuration(file);
-                var durationString = FormatDuration(duration);
-                var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
-                var destFileName = Path.Combine(targetFolder, newFileName);
-
-                // Ensure the new filename is unique
-                int counter = 1;
-                while (File.Exists(destFileName))
+                CurrentFileNumber++;
+                CurrentFileName = Path.GetFileName(file);
+                ProgressPercentage = (int)((float)CurrentFileNumber / TotalFiles * 100);
+                StateHasChanged();
+                try
                 {
-                    newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
-                    destFileName = Path.Combine(targetFolder, newFileName);
-                    counter++;
-                }
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.DirectoryName == targetFolder) continue;
 
-                if (IsAudioFile(file))
-                {
-                    var transcript = await TranscribeAudioAsync(file);
-                    if (!string.IsNullOrEmpty(transcript))
+                    var duration = GetMediaDuration(file);
+                    var durationString = FormatDuration(duration);
+                    var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
+                    var destFileName = Path.Combine(targetFolder, newFileName);
+
+                    int counter = 1;
+                    while (File.Exists(destFileName))
                     {
-                        var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
-                        var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
-                        await File.WriteAllTextAsync(transcriptPath, transcript);
+                        newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
+                        destFileName = Path.Combine(targetFolder, newFileName);
+                        counter++;
+                    }
 
-                        // Move the audio file only after successful transcription
-                        File.Move(fileInfo.FullName, destFileName);
+                    if (IsAudioFile(file))
+                    {
+                        var transcript = await TranscribeAudioAsync(file);
+                        if (!string.IsNullOrEmpty(transcript))
+                        {
+                            var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
+                            var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
+                            await File.WriteAllTextAsync(transcriptPath, transcript);
+                            File.Move(fileInfo.FullName, destFileName);
+                        }
+                        else
+                        {
+                            Error += $"\nFailed to transcribe: {fileInfo.Name}";
+                        }
                     }
                     else
                     {
-                        // If transcription failed, log an error but don't move the file
-                        Error += $"\nFailed to transcribe: {fileInfo.Name}";
+                        File.Move(fileInfo.FullName, destFileName);
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    // For non-audio files, move them immediately
-                    File.Move(fileInfo.FullName, destFileName);
+                    Error += $"\nError processing file {Path.GetFileName(file)}: {ex.Message}";
+                    CurrentException += $"\nException processing file {file}: {ex}";
                 }
+
+                await Task.Delay(100); // Small delay to allow UI update
             }
 
             SuccessMessage = "Files processed successfully.";
         }
         catch (Exception ex)
         {
-            Error = $"An error occurred while processing the files: {ex.Message}";
+            Error = "An error occurred while processing the files.";
+            CurrentException = $"File processing exception: {ex}";
         }
-
-        Processing = false;
-    }
-
-    private TimeSpan GetMediaDuration(string filePath)
-    {
-        try
+        finally
         {
-            using (var reader = new MediaFoundationReader(filePath))
-            {
-                return reader.TotalTime;
-            }
-        }
-        catch
-        {
-            // If we can't determine the duration, return zero
-            return TimeSpan.Zero;
+            Processing = false;
+            CurrentFileNumber = 0;
+            CurrentFileName = "";
+            ProgressPercentage = 0;
         }
     }
 
@@ -264,32 +305,6 @@
         {
             return $"{duration.Minutes}min_{duration.Seconds}sec";
         }
-    }
-
-    private async Task DeleteDuplicateFilesAsync(string folderPath)
-    {
-        var fileHashes = new Dictionary<string, string>();
-        foreach (var file in Directory.GetFiles(folderPath))
-        {
-            var fileHash = await GetFileHashAsync(file);
-            if (fileHashes.ContainsKey(fileHash))
-            {
-                // This is a duplicate file, delete it
-                File.Delete(file);
-            }
-            else
-            {
-                fileHashes[fileHash] = file;
-            }
-        }
-    }
-
-    private async Task<string> GetFileHashAsync(string filePath)
-    {
-        using var md5 = MD5.Create();
-        using var stream = File.OpenRead(filePath);
-        var hash = await md5.ComputeHashAsync(stream);
-        return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
     private bool IsAudioFile(string filePath)
@@ -312,6 +327,69 @@
         return audioExtensions.Contains(Path.GetExtension(filePath));
     }
 
+    private TimeSpan GetMediaDuration(string filePath)
+    {
+        try
+        {
+            using (var reader = new MediaFoundationReader(filePath))
+            {
+                return reader.TotalTime;
+            }
+        }
+        catch (Exception ex)
+        {
+            CurrentException += $"\nError getting media duration for {Path.GetFileName(filePath)}: {ex}";
+            return TimeSpan.Zero;
+        }
+    }
+
+    private async Task DeleteDuplicateFilesAsync(string folderPath)
+    {
+        try
+        {
+            var fileHashes = new Dictionary<string, string>();
+            foreach (var file in Directory.GetFiles(folderPath))
+            {
+                try
+                {
+                    var fileHash = await GetFileHashAsync(file);
+                    if (fileHashes.ContainsKey(fileHash))
+                    {
+                        File.Delete(file);
+                    }
+                    else
+                    {
+                        fileHashes[fileHash] = file;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    CurrentException += $"\nError processing file for duplication {Path.GetFileName(file)}: {ex}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            CurrentException += $"\nError in duplicate file deletion process: {ex}";
+        }
+    }
+
+    private async Task<string> GetFileHashAsync(string filePath)
+    {
+        try
+        {
+            using var md5 = MD5.Create();
+            using var stream = File.OpenRead(filePath);
+            var hash = await md5.ComputeHashAsync(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            CurrentException += $"\nError calculating hash for {Path.GetFileName(filePath)}: {ex}";
+            return string.Empty;
+        }
+    }
+
     private async Task<string> TranscribeAudioAsync(string filePath)
     {
         try
@@ -320,7 +398,7 @@
             var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
                 {
                     AudioUrl = uploadedFile.UploadUrl,
-                    SpeakerLabels = true  // Enable speaker diarization
+                    SpeakerLabels = true
                 };
 
             var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
@@ -338,7 +416,8 @@
         }
         catch (Exception ex)
         {
-            Error += $"\nTranscription error: {ex.Message}";
+            Error += $"\nTranscription error for {Path.GetFileName(filePath)}: {ex.Message}";
+            CurrentException += $"\nTranscription exception for {filePath}: {ex}";
             return null;
         }
     }

@@ -1,70 +1,110 @@
 ﻿@page "/discussions/list"
+@using System.IO
+@inject IWebHostEnvironment WebHostEnvironment
 
-@if (ProcessedData == null)
+<h3>Processed Files</h3>
+
+@if (Folders == null)
 {
     <p><em>Loading...</em></p>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var data in ProcessedData)
+    <div class="mb-3">
+        <label for="folderSelect" class="form-label">Select Folder:</label>
+        <select id="folderSelect" class="form-select" @onchange="OnFolderSelected">
+            <option value="">Choose a folder...</option>
+            @foreach (var folder in Folders)
             {
+                <option value="@folder">@folder</option>
+            }
+        </select>
+    </div>
+
+    @if (!string.IsNullOrEmpty(SelectedFolder))
+    {
+        <h4>Files in @SelectedFolder</h4>
+        <table class="table table-striped">
+            <thead>
                 <tr>
-                    <td>@data.Date.ToShortDateString()</td>
-                    <td>
-                        <button @onclick="() => Toggle(data.Id)" class="btn btn-secondary">Toggle</button>
-                    </td>
+                    <th>File Name</th>
+                    <th>Type</th>
+                    <th>Actions</th>
                 </tr>
-                @if (data.Expanded)
+            </thead>
+            <tbody>
+                @foreach (var file in Files)
                 {
                     <tr>
-                        <td colspan="2">
-                            <div>
-                                @* Display more detailed data here *@
-                            </div>
+                        <td>@file.Name</td>
+                        <td>@file.Extension</td>
+                        <td>
+                            @if (file.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <button @onclick="() => ViewTextFile(file.FullName)" class="btn btn-primary">View</button>
+                            }
                         </td>
                     </tr>
                 }
-            }
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    }
+}
+
+@if (!string.IsNullOrEmpty(TextFileContent))
+{
+    <div class="mt-4">
+        <h4>File Content</h4>
+        <pre>@TextFileContent</pre>
+    </div>
 }
 
 @code {
-    private List<ProcessedDataModel> ProcessedData;
+    private List<string> Folders { get; set; }
+    private List<FileInfo> Files { get; set; } = new List<FileInfo>();
+    private string SelectedFolder { get; set; }
+    private string TextFileContent { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        ProcessedData = await LoadProcessedData();
+        await LoadFolders();
     }
 
-    private async Task<List<ProcessedDataModel>> LoadProcessedData()
+    private Task LoadFolders()
     {
-        // Load processed data from the backend
-        return new List<ProcessedDataModel>(); // Replace with actual data
+        var uploadsPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+        Folders = Directory.GetDirectories(uploadsPath)
+                           .Select(Path.GetFileName)
+                           .ToList();
+        return Task.CompletedTask;
     }
 
-    private void Toggle(int id)
+    private void OnFolderSelected(ChangeEventArgs e)
     {
-        var item = ProcessedData.FirstOrDefault(x => x.Id == id);
-        if (item != null)
+        SelectedFolder = e.Value.ToString();
+        if (!string.IsNullOrEmpty(SelectedFolder))
         {
-            item.Expanded = !item.Expanded;
+            LoadFiles(SelectedFolder);
         }
+        else
+        {
+            Files.Clear();
+        }
+        TextFileContent = string.Empty;
     }
 
-    private class ProcessedDataModel
+    private void LoadFiles(string folderName)
     {
-        public int Id { get; set; }
-        public DateTime Date { get; set; }
-        public bool Expanded { get; set; }
-        // Other properties for processed data
+        var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", folderName);
+        Files = Directory.GetFiles(folderPath)
+                         .Where(f => 
+                                     Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                         .Select(f => new FileInfo(f))
+                         .ToList();
+    }
+
+    private async Task ViewTextFile(string filePath)
+    {
+        TextFileContent = await File.ReadAllTextAsync(filePath);
     }
 }
