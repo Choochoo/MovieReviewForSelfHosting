@@ -1,0 +1,54 @@
+﻿@page "/discussions/stats"
+@using MovieReviewApp.Models
+@using MovieReviewApp.Database
+
+<h3>Processed Stats Commands</h3>
+
+@if (StatsCommands == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!StatsCommands.Any())
+{
+    <p>No data found.</p>
+}
+else
+{
+    <!-- Loop through each StatsCommand for all data -->
+    @foreach (var command in StatsCommands)
+    {
+        <div class="card mb-3">
+            <div class="card-header">
+                @command.FolderName.Replace("-", " ")
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">@command.Command</h5>
+                <p class="card-text">
+                    <ul>
+                        @foreach (var result in command.Results)
+                        {
+                            <li>@result</li>
+                        }
+                    </ul>
+                </p>
+                <p class="card-text"><small class="text-muted">Processed on: @command.ProcessedDate.ToString("MMMM dd, yyyy")</small></p>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<StatsCommand>? StatsCommands { get; set; }
+    private MongoDb _db = new MongoDb();
+
+    protected override void OnInitialized()
+    {
+        LoadAllStatsCommands();
+    }
+
+    private void LoadAllStatsCommands()
+    {
+        // Load all processed stats commands from the database
+        StatsCommands = _db.GetProcessedStatCommands();
+    }
+}

@@ -24,6 +24,7 @@ namespace MovieReviewApp.Database
         private IMongoCollection<MovieEvent>? MovieEvents => database?.GetCollection<MovieEvent>("MovieReviews");
         private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
         private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
+        private IMongoCollection<StatsCommand>? StatsCommands => database?.GetCollection<StatsCommand>("StatsCommands");
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {
@@ -49,6 +50,23 @@ namespace MovieReviewApp.Database
                 .Set("SeenDate", movieEvent.SeenDate)
                 .Set("PhaseNumber", movieEvent.PhaseNumber); // Added PhaseNumber here
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+        }
+
+        public List<StatsCommand> GetProcessedStatCommandsForMonth(string monthYear)
+        {
+            var filter = Builders<StatsCommand>.Filter.Eq("MonthYear", monthYear);
+
+            return StatsCommands.Find(filter).ToList();
+        }
+
+        public List<StatsCommand> GetProcessedStatCommands()
+        {
+            return StatsCommands.Find(_ => true).ToList();
+        }
+
+        public void AddStatsCommand(StatsCommand commandResult)
+        {
+            StatsCommands?.InsertOne(commandResult);
         }
 
         public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)

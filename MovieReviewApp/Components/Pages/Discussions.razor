@@ -4,6 +4,9 @@
 
 <ul class="nav nav-tabs">
     <li class="nav-item">
+        <a class="nav-link @((activeTab == "stats") ? "active" : "")" @onclick='() => activeTab = "stats"'>Stats</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link @((activeTab == "list") ? "active" : "")" @onclick='() => activeTab = "list"'>Discussions</a>
     </li>
     <li class="nav-item">
@@ -11,6 +14,10 @@
     </li>
 </ul>
 <br />
+@if (activeTab == "stats")
+{
+    <Stats />
+}
 @if (activeTab == "list")
 {
     <DiscussionsList />
@@ -27,5 +34,5 @@ else if (activeTab == "upload")
 </style>
 
 @code {
-    private string activeTab = "list"; // Default tab
+    private string activeTab = "stats"; // Default tab
 }
