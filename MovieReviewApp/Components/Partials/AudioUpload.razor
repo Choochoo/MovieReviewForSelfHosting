@@ -215,12 +215,18 @@
         {
             var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
             var targetFolder = Path.Combine(uploadsFolder, $"{SelectedMonth}-{SelectedYear}");
+            var erroredOutFolder = Path.Combine(uploadsFolder, "errored_out");
+
             if (!Directory.Exists(targetFolder))
             {
                 Directory.CreateDirectory(targetFolder);
             }
+            if (!Directory.Exists(erroredOutFolder))
+            {
+                Directory.CreateDirectory(erroredOutFolder);
+            }
 
-            await DeleteDuplicateFilesAsync(uploadsFolder);
+            await HandleDuplicateFilesAsync(uploadsFolder);
 
             var files = Directory.GetFiles(uploadsFolder);
             TotalFiles = files.Length;
@@ -232,46 +238,14 @@
                 CurrentFileName = Path.GetFileName(file);
                 ProgressPercentage = (int)((float)CurrentFileNumber / TotalFiles * 100);
                 StateHasChanged();
+
                 try
                 {
-                    var fileInfo = new FileInfo(file);
-                    if (fileInfo.DirectoryName == targetFolder) continue;
-
-                    var duration = GetMediaDuration(file);
-                    var durationString = FormatDuration(duration);
-                    var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
-                    var destFileName = Path.Combine(targetFolder, newFileName);
-
-                    int counter = 1;
-                    while (File.Exists(destFileName))
-                    {
-                        newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
-                        destFileName = Path.Combine(targetFolder, newFileName);
-                        counter++;
-                    }
-
-                    if (IsAudioFile(file))
-                    {
-                        var transcript = await TranscribeAudioAsync(file);
-                        if (!string.IsNullOrEmpty(transcript))
-                        {
-                            var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
-                            var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
-                            await File.WriteAllTextAsync(transcriptPath, transcript);
-                            File.Move(fileInfo.FullName, destFileName);
-                        }
-                        else
-                        {
-                            Error += $"\nFailed to transcribe: {fileInfo.Name}";
-                        }
-                    }
-                    else
-                    {
-                        File.Move(fileInfo.FullName, destFileName);
-                    }
+                    await ProcessSingleFile(file, targetFolder);
                 }
                 catch (Exception ex)
                 {
+                    await MoveToErroredOutFolder(file, erroredOutFolder);
                     Error += $"\nError processing file {Path.GetFileName(file)}: {ex.Message}";
                     CurrentException += $"\nException processing file {file}: {ex}";
                 }
@@ -292,6 +266,146 @@
             CurrentFileNumber = 0;
             CurrentFileName = "";
             ProgressPercentage = 0;
+        }
+    }
+
+    private async Task ProcessSingleFile(string file, string targetFolder)
+    {
+        var fileInfo = new FileInfo(file);
+        if (fileInfo.DirectoryName == targetFolder) return;
+
+        var duration = GetMediaDuration(file);
+        var durationString = FormatDuration(duration);
+        var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
+        var destFileName = Path.Combine(targetFolder, newFileName);
+
+        int counter = 1;
+        while (File.Exists(destFileName))
+        {
+            newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
+            destFileName = Path.Combine(targetFolder, newFileName);
+            counter++;
+        }
+
+        if (IsAudioFile(file))
+        {
+            var transcript = await TranscribeAudioAsync(file);
+            if (!string.IsNullOrEmpty(transcript))
+            {
+                var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
+                var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
+                await File.WriteAllTextAsync(transcriptPath, transcript);
+                File.Move(fileInfo.FullName, destFileName);
+            }
+            else
+            {
+                throw new Exception($"Failed to transcribe: {fileInfo.Name}");
+            }
+        }
+        else
+        {
+            File.Move(fileInfo.FullName, destFileName);
+        }
+    }
+
+    private async Task MoveToErroredOutFolder(string filePath, string erroredOutFolder)
+    {
+        var fileName = $"errored_out_{Guid.NewGuid()}{Path.GetExtension(filePath)}";
+        var destPath = Path.Combine(erroredOutFolder, fileName);
+        File.Move(filePath, destPath);
+    }
+
+    private async Task HandleDuplicateFilesAsync(string folderPath)
+    {
+        var fileHashes = new Dictionary<string, List<string>>();
+        foreach (var file in Directory.GetFiles(folderPath))
+        {
+            try
+            {
+                var fileHash = await GetFileHashAsync(file);
+                if (!fileHashes.ContainsKey(fileHash))
+                {
+                    fileHashes[fileHash] = new List<string>();
+                }
+                fileHashes[fileHash].Add(file);
+            }
+            catch (Exception ex)
+            {
+                CurrentException += $"\nError processing file for duplication {Path.GetFileName(file)}: {ex}";
+            }
+        }
+
+        foreach (var hash in fileHashes.Keys)
+        {
+            if (fileHashes[hash].Count > 1)
+            {
+                await HandleDuplicateGroup(fileHashes[hash]);
+            }
+        }
+    }
+
+    private async Task HandleDuplicateGroup(List<string> duplicateFiles)
+    {
+        bool foundValidFile = false;
+        foreach (var file in duplicateFiles)
+        {
+            try
+            {
+                if (!foundValidFile && await IsFileTranscribable(file))
+                {
+                    foundValidFile = true;
+                }
+                else
+                {
+                    File.Delete(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                CurrentException += $"\nError handling duplicate file {Path.GetFileName(file)}: {ex}";
+            }
+        }
+    }
+
+    private async Task<bool> IsFileTranscribable(string filePath)
+    {
+        try
+        {
+            var transcript = await TranscribeAudioAsync(filePath);
+            return !string.IsNullOrEmpty(transcript);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<string> TranscribeAudioAsync(string filePath)
+    {
+        try
+        {
+            var uploadedFile = await client.Files.UploadAsync(new FileInfo(filePath));
+            var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
+                {
+                    AudioUrl = uploadedFile.UploadUrl,
+                    SpeakerLabels = true
+                };
+
+            var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
+            transcript.EnsureStatusCompleted();
+
+            if (transcript.Status == AssemblyAI.Transcripts.TranscriptStatus.Completed)
+            {
+                return FormatTranscriptWithSpeakers(transcript);
+            }
+            else
+            {
+                throw new Exception($"Transcription failed: {transcript.Status}");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Transcription error for {Path.GetFileName(filePath)}: {ex.Message}", ex);
         }
     }
 
@@ -390,43 +504,11 @@
         }
     }
 
-    private async Task<string> TranscribeAudioAsync(string filePath)
-    {
-        try
-        {
-            var uploadedFile = await client.Files.UploadAsync(new FileInfo(filePath));
-            var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
-                {
-                    AudioUrl = uploadedFile.UploadUrl,
-                    SpeakerLabels = true
-                };
-
-            var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
-            transcript.EnsureStatusCompleted();
-
-            if (transcript.Status == AssemblyAI.Transcripts.TranscriptStatus.Completed)
-            {
-                return FormatTranscriptWithSpeakers(transcript);
-            }
-            else
-            {
-                Error += $"\nTranscription failed: {transcript.Status}";
-                return null;
-            }
-        }
-        catch (Exception ex)
-        {
-            Error += $"\nTranscription error for {Path.GetFileName(filePath)}: {ex.Message}";
-            CurrentException += $"\nTranscription exception for {filePath}: {ex}";
-            return null;
-        }
-    }
-
     private string FormatTranscriptWithSpeakers(AssemblyAI.Transcripts.Transcript transcript)
     {
         if (transcript.Utterances == null || !transcript.Utterances.Any())
         {
-            return transcript.Text; // Return the full text if no utterances are available
+            return transcript.Text; 
         }
 
         var formattedTranscript = new StringBuilder();

@@ -362,3 +362,4 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /MovieReviewApp/wwwroot/uploads/August-2024
+/MovieReviewApp/wwwroot/uploads
