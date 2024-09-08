@@ -1,42 +1,45 @@
 ﻿using MovieReviewApp.Database;
 using MovieReviewApp.Enums;
+using MovieReviewApp.Helpers;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MovieReviewApp.Handlers
 {
     public class StatsCommandHandler
     {
         private MongoDb _db = new MongoDb();
-        private static readonly HashSet<string> CommonWords = new HashSet<string>
-    {
-        "the", "is", "in", "it", "and", "or", "to", "a", "of", "on", "at", "as", "for", "with", "by",
-        "an", "be", "this", "that", "but", "not", "are", "from", "was", "were", "you", "he", "she", "we",
-        "they", "has", "have", "had", "will", "can", "do", "if", "when", "which", "who", "their", "its"
-        // Add more common words to this list as needed
-    };
+        private readonly string _webRootPath;
+        private HashSet<string> CommonWords;
 
-        public StatsCommandHandler()
+        public StatsCommandHandler(string webRootPath)
         {
+            _webRootPath = webRootPath;
         }
 
-        public async Task<List<string>> ExecuteCommand(StatsCommandType commandType, string text)
+        public async Task<List<string>> ExecuteCommand(string folderName, StatsCommandType commandType)
         {
             switch (commandType)
             {
                 case StatsCommandType.ScanMostPopularWord:
-                    return await ScanMostPopularWord(text);
+                    return await ScanMostPopularWord(folderName);
                 // Add cases for other commands
                 default:
                     throw new NotImplementedException();
             }
         }
 
-        private Task<List<string>> ScanMostPopularWord(string text)
+        private Task<List<string>> ScanMostPopularWord(string folderName)
         {
+            // Read text files in the folder
+            string[] allFilesText = FolderHelper.GetTextFromFiles(Path.Combine(_webRootPath, "uploads", folderName));
+            var text = string.Join(Environment.NewLine, allFilesText);
+
             // Split text into words, remove common words, and count word frequency
             var words = text
                 .Split(new[] { ' ', '.', ',', ';', ':', '?', '!', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(w => w.ToLower())
-                .Where(w => !CommonWords.Contains(w))
+                .Where(w => !CommonWords.Contains(w))  // Exclude common words
                 .GroupBy(w => w)
                 .OrderByDescending(g => g.Count())
                 .Take(5)
@@ -45,6 +48,22 @@ namespace MovieReviewApp.Handlers
 
             return Task.FromResult(words);
         }
-    }
 
+        private HashSet<string> LoadCommonWords()
+        {
+            var commonWordsFilePath = Path.Combine(_webRootPath, "assets", "common_words.txt"); // Adjust the path as needed
+
+            if (!File.Exists(commonWordsFilePath))
+            {
+                throw new FileNotFoundException("Common words file not found", commonWordsFilePath);
+            }
+
+            var commonWords = File.ReadAllLines(commonWordsFilePath)
+                                  .Select(word => word.ToLower().Trim())
+                                  .Where(word => !string.IsNullOrWhiteSpace(word))
+                                  .ToHashSet();
+
+            return commonWords;
+        }
+    }
 }

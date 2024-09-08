@@ -3,6 +3,8 @@
 @inject IWebHostEnvironment WebHostEnvironment
 @using AssemblyAI
 @using MovieReviewApp.Enums
+@using MovieReviewApp.Handlers
+@using MovieReviewApp.Services
 @inject IConfiguration Configuration;
 
 <h4>Stats Commands</h4>
@@ -96,6 +98,8 @@
     private List<string> SelectedFolders { get; set; } = new();  // Selected folders (month-year)
     public string Error = string.Empty;
     private AssemblyAIClient? client;
+    private StatsCommandProcessorService processorService { get; set; }
+
 
     protected override void OnInitialized()
     {
@@ -103,6 +107,8 @@
         client = new AssemblyAIClient(apiKey);
 
         base.OnInitialized();
+
+        processorService = new StatsCommandProcessorService(WebHostEnvironment.WebRootPath);
 
         // Load all possible commands
         AllStatsCommands = Enum.GetValues(typeof(StatsCommandType))
@@ -138,7 +144,8 @@
             // Loop through selected folders to process
             foreach (var folder in SelectedFolders)
             {
-                // Fetch text and run commands for each folder
+                var folderName = folder.Replace(" ", "-");
+                await processorService.ProcessCommands(folderName, SelectedCommands);
             }
         }
         catch (Exception ex)

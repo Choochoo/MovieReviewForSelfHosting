@@ -1,5 +1,6 @@
 ﻿using MovieReviewApp.Database;
 using MovieReviewApp.Enums;
+using MovieReviewApp.Handlers;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Services
@@ -7,21 +8,26 @@ namespace MovieReviewApp.Services
     public class StatsCommandProcessorService
     {
         private MongoDb _db = new MongoDb();
+        private readonly StatsCommandHandler statsCommandHandler;
 
-        public StatsCommandProcessorService()
+        public StatsCommandProcessorService(string webRootPath)
         {
+            statsCommandHandler = new StatsCommandHandler(webRootPath);
         }
 
         public async Task<List<StatsCommand>> ProcessCommands(string folderName, List<string> commands)
         {
             var results = new List<StatsCommand>();
-            var existingCommands = _db.GetProcessedStatCommandsForMonth(folderName);
 
             foreach (var command in commands)
             {
-                if (!existingCommands.Any(c => c.Command == command))
+                // Try to find the corresponding StatsCommandType enum value
+                StatsCommandType? commandType = GetCommandType(command);
+
+                if (commandType.HasValue)
                 {
-                    var result = ExecuteCommand(command); // This would be your actual command logic
+                    // Execute the command using the command type
+                    var result = await statsCommandHandler.ExecuteCommand(folderName, commandType.Value);
                     var commandResult = new StatsCommand
                     {
                         Command = command,
@@ -32,9 +38,33 @@ namespace MovieReviewApp.Services
                     _db.AddStatsCommand(commandResult);
                     results.Add(commandResult);
                 }
+                else
+                {
+                    // Log an error or handle the case where the command doesn't match an enum value
+                    Console.WriteLine($"No matching command type found for {command}");
+                }
             }
 
             return results;
+        }
+
+        // Helper method to map the string command to StatsCommandType
+        private StatsCommandType? GetCommandType(string command)
+        {
+            // Loop through the StatsCommandType enum values
+            foreach (var enumValue in Enum.GetValues(typeof(StatsCommandType)))
+            {
+                var enumName = enumValue.ToString().ToLower().Replace(" ", "");
+
+                // Match the processed enum name with the command
+                if (enumName == command.ToLower().Replace(" ", ""))
+                {
+                    return (StatsCommandType)enumValue;
+                }
+            }
+
+            // Return null if no match is found
+            return null;
         }
 
         public async Task ProcessCommandResults(string folder, StatsCommandType commandType, List<string> results)
@@ -55,14 +85,6 @@ namespace MovieReviewApp.Services
             _db.AddStatsCommand(statsCommand);
 
             await Task.CompletedTask;
-        }
-
-
-
-        private List<string> ExecuteCommand(string command)
-        {
-            // Placeholder for actual command execution logic
-            return new List<string> { $"Result for {command}" };
         }
     }
 }
