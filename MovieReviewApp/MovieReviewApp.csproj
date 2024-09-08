@@ -9,6 +9,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Content Remove="Components\Partials\UploadAudio - Copy.razor" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="AssemblyAI" Version="1.1.1" />
 		<PackageReference Include="MongoDB.Driver" Version="2.28.0" />
 		<PackageReference Include="NAudio" Version="2.2.1" />

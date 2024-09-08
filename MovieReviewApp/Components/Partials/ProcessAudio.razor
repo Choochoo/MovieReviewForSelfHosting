@@ -1,0 +1,253 @@
+﻿@page "/discussions/upload/process"
+@using AssemblyAI;
+@using AssemblyAI.Transcripts;
+@using MovieReviewApp.Enums
+@using NAudio.Wave
+@using System.Globalization
+@using System.Text
+@inject IWebHostEnvironment WebHostEnvironment;
+@inject IConfiguration Configuration;
+
+
+<h4>Process Files</h4>
+
+<div class="form-group">
+    <div class="input-group mb-3 flex-column flex-sm-row">
+        <select @bind="SelectedMonth" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;">
+            @foreach (var month in Months)
+            {
+                <option value="@month">@month</option>
+            }
+        </select>
+
+        <select @bind="SelectedYear" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;">
+            @foreach (var year in Years)
+            {
+                <option value="@year">@year</option>
+            }
+        </select>
+
+        <input type="password" @bind="PIN" placeholder="Enter PIN" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;" />
+        <button @onclick="ProcessFiles" class="btn btn-primary" disabled="@Processing">Process</button>
+    </div>
+</div>
+
+@code {
+    private bool Processing = false;
+    private string SelectedMonth { get; set; } = DateTime.Now.ToString("MMMM");
+    private int SelectedYear { get; set; } = DateTime.Now.Year;
+    private List<string> Months = CultureInfo.CurrentCulture.DateTimeFormat.MonthNames.Take(12).ToList();
+    private List<int> Years = Enumerable.Range(DateTime.Now.Year - 20, 21).ToList();
+    private string PIN { get; set; } = "";
+    public string Error = string.Empty;
+    public string SuccessMessage = string.Empty;
+    private AssemblyAIClient? client;
+    public string CurrentException = "";
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        try
+        {
+            var apiKey = Configuration["AssemblyAI:ApiKey"];
+            client = new AssemblyAIClient(apiKey);
+        }
+        catch (Exception ex)
+        {
+            CurrentException = $"Error initializing: {ex.Message}";
+        }
+    }
+
+
+    private async Task ProcessFiles()
+    {
+        const string correctPIN = "9021";
+        if (PIN != correctPIN)
+        {
+            Error = "Invalid PIN.";
+            return;
+        }
+
+        Processing = true;
+        Error = "";
+        SuccessMessage = "";
+
+        try
+        {
+            var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+            var targetFolder = Path.Combine(uploadsFolder, $"{SelectedMonth}-{SelectedYear}");
+            var erroredOutFolder = Path.Combine(uploadsFolder, "errored_out");
+
+            if (!Directory.Exists(targetFolder))
+            {
+                Directory.CreateDirectory(targetFolder);
+            }
+            if (!Directory.Exists(erroredOutFolder))
+            {
+                Directory.CreateDirectory(erroredOutFolder);
+            }
+
+            var files = Directory.GetFiles(uploadsFolder);
+            foreach (var file in files)
+            {
+                try
+                {
+                    await ProcessSingleFile(file, targetFolder);
+                }
+                catch (Exception ex)
+                {
+                    await MoveToErroredOutFolder(file, erroredOutFolder);
+                    Error += $"\nError processing file {Path.GetFileName(file)}: {ex.Message}";
+                }
+            }
+
+            SuccessMessage = "Files processed successfully.";
+        }
+        catch (Exception ex)
+        {
+            Error = "An error occurred while processing the files.";
+        }
+        finally
+        {
+            Processing = false;
+        }
+    }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}hr_{duration.Minutes}min_{duration.Seconds}sec";
+        }
+        else
+        {
+            return $"{duration.Minutes}min_{duration.Seconds}sec";
+        }
+    }
+
+    private async Task ProcessSingleFile(string file, string targetFolder)
+    {
+        var fileInfo = new FileInfo(file);
+        if (fileInfo.DirectoryName == targetFolder) return;
+
+        var duration = GetMediaDuration(file);
+        var durationString = FormatDuration(duration);
+        var newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}{fileInfo.Extension}";
+        var destFileName = Path.Combine(targetFolder, newFileName);
+
+        int counter = 1;
+        while (File.Exists(destFileName))
+        {
+            newFileName = $"{SelectedMonth}-{SelectedYear}_{durationString}_{counter}{fileInfo.Extension}";
+            destFileName = Path.Combine(targetFolder, newFileName);
+            counter++;
+        }
+
+        if (IsAudioFile(file))
+        {
+            var transcript = await TranscribeAudioAsync(file);
+            if (!string.IsNullOrEmpty(transcript))
+            {
+                var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
+                var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
+                await File.WriteAllTextAsync(transcriptPath, transcript);
+                File.Move(fileInfo.FullName, destFileName);
+            }
+            else
+            {
+                throw new Exception($"Failed to transcribe: {fileInfo.Name}");
+            }
+        }
+        else
+        {
+            File.Move(fileInfo.FullName, destFileName);
+        }
+    }
+
+    private async Task<string> TranscribeAudioAsync(string filePath)
+    {
+        try
+        {
+            var uploadedFile = await client.Files.UploadAsync(new FileInfo(filePath));
+            var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
+                {
+                    AudioUrl = uploadedFile.UploadUrl,
+                    SpeakerLabels = true
+                };
+
+            var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
+            transcript.EnsureStatusCompleted();
+
+            if (transcript.Status == AssemblyAI.Transcripts.TranscriptStatus.Completed)
+            {
+                return FormatTranscriptWithSpeakers(transcript);
+            }
+            else
+            {
+                throw new Exception($"Transcription failed: {transcript.Status}");
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Transcription error for {Path.GetFileName(filePath)}: {ex.Message}", ex);
+        }
+    }
+
+    private string FormatTranscriptWithSpeakers(AssemblyAI.Transcripts.Transcript transcript)
+    {
+        if (transcript.Utterances == null || !transcript.Utterances.Any())
+        {
+            return transcript.Text;
+        }
+
+        var formattedTranscript = new StringBuilder();
+        foreach (var utterance in transcript.Utterances)
+        {
+            formattedTranscript.AppendLine($"Speaker {utterance.Speaker}: {utterance.Text}");
+        }
+        return formattedTranscript.ToString();
+    }
+
+    private bool IsAudioFile(string filePath)
+    {
+        var audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Common audio file extensions
+            ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
+
+            // Video file extensions that may contain audio
+            ".mp4", ".mov", ".avi", ".mkv", ".webm",
+
+            // Apple-specific formats
+            ".m4v", ".3gp",
+
+            // Additional formats
+            ".aiff", ".ac3", ".amr"
+        };
+
+        return audioExtensions.Contains(Path.GetExtension(filePath));
+    }
+
+    private TimeSpan GetMediaDuration(string filePath)
+    {
+        try
+        {
+            using (var reader = new MediaFoundationReader(filePath))
+            {
+                return reader.TotalTime;
+            }
+        }
+        catch (Exception ex)
+        {
+            CurrentException += $"\nError getting media duration for {Path.GetFileName(filePath)}: {ex}";
+            return TimeSpan.Zero;
+        }
+    }
+
+    private async Task MoveToErroredOutFolder(string filePath, string erroredOutFolder)
+    {
+        var fileName = $"errored_out_{Guid.NewGuid()}{Path.GetExtension(filePath)}";
+        var destPath = Path.Combine(erroredOutFolder, fileName);
+        File.Move(filePath, destPath);
+    }
+}

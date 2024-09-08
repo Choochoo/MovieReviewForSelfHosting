@@ -7,6 +7,13 @@
 
 <h3>Processed Files</h3>
 
+@if (!string.IsNullOrEmpty(ErrorMessage))
+{
+    <div class="alert alert-danger" role="alert">
+        @ErrorMessage
+    </div>
+}
+
 @if (Folders == null)
 {
     <p><em>Loading...</em></p>
@@ -67,77 +74,124 @@ else
 }
 
 @code {
-    private List<string> Folders { get; set; }
+    private List<string> Folders { get; set; } = new List<string>();
     private List<FileInfo> Files { get; set; } = new List<FileInfo>();
     private string SelectedFolder { get; set; }
     private string TextFileContent { get; set; }
     private string _apiKey { get; set; }
+    private string ErrorMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadFolders();
         try
         {
+            await LoadFolders();
             _apiKey = Configuration["OpenAI:ApiKey"];
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                ErrorMessage = "API key not found in configuration.";
+            }
         }
         catch (Exception ex)
         {
+            ErrorMessage = $"Error initializing: {ex.Message}";
         }
     }
 
     private Task LoadFolders()
     {
-        var uploadsPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
-        Folders = Directory.GetDirectories(uploadsPath)
-                           .Select(Path.GetFileName)
-                           .ToList();
-        return Task.CompletedTask;
+        try
+        {
+            var uploadsPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+            Directory.CreateDirectory(uploadsPath);
+            Folders = Directory.GetDirectories(uploadsPath)
+                               .Select(Path.GetFileName)
+                               .Where(x => x.IndexOf("_") == -1)
+                               .ToList();
+            return Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading folders: {ex.Message}";
+            return Task.CompletedTask;
+        }
     }
 
     private void OnFolderSelected(ChangeEventArgs e)
     {
-        SelectedFolder = e.Value.ToString();
-        if (!string.IsNullOrEmpty(SelectedFolder))
+        try
         {
-            LoadFiles(SelectedFolder);
+            SelectedFolder = e.Value.ToString();
+            if (!string.IsNullOrEmpty(SelectedFolder))
+            {
+                LoadFiles(SelectedFolder);
+            }
+            else
+            {
+                Files.Clear();
+            }
+            TextFileContent = string.Empty;
+            ErrorMessage = string.Empty;
         }
-        else
+        catch (Exception ex)
         {
-            Files.Clear();
+            ErrorMessage = $"Error selecting folder: {ex.Message}";
         }
-        TextFileContent = string.Empty;
     }
 
     private void LoadFiles(string folderName)
     {
-        var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", folderName);
-        Files = Directory.GetFiles(folderPath)
-                         .Where(f =>
-                                     Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase))
-                         .Select(f => new FileInfo(f))
-                         .ToList();
+        try
+        {
+            var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", folderName);
+            Files = Directory.GetFiles(folderPath)
+                             .Where(f => Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                             .Select(f => new FileInfo(f))
+                             .ToList();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading files: {ex.Message}";
+        }
     }
 
     private async Task ViewTextFile(string filePath)
     {
-        TextFileContent = await File.ReadAllTextAsync(filePath);
+        try
+        {
+            TextFileContent = await File.ReadAllTextAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error viewing file: {ex.Message}";
+        }
     }
 
     private async Task GuessNames()
     {
         try
         {
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                ErrorMessage = "API key is missing. Please check your configuration.";
+                return;
+            }
+
             var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", SelectedFolder);
             var textFiles = Directory.GetFiles(folderPath, "*.txt");
 
-            // Prepare content for API by separating each file and treating them as different contexts
+            if (textFiles.Length == 0)
+            {
+                ErrorMessage = "No text files found in the selected folder.";
+                return;
+            }
+
             var fileContents = textFiles.Select(File.ReadAllText).ToArray();
 
-            // Prepare a prompt for each file, treating each file as a different context
             var prompt = "There are six people in this conversation: Jared, Lacey, Keri, Dave, Jeremiah, Nikki. " +
                          "Each file represents a separate conversation, and the speakers (e.g., 'Speaker A', 'Speaker B') " +
                          "may represent different people across files, but they are always one of the six people mentioned. " +
-                         "Please replace the 'Speaker A', 'Speaker B', etc. with the most appropriate name in each file.\n\n";
+                         "Please replace the 'Speaker A', 'Speaker B', etc. with the most appropriate name in each file.  Keep note that 'Carrie' is actually spelled 'Keri'\n\n";
 
             for (int i = 0; i < fileContents.Length; i++)
             {
@@ -146,15 +200,14 @@ else
 
             var request = new
             {
-                model = "gpt-4o",  // Using the GPT-4o model as specified
+                model = "gpt-4o",
                 messages = new[]
                 {
-                new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-                new { role = "user", content = prompt }
-            }
+                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
+                    new { role = "user", content = prompt }
+                }
             };
 
-            // Use the _apiKey variable for authentication
             Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
             var response = await Http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request);
 
@@ -165,12 +218,9 @@ else
                 using (JsonDocument doc = JsonDocument.Parse(responseBody))
                 {
                     var root = doc.RootElement;
-
-                    // Navigate through the JSON structure to extract 'choices' and 'message.content'
                     var choices = root.GetProperty("choices");
                     var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
 
-                    // Here, we do not split by 'File X content', instead we apply guessed names directly to the content
                     for (int i = 0; i < textFiles.Length; i++)
                     {
                         var fileContent = File.ReadAllText(textFiles[i]);
@@ -178,84 +228,54 @@ else
                         File.WriteAllText(textFiles[i], updatedContent);
                     }
                 }
+
+                ErrorMessage = string.Empty;
+                await LoadFolders();
+                LoadFiles(SelectedFolder);
             }
             else
             {
-                // Handle API failure
-                Console.WriteLine("API request failed.");
+                ErrorMessage = $"API request failed: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
             }
         }
         catch (Exception ex)
         {
-            // Log or handle exceptions
-            Console.WriteLine($"An error occurred: {ex.Message}");
+            ErrorMessage = $"Error guessing names: {ex.Message}";
         }
     }
 
-    // Helper function to apply guessed names directly into the content
     private string ApplyGuessedNames(string fileContent, string messageContent)
     {
-        // Replace speaker placeholders (Speaker A, Speaker B, etc.) with guessed names from messageContent
-        // Assume the format is "Speaker A: Jared", "Speaker B: Lacey", etc.
-        var speakerMap = new Dictionary<string, string>();
-
-        // Parse the messageContent to extract the speaker mappings
-        var lines = messageContent.Split('\n');
-        foreach (var line in lines)
+        try
         {
-            // Parse lines that look like "Jared: Some dialogue"
-            var parts = line.Split(':');
-            if (parts.Length == 2)
-            {
-                var speakerName = parts[0].Trim();
-                var dialogue = parts[1].Trim();
-                // Add the speaker and their dialogue to the map if it's a known person
-                if (!speakerMap.ContainsKey(speakerName) &&
-                    new[] { "Jared", "Lacey", "Keri", "Dave", "Jeremiah", "Nikki" }.Contains(speakerName))
-                {
-                    speakerMap[speakerName] = dialogue;
-                }
-            }
-        }
-
-        // Now replace any placeholders (like "Speaker A") in the original fileContent with the actual speaker names
-        foreach (var speaker in speakerMap)
-        {
-            fileContent = fileContent.Replace(speaker.Key, speaker.Value);
-        }
-
-        return fileContent;
-    }
-
-    // Helper function to replace placeholders with guessed names per file
-    private string ReplaceSpeakerPlaceholders(string fileContent, string guessedNamesForFile)
-    {
-        // Parse the guessed names from the format and build a speaker map
-        var speakerMap = new Dictionary<string, string>();
-        var lines = guessedNamesForFile.Split('\n');
-
-        foreach (var line in lines)
-        {
-            // Parse lines that look like '**Speaker A:** Jared'
-            if (line.Contains("**Speaker"))
+            var speakerMap = new Dictionary<string, string>();
+            var lines = messageContent.Split('\n');
+            foreach (var line in lines)
             {
                 var parts = line.Split(':');
                 if (parts.Length == 2)
                 {
-                    var placeholder = parts[0].Replace("**", "").Trim(); // e.g., "Speaker A"
-                    var realName = parts[1].Trim();                      // e.g., "Jared"
-                    speakerMap[placeholder] = realName;
+                    var speakerPlaceholder = parts[0].Trim();
+                    var speakerName = parts[1].Trim();
+                    if (speakerPlaceholder.StartsWith("Speaker ") &&
+                        new[] { "Jared", "Lacey", "Keri", "Dave", "Jeremiah", "Nikki" }.Contains(speakerName))
+                    {
+                        speakerMap[speakerPlaceholder] = speakerName;
+                    }
                 }
             }
-        }
 
-        // Replace placeholders in the file content based on the guessed names
-        foreach (var speaker in speakerMap)
+            foreach (var speaker in speakerMap)
+            {
+                fileContent = fileContent.Replace(speaker.Key + ":", speaker.Value + ":");
+            }
+
+            return fileContent;
+        }
+        catch (Exception ex)
         {
-            fileContent = fileContent.Replace(speaker.Key, speaker.Value);
+            ErrorMessage = $"Error applying guessed names: {ex.Message}";
+            return fileContent;
         }
-
-        return fileContent;
     }
-
 }

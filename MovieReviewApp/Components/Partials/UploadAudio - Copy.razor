@@ -77,14 +77,19 @@
 <div class="form-group">
     <h4>Stats Commands</h4>
     <div class="input-group mb-3">
-        <!-- Multi-select for selecting the commands -->
-        <select multiple @bind="SelectedCommands" class="form-control">
-            @foreach (StatsCommandType command in Enum.GetValues(typeof(StatsCommandType)))
-            {
-                <option value="@((int)command)">@EnumHelper.GetFormattedName(command)</option>
-            }
-        </select>
-
+        <!-- Checkboxes for selecting the commands -->
+        @foreach (var commandString in AllStatsCommands)
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       id="@commandString"
+                       @onchange="@(e => ToggleCommand(commandString, (bool)e.Value))"
+                       checked="@SelectedCommands.Contains(commandString)" />
+                <label class="form-check-label" for="@commandString">
+                    @commandString
+                </label>
+            </div>
+        }
 
         <!-- Dropdown for selecting the stats month -->
         <select @bind="SelectedStatsMonth" class="form-control mb-2 mb-sm-0 mr-sm-2" style="width: auto;">
@@ -118,20 +123,30 @@
     public string Error = string.Empty;
     public string SuccessMessage = string.Empty;
     private string PIN { get; set; } = "";
-    private AssemblyAIClient client;
+    private AssemblyAIClient? client;
     private bool FoundApiKey = false;
     private string CurrentException = "";
     private int CurrentFileNumber { get; set; }
     private int TotalFiles { get; set; }
-    private string CurrentFileName { get; set; }
+    private string? CurrentFileName { get; set; }
     private int ProgressPercentage { get; set; }
-    private List<StatsCommandType> SelectedCommands { get; set; } = new();
+    private List<string> SelectedCommands { get; set; } = new();
+    private List<string> AllStatsCommands { get; set; } = new();
     private string SelectedStatsMonth { get; set; } = DateTime.Now.ToString("MMMM");
     private int SelectedStatsYear { get; set; } = DateTime.Now.Year;
-    private StatsCommandHandler statsCommandHandler = new StatsCommandHandler();
+    // private StatsCommandHandler statsCommandHandler = new StatsCommandHandler();
 
     protected override void OnInitialized()
     {
+        base.OnInitialized();
+
+        // Populate AllStatsCommands
+        AllStatsCommands = Enum.GetValues(typeof(StatsCommandType))
+                               .Cast<StatsCommandType>()
+                               .Select(c => c.ToString())
+                               .ToList();
+
+        // Your existing initialization code...
         try
         {
             var apiKey = Configuration["AssemblyAI:ApiKey"];
@@ -143,6 +158,8 @@
             CurrentException = $"Error initializing: {ex.Message}";
         }
     }
+
+
 
     private void HandleSelected(InputFileChangeEventArgs e)
     {
@@ -314,15 +331,17 @@
         Processing = true;
         try
         {
-            // Loop through selected commands and process each using StatsCommandHandler
             var monthYear = $"{SelectedStatsMonth}-{SelectedStatsYear}";
-            foreach (var command in SelectedCommands)
+            var textToAnalyze = await FetchTextForMonthYear(monthYear);
+
+            if (!string.IsNullOrEmpty(textToAnalyze))
             {
-                // Fetch the text to be analyzed based on the month/year
-                var textToAnalyze = await FetchTextForMonthYear(monthYear); // Example method to get text
-                if (!string.IsNullOrEmpty(textToAnalyze))
+                foreach (var commandString in SelectedCommands)
                 {
-                    await ProcessSelectedCommand(command, textToAnalyze);
+                    if (Enum.TryParse<StatsCommandType>(commandString, out var command))
+                    {
+                        await ProcessSelectedCommand(command, textToAnalyze);
+                    }
                 }
             }
         }
@@ -338,6 +357,7 @@
 
     private async Task ProcessSelectedCommand(StatsCommandType command, string textToAnalyze)
     {
+        /*
         try
         {
             // Use StatsCommandHandler to process the selected command with the text
@@ -350,7 +370,7 @@
         catch (Exception ex)
         {
             CurrentException += $"Error processing {command}: {ex.Message}";
-        }
+        }*/
     }
 
     private Task<string> FetchTextForMonthYear(string monthYear)

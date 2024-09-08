@@ -1,0 +1,185 @@
+﻿@page "/discussions/statscommands"
+@using System.IO
+@inject IWebHostEnvironment WebHostEnvironment
+@using AssemblyAI
+@using MovieReviewApp.Enums
+@inject IConfiguration Configuration;
+
+<h4>Stats Commands</h4>
+
+<div class="form-group">
+    <div class="input-group mb-3">
+        <!-- Checkboxes for selecting the commands -->
+        @if (AllStatsCommands?.Any() ?? false)
+        {
+            <div class="commands-section">
+                @foreach (var commandString in AllStatsCommands)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="@commandString"
+                               @onchange="@(e => ToggleCommand(commandString, (bool)e.Value))"
+                               checked="@SelectedCommands.Contains(commandString)" />
+                        <label class="form-check-label" for="@commandString">
+                            @FormatCommand(commandString)
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p>No available stats commands found.</p>
+        }
+    </div>
+</div>
+
+<h4>Months</h4>
+
+<div class="form-group">
+    <div class="input-group mb-3">
+        <!-- Checkboxes for selecting folders -->
+        @if (AvailableFolders?.Any() ?? false)
+        {
+            <div class="folders-section">
+                @foreach (var folder in AvailableFolders)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="@folder"
+                               @onchange="@(e => ToggleFolder(folder, (bool)e.Value))"
+                               checked="@SelectedFolders.Contains(folder)" />
+                        <label class="form-check-label" for="@folder">
+                            @folder
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p>No available folders found.</p>
+        }
+    </div>
+
+    <button @onclick="RunStatsCommands" class="btn btn-primary" disabled="@(!CanRunCommands)">Run Commands</button>
+
+</div>
+
+<style>
+    .commands-section {
+        margin-bottom: 20px;
+    }
+
+    .folders-section {
+        margin-bottom: 20px;
+    }
+
+    .form-check {
+        margin-bottom: 10px;
+    }
+
+    .form-check-label {
+        margin-left: 5px;
+    }
+
+    .form-check-input {
+        margin-right: 10px;
+    }
+</style>
+
+@code {
+    private bool Processing = false;
+    private List<string> SelectedCommands { get; set; } = new();
+    private List<string> AllStatsCommands { get; set; } = new();
+    private List<string> AvailableFolders { get; set; } = new(); // Available folders (month-year format)
+    private List<string> SelectedFolders { get; set; } = new();  // Selected folders (month-year)
+    public string Error = string.Empty;
+    private AssemblyAIClient? client;
+
+    protected override void OnInitialized()
+    {
+        var apiKey = Configuration["AssemblyAI:ApiKey"];
+        client = new AssemblyAIClient(apiKey);
+
+        base.OnInitialized();
+
+        // Load all possible commands
+        AllStatsCommands = Enum.GetValues(typeof(StatsCommandType))
+                               .Cast<StatsCommandType>()
+                               .Select(c => c.ToString())
+                               .ToList();
+
+        // Load available folders (month-year format) based on folder names
+        LoadAvailableFolders();
+    }
+
+    private void LoadAvailableFolders()
+    {
+        var basePath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+        if (!Directory.Exists(basePath))
+        {
+            Directory.CreateDirectory(basePath);
+        }
+
+        var directories = Directory.GetDirectories(basePath);
+        AvailableFolders = directories
+            .Select(Path.GetFileName)
+            .Where(x => x.IndexOf("_") == -1)
+            .Select(x => x.Replace("-", " "))
+            .ToList();
+    }
+
+    private async Task RunStatsCommands()
+    {
+        Processing = true;
+        try
+        {
+            // Loop through selected folders to process
+            foreach (var folder in SelectedFolders)
+            {
+                // Fetch text and run commands for each folder
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error running stats commands: {ex.Message}";
+        }
+        finally
+        {
+            Processing = false;
+        }
+    }
+
+    private void ToggleCommand(string command, bool isChecked)
+    {
+        if (isChecked)
+        {
+            SelectedCommands.Add(command);
+        }
+        else
+        {
+            SelectedCommands.Remove(command);
+        }
+    }
+
+    private void ToggleFolder(string folder, bool isChecked)
+    {
+        if (isChecked)
+        {
+            SelectedFolders.Add(folder);
+        }
+        else
+        {
+            SelectedFolders.Remove(folder);
+        }
+    }
+
+    private bool CanRunCommands => SelectedCommands.Any() && SelectedFolders.Any();
+
+    private string FormatCommand(string command)
+    {
+        // Insert spaces before capital letters (except the first one)
+        return System.Text.RegularExpressions.Regex.Replace(command, "([A-Z])", " $1").Trim();
+    }
+}

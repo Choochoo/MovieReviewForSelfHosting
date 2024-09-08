@@ -1,0 +1,211 @@
+﻿@page "/discussions/upload-audio"
+@inject IWebHostEnvironment WebHostEnvironment;
+@inject IJSRuntime JSRuntime;
+
+<h4>Upload Audio Clips</h4>
+
+<div class="form-group">
+    <div class="input-group mb-3">
+        @if (fileInputVisible)
+        {
+            <InputFile OnChange="HandleSelected" multiple class="form-control-file" />
+        }
+        <button @onclick="UploadFiles" class="btn btn-primary" disabled="@isUploadButtonDisabled">Upload</button>
+    </div>
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert alert-danger" role="alert">
+            @Error
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(SuccessMessage))
+    {
+        <div class="alert alert-success" role="alert">
+            @SuccessMessage
+        </div>
+    }
+    <div id="progressBarContainer" style="display: none;">
+        <div class="progress">
+            <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+    </div>
+    <div id="errorContainer" style="display: none;" class="alert alert-danger"></div>
+</div>
+
+@code {
+    private bool isUploadButtonDisabled = true;
+    private bool fileInputVisible = true;
+    public string Error = string.Empty;
+    public string SuccessMessage = string.Empty;
+    private List<IBrowserFile> selectedFiles = new List<IBrowserFile>();
+
+    private void HandleSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            selectedFiles = e.GetMultipleFiles().ToList();
+            isUploadButtonDisabled = !selectedFiles.Any();
+        }
+        catch (Exception ex)
+        {
+            Error = $"Error selecting files in HandleSelected: {ex.Message}";
+        }
+    }
+
+    private async Task UploadFiles()
+    {
+        const long maxFileSize = 2L * 1024 * 1024 * 1024; // 2 GB limit
+        isUploadButtonDisabled = true;
+        Error = string.Empty;
+        SuccessMessage = string.Empty;
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("showProgressBar");
+
+            long totalSize = selectedFiles.Sum(f => f.Size);
+            long uploadedSize = 0;
+
+            foreach (var file in selectedFiles)
+            {
+                try
+                {
+                    if (file.Size > maxFileSize)
+                    {
+                        Error = $"File size exceeds the 2 GB limit for {file.Name}.";
+                        isUploadButtonDisabled = false;
+                        await JSRuntime.InvokeVoidAsync("hideProgressBar");
+                        return;
+                    }
+
+                    try
+                    {
+                        var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
+                        if (!Directory.Exists(uploadsFolder))
+                        {
+                            try
+                            {
+                                Directory.CreateDirectory(uploadsFolder);
+                            }
+                            catch (Exception dirEx)
+                            {
+                                Error = $"Error creating uploads directory: {dirEx.Message}";
+                                return;
+                            }
+                        }
+
+                        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+                        var filePath = Path.Combine(uploadsFolder, fileName);
+
+                        using (var stream = new FileStream(filePath, FileMode.Create))
+                        {
+                            var buffer = new byte[4096];
+                            int bytesRead;
+                            long totalBytesRead = 0;
+                            var fileStream = file.OpenReadStream(maxFileSize);
+
+                            try
+                            {
+                                while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    await stream.WriteAsync(buffer, 0, bytesRead);
+                                    totalBytesRead += bytesRead;
+                                    uploadedSize += bytesRead;
+
+                                    double overallProgress = (double)uploadedSize / totalSize * 100;
+                                    await JSRuntime.InvokeVoidAsync("updateProgressBar", Math.Round(overallProgress, 2));
+                                }
+                            }
+                            catch (Exception readWriteEx)
+                            {
+                                Error = $"Error reading or writing file {file.Name}: {readWriteEx.Message}";
+                                return;
+                            }
+                        }
+
+                        SuccessMessage = $"File {file.Name} uploaded successfully.";
+                    }
+                    catch (Exception fileEx)
+                    {
+                        Error = $"Error processing file {file.Name}: {fileEx.Message}";
+                    }
+                }
+                catch (Exception sizeEx)
+                {
+                    Error = $"Error checking file size for {file.Name}: {sizeEx.Message}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = $"An error occurred during the upload process: {ex.Message}";
+        }
+        finally
+        {
+            selectedFiles.Clear();
+            isUploadButtonDisabled = true;
+            fileInputVisible = false;
+            StateHasChanged();
+            await Task.Delay(100);
+            fileInputVisible = true;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("hideProgressBar");
+            }
+            catch (Exception hideProgressEx)
+            {
+                Error = $"Error hiding progress bar: {hideProgressEx.Message}";
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                function showProgressBar() {
+                    try {
+                        document.getElementById('progressBarContainer').style.display = 'block';
+                    } catch (error) {
+                        logJavaScriptError('Error showing progress bar: ' + error.message);
+                    }
+                }
+
+                function hideProgressBar() {
+                    try {
+                        document.getElementById('progressBarContainer').style.display = 'none';
+                    } catch (error) {
+                        logJavaScriptError('Error hiding progress bar: ' + error.message);
+                    }
+                }
+
+                function updateProgressBar(percentage) {
+                    try {
+                        var progressBar = document.getElementById('progressBar');
+                        progressBar.style.width = percentage + '%';
+                        progressBar.setAttribute('aria-valuenow', percentage);
+                        progressBar.textContent = percentage + '%';
+                    } catch (error) {
+                        logJavaScriptError('Error updating progress bar: ' + error.message);
+                    }
+                }
+
+                function logJavaScriptError(errorMessage) {
+                    try {
+                        var errorContainer = document.getElementById('errorContainer');
+                        errorContainer.style.display = 'block';
+                        errorContainer.textContent = errorMessage;
+                    } catch (error) {
+                        console.error('Error logging JS error: ' + error.message);
+                    }
+                }
+
+                window.showProgressBar = showProgressBar;
+                window.hideProgressBar = hideProgressBar;
+                window.updateProgressBar = updateProgressBar;
+                window.logJavaScriptError = logJavaScriptError;
+            ");
+        }
+    }
+}

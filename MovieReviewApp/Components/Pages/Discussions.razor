@@ -1,7 +1,6 @@
 ﻿@page "/discussions"
 @using MovieReviewApp.Components.Partials
 
-
 <ul class="nav nav-tabs">
     <li class="nav-item">
         <a class="nav-link @((activeTab == "stats") ? "active" : "")" @onclick='() => activeTab = "stats"'>Stats</a>
@@ -11,6 +10,9 @@
     </li>
     <li class="nav-item">
         <a class="nav-link @((activeTab == "upload") ? "active" : "")" @onclick='() => activeTab = "upload"'>Audio Upload</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @((activeTab == "processing") ? "active" : "")" @onclick='() => activeTab = "processing"'>Processing Audio</a>
     </li>
 </ul>
 <br />
@@ -24,11 +26,15 @@
 }
 else if (activeTab == "upload")
 {
-    <AudioUpload />
+    <UploadAudio/>
+}
+else if (activeTab == "processing")
+{
+    <Processing />
 }
 
 <style>
-    .nav-item{
+    .nav-item {
         cursor: pointer;
     }
 </style>
