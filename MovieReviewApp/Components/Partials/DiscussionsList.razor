@@ -1,6 +1,7 @@
 ﻿@page "/discussions/list"
 @using System.IO
 @using System.Text.Json
+@using System.Text.RegularExpressions
 @inject IWebHostEnvironment WebHostEnvironment
 @inject HttpClient Http
 @inject IConfiguration Configuration
@@ -261,24 +262,48 @@ else
             ProgressPercentage = 30;
             StateHasChanged();
 
-            var prompt = "There are six people in this conversation: Jared, Lacey, Keri, Dave, Jeremiah, Nikki. " +
-                         "Each file represents a separate conversation, and the speakers (e.g., 'Speaker A', 'Speaker B') " +
-                         "may represent different people across files, but they are always one of the six people mentioned. " +
-                         "Please replace the 'Speaker A', 'Speaker B', etc. with the most appropriate name in each file. Keep note that 'Carrie' is actually spelled 'Keri'\n\n";
+            var prompt = @"Please analyze the conversations in the following files and assign names to the speakers. Use this template for your response:
+
+[FILE_START:1]
+Speaker A: [Name]
+Speaker B: [Name]
+...
+[FILE_END:1]
+
+[FILE_START:2]
+Speaker A: [Name]
+Speaker B: [Name]
+...
+[FILE_END:2]
+
+... (continue for all files)
+
+Important instructions:
+1. Use only the names Jared, Lacey, Keri, Dave, Jeremiah, and Nikki.
+2. Include only the speakers that appear in each file. Do not include entries for speakers not present.
+3. The speaker designations (A, B, C, etc.) are specific to each file and do not need to be consistent across files. For example, Jared could be Speaker A in one file and Speaker C in another.
+4. The number of files may vary. Provide assignments for each file present in the input.
+5. If you're unsure about a speaker's identity, use your best judgment based on the conversation context.
+
+Here are the file contents:
+
+";
 
             for (int i = 0; i < fileContents.Count; i++)
             {
                 prompt += $"File {i + 1} content:\n{fileContents[i]}\n\n";
             }
 
+            prompt += "Please provide your analysis following the template above, adjusting for the actual number of files present.";
+
             var request = new
             {
                 model = "chatgpt-4o-latest",
                 messages = new[]
                 {
-        new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-        new { role = "user", content = prompt }
-    }
+                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
+                    new { role = "user", content = prompt }
+                }
             };
 
             StatusMessage = "Sending request to OpenAI API...";
@@ -323,7 +348,7 @@ else
                         for (int i = 0; i < textFiles.Length; i++)
                         {
                             var fileContent = await File.ReadAllTextAsync(textFiles[i]);
-                            var updatedContent = ApplyGuessedNames(fileContent, messageContent);
+                            var updatedContent = ApplyGuessedNames(fileContent, messageContent, i);
                             await File.WriteAllTextAsync(textFiles[i], updatedContent);
 
                             ProgressPercentage = 80 + (i + 1) * 20 / textFiles.Length;
@@ -373,43 +398,50 @@ else
         }
     }
 
-    private string ApplyGuessedNames(string fileContent, string messageContent)
+    private string ApplyGuessedNames(string fileContent, string messageContent, int fileIndex)
     {
         try
         {
             var speakerMap = new Dictionary<string, string>();
-            var lines = messageContent.Split('\n');
+            var filePattern = $@"\[FILE_START:{fileIndex + 1}\](.*?)\[FILE_END:{fileIndex + 1}\]";
+            var match = Regex.Match(messageContent, filePattern, RegexOptions.Singleline);
+
+            if (!match.Success)
+            {
+                ErrorMessage += $"\nNo speaker assignments found for file {fileIndex + 1}.";
+                return fileContent;
+            }
+
+            var fileAssignments = match.Groups[1].Value.Trim();
+            var lines = fileAssignments.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
             foreach (var line in lines)
             {
-                var parts = line.Split(':');
+                var parts = line.Split(':', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 2)
                 {
-                    var speakerPlaceholder = parts[0].Trim();
-                    var speakerName = parts[1].Trim();
-                    if (speakerPlaceholder.StartsWith("Speaker ") &&
-                        new[] { "Jared", "Lacey", "Keri", "Dave", "Jeremiah", "Nikki" }.Contains(speakerName))
-                    {
-                        speakerMap[speakerPlaceholder] = speakerName;
-                    }
+                    var speaker = parts[0].Trim();
+                    var name = parts[1].Trim();
+                    speakerMap[speaker] = name;
                 }
             }
 
             if (speakerMap.Count == 0)
             {
-                ErrorMessage += "\nNo valid speaker mappings found in the API response.";
+                ErrorMessage += $"\nNo valid speaker mappings found for file {fileIndex + 1}.";
                 return fileContent;
             }
 
             foreach (var speaker in speakerMap)
             {
-                fileContent = fileContent.Replace(speaker.Key + ":", speaker.Value + ":");
+                fileContent = Regex.Replace(fileContent, $@"{Regex.Escape(speaker.Key)}:", $"{speaker.Value}:", RegexOptions.IgnoreCase);
             }
 
             return fileContent;
         }
         catch (Exception ex)
         {
-            ErrorMessage += $"\nError applying guessed names: {ex.Message}";
+            ErrorMessage += $"\nError applying guessed names to file {fileIndex + 1}: {ex.Message}";
             return fileContent;
         }
     }
