@@ -3,7 +3,7 @@
 @using System.Text.Json
 @inject IWebHostEnvironment WebHostEnvironment
 @inject HttpClient Http
-@inject IConfiguration Configuration;
+@inject IConfiguration Configuration
 
 <h3>Processed Files</h3>
 
@@ -33,10 +33,18 @@ else
 
     @if (!string.IsNullOrEmpty(SelectedFolder))
     {
-        <div class="d-flex justify-content-between">
+        <div class="d-flex justify-content-between align-items-center mb-3">
             <h4>Files for @SelectedFolder.Replace("-", " ")</h4>
-            <button @onclick="GuessNames" class="btn btn-secondary">Guess Names</button>
+            <button @onclick="GuessNames" class="btn btn-secondary" disabled="@IsProcessing">Guess Names</button>
         </div>
+
+        @if (IsProcessing)
+        {
+            <div class="progress mb-3">
+                <div class="progress-bar" role="progressbar" style="width: @($"{ProgressPercentage}%");" aria-valuenow="@ProgressPercentage" aria-valuemin="0" aria-valuemax="100">@($"{ProgressPercentage}%")</div>
+            </div>
+            <p class="text-muted">@StatusMessage</p>
+        }
 
         <table class="table table-striped">
             <thead>
@@ -80,6 +88,9 @@ else
     private string TextFileContent { get; set; }
     private string _apiKey { get; set; }
     private string ErrorMessage { get; set; }
+    private bool IsProcessing { get; set; }
+    private int ProgressPercentage { get; set; }
+    private string StatusMessage { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -98,33 +109,44 @@ else
         }
     }
 
-    private Task LoadFolders()
+    private async Task LoadFolders()
     {
         try
         {
+            StatusMessage = "Loading folders...";
+            IsProcessing = true;
+            ProgressPercentage = 0;
+            StateHasChanged();
+
             var uploadsPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
             Directory.CreateDirectory(uploadsPath);
             Folders = Directory.GetDirectories(uploadsPath)
                                .Select(Path.GetFileName)
                                .Where(x => x.IndexOf("_") == -1)
                                .ToList();
-            return Task.CompletedTask;
+
+            ProgressPercentage = 100;
+            StatusMessage = "Folders loaded successfully.";
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Error loading folders: {ex.Message}";
-            return Task.CompletedTask;
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
         }
     }
 
-    private void OnFolderSelected(ChangeEventArgs e)
+    private async Task OnFolderSelected(ChangeEventArgs e)
     {
         try
         {
             SelectedFolder = e.Value.ToString();
             if (!string.IsNullOrEmpty(SelectedFolder))
             {
-                LoadFiles(SelectedFolder);
+                await LoadFiles(SelectedFolder);
             }
             else
             {
@@ -139,19 +161,32 @@ else
         }
     }
 
-    private void LoadFiles(string folderName)
+    private async Task LoadFiles(string folderName)
     {
         try
         {
+            StatusMessage = "Loading files...";
+            IsProcessing = true;
+            ProgressPercentage = 0;
+            StateHasChanged();
+
             var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", folderName);
             Files = Directory.GetFiles(folderPath)
                              .Where(f => Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase))
                              .Select(f => new FileInfo(f))
                              .ToList();
+
+            ProgressPercentage = 100;
+            StatusMessage = "Files loaded successfully.";
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Error loading files: {ex.Message}";
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
         }
     }
 
@@ -169,6 +204,11 @@ else
 
     private async Task GuessNames()
     {
+        IsProcessing = true;
+        ProgressPercentage = 0;
+        StatusMessage = "Initializing name guessing process...";
+        StateHasChanged();
+
         try
         {
             if (string.IsNullOrEmpty(_apiKey))
@@ -198,6 +238,10 @@ else
                 return;
             }
 
+            StatusMessage = "Reading file contents...";
+            ProgressPercentage = 10;
+            StateHasChanged();
+
             var fileContents = new List<string>();
             foreach (var file in textFiles)
             {
@@ -211,6 +255,10 @@ else
                     return;
                 }
             }
+
+            StatusMessage = "Preparing API request...";
+            ProgressPercentage = 30;
+            StateHasChanged();
 
             var prompt = "There are six people in this conversation: Jared, Lacey, Keri, Dave, Jeremiah, Nikki. " +
                          "Each file represents a separate conversation, and the speakers (e.g., 'Speaker A', 'Speaker B') " +
@@ -227,10 +275,14 @@ else
                 model = "gpt-4o",
                 messages = new[]
                 {
-                new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-                new { role = "user", content = prompt }
-            }
+                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
+                    new { role = "user", content = prompt }
+                }
             };
+
+            StatusMessage = "Sending request to OpenAI API...";
+            ProgressPercentage = 50;
+            StateHasChanged();
 
             Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
             HttpResponseMessage response;
@@ -246,6 +298,10 @@ else
 
             if (response.IsSuccessStatusCode)
             {
+                StatusMessage = "Processing API response...";
+                ProgressPercentage = 70;
+                StateHasChanged();
+
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 try
@@ -256,18 +312,28 @@ else
                         var choices = root.GetProperty("choices");
                         var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
 
+                        StatusMessage = "Applying guessed names to files...";
+                        ProgressPercentage = 80;
+                        StateHasChanged();
+
                         for (int i = 0; i < textFiles.Length; i++)
                         {
                             var fileContent = await File.ReadAllTextAsync(textFiles[i]);
                             var updatedContent = ApplyGuessedNames(fileContent, messageContent);
                             await File.WriteAllTextAsync(textFiles[i], updatedContent);
+
+                            ProgressPercentage = 80 + (i + 1) * 20 / textFiles.Length;
+                            StateHasChanged();
                         }
                     }
 
                     ErrorMessage = string.Empty;
-                    await LoadFolders();
-                    LoadFiles(SelectedFolder);
+                    StatusMessage = "Names guessed and applied successfully.";
+                    ProgressPercentage = 100;
                     StateHasChanged();
+
+                    await LoadFolders();
+                    await LoadFiles(SelectedFolder);
                 }
                 catch (JsonException jsonEx)
                 {
@@ -287,6 +353,11 @@ else
         catch (Exception ex)
         {
             ErrorMessage = $"Unexpected error in GuessNames: {ex.Message}";
+        }
+        finally
+        {
+            IsProcessing = false;
+            StateHasChanged();
         }
     }
 
@@ -330,5 +401,4 @@ else
             return fileContent;
         }
     }
-
 }
