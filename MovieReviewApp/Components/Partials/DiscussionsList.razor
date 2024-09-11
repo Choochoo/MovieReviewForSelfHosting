@@ -207,6 +207,7 @@ else
         IsProcessing = true;
         ProgressPercentage = 0;
         StatusMessage = "Initializing name guessing process...";
+        ErrorMessage = string.Empty;
         StateHasChanged();
 
         try
@@ -272,12 +273,12 @@ else
 
             var request = new
             {
-                model = "gpt-4o",
+                model = "chatgpt-4o-latest",
                 messages = new[]
                 {
-                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-                    new { role = "user", content = prompt }
-                }
+        new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
+        new { role = "user", content = prompt }
+    }
             };
 
             StatusMessage = "Sending request to OpenAI API...";
@@ -289,6 +290,9 @@ else
             try
             {
                 response = await Http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request);
+                StatusMessage = "Received response from OpenAI API...";
+                ProgressPercentage = 60;
+                StateHasChanged();
             }
             catch (HttpRequestException httpEx)
             {
@@ -323,11 +327,11 @@ else
                             await File.WriteAllTextAsync(textFiles[i], updatedContent);
 
                             ProgressPercentage = 80 + (i + 1) * 20 / textFiles.Length;
+                            StatusMessage = $"Updated file {i + 1} of {textFiles.Length}...";
                             StateHasChanged();
                         }
                     }
 
-                    ErrorMessage = string.Empty;
                     StatusMessage = "Names guessed and applied successfully.";
                     ProgressPercentage = 100;
                     StateHasChanged();
@@ -357,6 +361,14 @@ else
         finally
         {
             IsProcessing = false;
+            if (string.IsNullOrEmpty(ErrorMessage))
+            {
+                StatusMessage = "Process completed successfully.";
+            }
+            else
+            {
+                StatusMessage = "Process completed with errors.";
+            }
             StateHasChanged();
         }
     }
