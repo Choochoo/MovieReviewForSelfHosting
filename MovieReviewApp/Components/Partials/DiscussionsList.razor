@@ -177,7 +177,19 @@ else
                 return;
             }
 
+            if (string.IsNullOrEmpty(SelectedFolder))
+            {
+                ErrorMessage = "No folder selected. Please select a folder before guessing names.";
+                return;
+            }
+
             var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", SelectedFolder);
+            if (!Directory.Exists(folderPath))
+            {
+                ErrorMessage = $"The selected folder '{SelectedFolder}' does not exist.";
+                return;
+            }
+
             var textFiles = Directory.GetFiles(folderPath, "*.txt");
 
             if (textFiles.Length == 0)
@@ -186,61 +198,95 @@ else
                 return;
             }
 
-            var fileContents = textFiles.Select(File.ReadAllText).ToArray();
+            var fileContents = new List<string>();
+            foreach (var file in textFiles)
+            {
+                try
+                {
+                    fileContents.Add(await File.ReadAllTextAsync(file));
+                }
+                catch (IOException ioEx)
+                {
+                    ErrorMessage = $"Error reading file {Path.GetFileName(file)}: {ioEx.Message}";
+                    return;
+                }
+            }
 
             var prompt = "There are six people in this conversation: Jared, Lacey, Keri, Dave, Jeremiah, Nikki. " +
                          "Each file represents a separate conversation, and the speakers (e.g., 'Speaker A', 'Speaker B') " +
                          "may represent different people across files, but they are always one of the six people mentioned. " +
-                         "Please replace the 'Speaker A', 'Speaker B', etc. with the most appropriate name in each file.  Keep note that 'Carrie' is actually spelled 'Keri'\n\n";
+                         "Please replace the 'Speaker A', 'Speaker B', etc. with the most appropriate name in each file. Keep note that 'Carrie' is actually spelled 'Keri'\n\n";
 
-            for (int i = 0; i < fileContents.Length; i++)
+            for (int i = 0; i < fileContents.Count; i++)
             {
                 prompt += $"File {i + 1} content:\n{fileContents[i]}\n\n";
             }
 
             var request = new
             {
-                model = "gpt-4o",
+                model = "gpt-4",
                 messages = new[]
                 {
-                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-                    new { role = "user", content = prompt }
-                }
+                new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
+                new { role = "user", content = prompt }
+            }
             };
 
             Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-            var response = await Http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request);
+            HttpResponseMessage response;
+            try
+            {
+                response = await Http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request);
+            }
+            catch (HttpRequestException httpEx)
+            {
+                ErrorMessage = $"Error connecting to OpenAI API: {httpEx.Message}";
+                return;
+            }
 
             if (response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync();
 
-                using (JsonDocument doc = JsonDocument.Parse(responseBody))
+                try
                 {
-                    var root = doc.RootElement;
-                    var choices = root.GetProperty("choices");
-                    var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
-
-                    for (int i = 0; i < textFiles.Length; i++)
+                    using (JsonDocument doc = JsonDocument.Parse(responseBody))
                     {
-                        var fileContent = File.ReadAllText(textFiles[i]);
-                        var updatedContent = ApplyGuessedNames(fileContent, messageContent);
-                        File.WriteAllText(textFiles[i], updatedContent);
-                    }
-                }
+                        var root = doc.RootElement;
+                        var choices = root.GetProperty("choices");
+                        var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
 
-                ErrorMessage = string.Empty;
-                await LoadFolders();
-                LoadFiles(SelectedFolder);
+                        for (int i = 0; i < textFiles.Length; i++)
+                        {
+                            var fileContent = await File.ReadAllTextAsync(textFiles[i]);
+                            var updatedContent = ApplyGuessedNames(fileContent, messageContent);
+                            await File.WriteAllTextAsync(textFiles[i], updatedContent);
+                        }
+                    }
+
+                    ErrorMessage = string.Empty;
+                    await LoadFolders();
+                    LoadFiles(SelectedFolder);
+                    StateHasChanged();
+                }
+                catch (JsonException jsonEx)
+                {
+                    ErrorMessage = $"Error parsing API response: {jsonEx.Message}";
+                }
+                catch (IOException ioEx)
+                {
+                    ErrorMessage = $"Error writing to files: {ioEx.Message}";
+                }
             }
             else
             {
-                ErrorMessage = $"API request failed: {response.StatusCode} - {await response.Content.ReadAsStringAsync()}";
+                var errorContent = await response.Content.ReadAsStringAsync();
+                ErrorMessage = $"API request failed: {response.StatusCode} - {errorContent}";
             }
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error guessing names: {ex.Message}";
+            ErrorMessage = $"Unexpected error in GuessNames: {ex.Message}";
         }
     }
 
@@ -265,6 +311,12 @@ else
                 }
             }
 
+            if (speakerMap.Count == 0)
+            {
+                ErrorMessage += "\nNo valid speaker mappings found in the API response.";
+                return fileContent;
+            }
+
             foreach (var speaker in speakerMap)
             {
                 fileContent = fileContent.Replace(speaker.Key + ":", speaker.Value + ":");
@@ -274,8 +326,9 @@ else
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error applying guessed names: {ex.Message}";
+            ErrorMessage += $"\nError applying guessed names: {ex.Message}";
             return fileContent;
         }
     }
+
 }
