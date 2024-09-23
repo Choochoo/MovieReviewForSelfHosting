@@ -48,6 +48,7 @@ namespace MovieReviewApp.Database
                 .Set("Reasoning", movieEvent.Reasoning)
                 .Set("AlreadySeen", movieEvent.AlreadySeen)
                 .Set("SeenDate", movieEvent.SeenDate)
+                .Set("MeetupTime", movieEvent.MeetupTime)
                 .Set("PhaseNumber", movieEvent.PhaseNumber); // Added PhaseNumber here
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
