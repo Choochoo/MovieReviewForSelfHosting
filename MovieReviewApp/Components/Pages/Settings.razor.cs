@@ -1,9 +1,8 @@
+// Settings.razor.cs
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MovieReviewApp.Database;
 using MovieReviewApp.Models;
-using System;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -11,8 +10,6 @@ namespace MovieReviewApp.Components.Pages
     {
         [Inject]
         private MongoDb db { get; set; } = default!;
-
-
         public List<Person>? People { get; set; }
         public DateTime? StartDate { get; set; }
         public int? TimeCount;
@@ -30,7 +27,6 @@ namespace MovieReviewApp.Components.Pages
         protected override void OnInitialized()
         {
             settings = db.GetSettings();
-
             RespectOrder = false; // default value
             var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
             if (setting != null && !string.IsNullOrEmpty(setting.Value))
@@ -38,14 +34,36 @@ namespace MovieReviewApp.Components.Pages
             StartDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
             TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
             TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
+            People = db.GetAllPeople(RespectOrder);
+            EnsureValidOrder();
+        }
+
+        private void EnsureValidOrder()
+        {
+            if (People == null) return;
+
+            var orderedPeople = People
+                .OrderBy(p => p.Order == 0)
+                .ThenBy(p => p.Order)
+                .ThenBy(p => p.Name)
+                .ToList();
+
+            for (int i = 0; i < orderedPeople.Count; i++)
+            {
+                if (orderedPeople[i].Order != i + 1)
+                {
+                    orderedPeople[i].Order = i + 1;
+                    db.AddOrUpdatePerson(orderedPeople[i]);
+                }
+            }
 
             People = db.GetAllPeople(RespectOrder);
         }
 
-
         private void AddPerson()
         {
-            db.AddPerson(new Person { Name = NewPerson });
+            var newPersonOrder = (People?.Count ?? 0) + 1;
+            db.AddPerson(new Person { Name = NewPerson, Order = newPersonOrder });
             NewPerson = "New Person";
             People = db.GetAllPeople(RespectOrder);
         }
@@ -55,19 +73,23 @@ namespace MovieReviewApp.Components.Pages
             if (person != null)
                 person.IsEditing = true;
         }
+
         private void Cancel(Person person)
         {
             if (person != null)
                 person.IsEditing = false;
         }
+
         private void Delete(Person person)
         {
             if (person != null)
             {
                 db.DeletePerson(person);
                 People = db.GetAllPeople(RespectOrder);
+                EnsureValidOrder(); // Reorder after deletion
             }
         }
+
         private void Save(Person person)
         {
             if (person != null)
@@ -76,21 +98,77 @@ namespace MovieReviewApp.Components.Pages
                 this.Cancel(person);
             }
         }
+
         private void SaveDate()
         {
             var dateSetting = settings.First(x => x.Key == "StartDate");
             dateSetting.Value = StartDate.ToString();
             db.AddOrUpdateSetting(dateSetting);
         }
+
         private void SaveOccurance(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
         {
             var timeCountSetting = settings.First(x => x.Key == "TimeCount");
             timeCountSetting.Value = TimeCount.ToString();
             db.AddOrUpdateSetting(timeCountSetting);
-            
+
             var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
             timePeriodSetting.Value = TimePeriod;
             db.AddOrUpdateSetting(timePeriodSetting);
+        }
+
+        private void SaveRespectOrder()
+        {
+            var orderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            if (orderSetting == null)
+            {
+                orderSetting = new Setting { Key = "RespectOrder", Value = RespectOrder.ToString() };
+                settings.Add(orderSetting);
+            }
+            else
+            {
+                orderSetting.Value = RespectOrder.ToString();
+            }
+            db.AddOrUpdateSetting(orderSetting);
+            People = db.GetAllPeople(RespectOrder);
+        }
+
+        private async Task MoveUp(Person person)
+        {
+            if (person?.Order > 1)
+            {
+                var personAbove = People?.FirstOrDefault(p => p.Order == person.Order - 1);
+                if (personAbove != null)
+                {
+                    var tempOrder = personAbove.Order;
+                    personAbove.Order = person.Order;
+                    person.Order = tempOrder;
+
+                    db.AddOrUpdatePerson(person);
+                    db.AddOrUpdatePerson(personAbove);
+
+                    People = db.GetAllPeople(RespectOrder);
+                }
+            }
+        }
+
+        private async Task MoveDown(Person person)
+        {
+            if (person?.Order < People?.Count)
+            {
+                var personBelow = People?.FirstOrDefault(p => p.Order == person.Order + 1);
+                if (personBelow != null)
+                {
+                    var tempOrder = personBelow.Order;
+                    personBelow.Order = person.Order;
+                    person.Order = tempOrder;
+
+                    db.AddOrUpdatePerson(person);
+                    db.AddOrUpdatePerson(personBelow);
+
+                    People = db.GetAllPeople(RespectOrder);
+                }
+            }
         }
     }
 }

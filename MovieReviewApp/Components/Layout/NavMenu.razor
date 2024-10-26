@@ -1,12 +1,14 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@using Microsoft.Extensions.Options
+@using MovieReviewApp.Models
+@inject IOptions<AppSettings> AppSettings
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">Film Club Schmilm Club</a>
+        <a class="navbar-brand" href="">@AppSettings.Value.Title</a>
         <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
     </div>
 </div>
-
 <div class="nav-scrollable @NavMenuCssClass">
     <nav class="flex-column">
         <div class="nav-item px-3">
@@ -34,9 +36,7 @@
 
 @code {
     private bool collapseNavMenu = true;
-
     private string NavMenuCssClass => collapseNavMenu ? "menu-collapsed" : "menu-expanded";
-
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;

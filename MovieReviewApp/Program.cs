@@ -9,13 +9,14 @@ using MovieReviewApp.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add configuration sources
-builder.Configuration.AddJsonFile($"appsettings.{builder.Environment.Audience()}.json", optional: true, reloadOnChange: true);
+var audience = builder.Environment.Audience();
+builder.Configuration.AddJsonFile($"appsettings.{audience}.json", optional: false, reloadOnChange: true);
 
 // Define and configure AppSettings
 builder.Services.Configure<AppSettings>(options =>
 {
     builder.Configuration.GetSection("AppSettings").Bind(options);
-    options.IsKid = builder.Environment.EnvironmentName.Equals("Kid", StringComparison.OrdinalIgnoreCase);
+    options.IsKid = audience.Equals("Kid", StringComparison.OrdinalIgnoreCase);
     options.Title = options.IsKid ? "Browne Filmatorium" : "Film Schmilm Club";
 });
 

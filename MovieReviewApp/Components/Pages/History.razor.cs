@@ -1,4 +1,5 @@
 
+using Microsoft.AspNetCore.Components;
 using MovieReviewApp.Database;
 using MovieReviewApp.Models;
 

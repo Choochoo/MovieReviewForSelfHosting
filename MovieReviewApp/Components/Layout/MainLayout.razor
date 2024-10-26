@@ -1,23 +1,23 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.Extensions.Options
+@using MovieReviewApp.Models
+@inject IOptions<AppSettings> AppSettings
 
 <div class="page">
-    <div class="sidebar">
+    <div class="sidebar @(AppSettings.Value.IsKid ? "sidebar-kid" : "sidebar-adult")">
         <NavMenu />
     </div>
-
     <main>
         <article class="content px-4">
             @Body
         </article>
     </main>
 </div>
-
 <div id="blazor-error-ui">
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
     <a class="dismiss">🗙</a>
 </div>
-
 <style>
     .page {
         display: flex;
@@ -31,6 +31,14 @@
         left: 0;
         height: 100%;
         z-index: 1000;
+    }
+
+    .sidebar-kid {
+        background-image: linear-gradient(180deg, rgb(103, 5, 5) 0%, #473a06 70%);
+    }
+
+    .sidebar-adult {
+        background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
     }
 
     main {

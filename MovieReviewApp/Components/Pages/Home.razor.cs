@@ -1,6 +1,7 @@
 
 
 
+using Microsoft.AspNetCore.Components;
 using MovieReviewApp.Database;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
@@ -43,43 +44,61 @@ namespace MovieReviewApp.Components.Pages
         private void GeneratePhases(DateTime startDate, string?[]? allNames)
         {
             var listNames = allNames?.ToList();
-            var phase = GeneratePhase(1, startDate, listNames); // Always phase 1
-
+            var phase = GeneratePhase(1, startDate, listNames); // Start with Phase 1
             Phases.Add(phase);
+
+            // Keep generating phases until we reach a future date
             var isNextPhase = false;
             while (!isNextPhase)
             {
                 startDate = phase.EndDate.AddDays(1);
                 phase = GeneratePhase(phase.Number.Value + 1, startDate, listNames);
                 Phases.Add(phase);
-                isNextPhase = phase.StartDate > DateTime.Now;
+                isNextPhase = phase.StartDate > DateTime.Now; // Stop when we reach a future phase
             }
         }
 
         private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
         {
+            // Get existing phase data from database
             var phase = db.GetPhase(phaseNumber, peopleNames, startDate);
-            var peopleUsed = phase.Events.Where(x => !string.IsNullOrEmpty(x.Person)).Select(x => x.Person).Distinct().ToList();
 
-            if (RespectOrder)
+            // Find who's already been assigned in this phase
+            var peopleUsed = phase.Events.Where(x => !string.IsNullOrEmpty(x.Person))
+                                        .Select(x => x.Person)
+                                        .Distinct()
+                                        .ToList();
+
+            // If respecting order, cycle random seed to maintain consistent ordering
+            if (!RespectOrder)
             {
                 for (var i = 0; i < peopleUsed.Count; i++)
-                    _rand.Next();//cycle to where we are in the seed.
+                    _rand.Next();
             }
 
+            // Get remaining people who haven't been assigned yet
             var peopleLeftNotInDb = peopleNames.Where(x => !peopleUsed.Contains(x)).ToList();
+
+            // Generate events for remaining people
             GenerateMovieEvents(phaseNumber, startDate, phase, peopleUsed, peopleLeftNotInDb);
             SetCurrentAndNextPhases(phase);
 
             return phase;
         }
 
-        private void GenerateMovieEvents(int phaseNumber, DateTime startDate, Phase phase, List<string?> peopleUsed, List<string> peopleLeftNotInDb)
+        private void GenerateMovieEvents(int phaseNumber, DateTime startDate, Phase phase,
+            List<string?> peopleUsed, List<string> peopleLeftNotInDb)
         {
             var moveEventStartDate = startDate.AddMonths(peopleUsed.Count);
+
             while (peopleLeftNotInDb.Count > 0)
             {
-                var person = RespectOrder ? peopleLeftNotInDb.First() : peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
+                // Pick next person - either in order or randomly
+                var person = RespectOrder
+                    ? peopleLeftNotInDb.First()
+                    : peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
+
+                // Create event for this person
                 phase.Events.Add(new MovieEvent
                 {
                     StartDate = moveEventStartDate,
@@ -89,6 +108,7 @@ namespace MovieReviewApp.Components.Pages
                     IsEditing = false,
                     PhaseNumber = phaseNumber
                 });
+
                 moveEventStartDate = moveEventStartDate.AddMonths(1);
                 peopleLeftNotInDb.Remove(person);
             }

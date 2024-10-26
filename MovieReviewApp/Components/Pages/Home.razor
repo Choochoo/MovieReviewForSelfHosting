@@ -8,22 +8,22 @@
     {
         <div class="row">
             <div class="col-md-6">
-            <Phase MovieEvent="CurrentEvent" />
-        </div>
-        <div class="col-md-6">
-            <p>
-                Questions:
-            </p>
+                <Phase MovieEvent="CurrentEvent" />
+            </div>
+            <div class="col-md-6">
+                <p>
+                    Questions:
+                </p>
 
-            <ol>
-                <li>Did I like the movie?</li>
-                <li>Am I glad I watched the movie?</li>
-                <li>Do I think I'd ever watch it again?</li>
-                <li>Would you ever recommend this movie?</li>
-                <li>What was my favorite part of the movie?</li>
-                <li>What was my least favorite part of the movie?</li>
-            </ol>
-        </div>
+                <ol>
+                    <li>Did I like the movie?</li>
+                    <li>Am I glad I watched the movie?</li>
+                    <li>Do I think I'd ever watch it again?</li>
+                    <li>Would you ever recommend this movie?</li>
+                    <li>What was my favorite part of the movie?</li>
+                    <li>What was my least favorite part of the movie?</li>
+                </ol>
+            </div>
         </div>
     }
     else
@@ -35,25 +35,35 @@
     {
         <div class="row mt-4">
             <div class="col-md-6">
-            <Phase MovieEvent="NextEvent" />
+                <Phase MovieEvent="NextEvent" />
             </div>
         </div>
     }
 
-    @if (Phases != null && Phases.Any())
+    @if (Phases?.Any() ?? false)
     {
         <div class="row mt-4">
             <div class="col-md-12">
-                @foreach (var phase in Phases.Where(x => x.EndDate >= DateTime.Now))
-                {
-                    <p>Cycle @phase.Number:</p>
-                    @foreach (var movieEvent in phase.Events.Where(x => x.EndDate >= DateTime.Now))
+                <div class="timeline">
+                    @foreach (var phase in Phases)
                     {
-                        <p>@movieEvent.StartDate.ToString("MMMM, yyyy") - @movieEvent.Person</p>
+                        <div class="timeline-item">
+                            <h5>Cycle @phase.Number (@phase.StartDate.ToString("MMMM yyyy") - @phase.EndDate.ToString("MMMM yyyy"))</h5>
+                            @foreach (var movieEvent in phase.Events.Where(x =>
+                           x != CurrentEvent &&
+                           x != NextEvent &&
+                           x.EndDate >= DateTime.Now))
+                            {
+                                <div class="timeline-content">
+                                    <span class="date">@movieEvent.StartDate.ToString("MMMM yyyy")</span> -
+                                    <span class="person">@(movieEvent.Person ?? "TBD")</span>
+                                </div>
+                            }
+                        </div>
                     }
-                    <br />
-                }
+                </div>
             </div>
         </div>
     }
-</div>
+
+    </div>

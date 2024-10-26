@@ -1,11 +1,23 @@
-﻿@page "/settings"
+﻿@* Settings.razor *@
+@page "/settings"
 @attribute [StreamRendering]
 
 <PageTitle>Settings</PageTitle>
-
 <h1>Settings</h1>
 
 <div class="container">
+    <div class="row mb-3">
+        <div class="col-sm-12">
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" @bind="RespectOrder" id="respectOrder">
+                <label class="form-check-label" for="respectOrder">
+                    Respect Order
+                </label>
+                <button type="button" class="btn btn-primary ms-3" @onclick="SaveRespectOrder">Save</button>
+            </div>
+        </div>
+    </div>
+
     <div class="row mb-3">
         <div class="col-sm-12">
             <label>Start Date:</label>
@@ -15,8 +27,6 @@
             </div>
         </div>
     </div>
-
-    <hr />
 
     <div class="row mb-3">
         <div class="col-sm-12">
@@ -48,25 +58,61 @@
             <table class="table table-striped">
                 <thead>
                     <tr>
+                        <th style="width: 100px">Order</th>
                         <th>Name</th>
-                        <th></th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var person in People)
+                    @foreach (var person in People.OrderBy(p => p?.Order))
                     {
                         @if (person != null)
                         {
                             <tr>
-                                <td>@person.Name</td>
                                 <td>
-                                    <button type="button" class="btn btn-secondary me-2 mb-2" @onclick="() => Edit(person)">Edit</button>
-                                    <button type="button" class="btn btn-danger mb-2" @onclick="() => Delete(person)">Delete</button>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">@person.Order</span>
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="async () => await MoveUp(person)"
+                                                    disabled="@(person.Order <= 1)">
+                                                ↑
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="async () => await MoveDown(person)"
+                                                    disabled="@(person.Order >= People.Count)">
+                                                ↓
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (person.IsEditing)
+                                    {
+                                        <input type="text" @bind="person.Name" class="form-control" />
+                                    }
+                                    else
+                                    {
+                                        @person.Name
+                                    }
+                                </td>
+                                <td>
+                                    @if (person.IsEditing)
+                                    {
+                                        <button type="button" class="btn btn-primary me-2 mb-2" @onclick="() => Save(person)">Save</button>
+                                        <button type="button" class="btn btn-secondary mb-2" @onclick="() => Cancel(person)">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-secondary me-2 mb-2" @onclick="() => Edit(person)">Edit</button>
+                                        <button type="button" class="btn btn-danger mb-2" @onclick="() => Delete(person)">Delete</button>
+                                    }
                                 </td>
                             </tr>
                         }
                     }
                     <tr>
+                        <td></td>
                         <td>
                             <input style="width:70%" type="text" @bind="@NewPerson" class="form-control mb-2" />
                         </td>

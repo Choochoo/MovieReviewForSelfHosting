@@ -50,7 +50,7 @@ namespace MovieReviewApp.Database
                 .Set("AlreadySeen", movieEvent.AlreadySeen)
                 .Set("SeenDate", movieEvent.SeenDate)
                 .Set("MeetupTime", movieEvent.MeetupTime?.ToLocalTime())
-                .Set("PhaseNumber", movieEvent.PhaseNumber); // Added PhaseNumber here
+                .Set("PhaseNumber", movieEvent.PhaseNumber);
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
 
@@ -144,7 +144,8 @@ namespace MovieReviewApp.Database
         {
             var filter = Builders<Person>.Filter.Eq("Id", person.Id);
             var update = Builders<Person>.Update
-                .Set("Name", person.Name);
+                .Set("Name", person.Name)
+                .Set("Order", person.Order);
             People.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
 
