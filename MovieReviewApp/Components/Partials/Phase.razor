@@ -1,6 +1,9 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
 @inject MongoDb db
+@inject HttpClient Http
+@using Newtonsoft.Json.Linq
+@inject IConfiguration Configuration
 
 @if (MovieEvent != null)
 {
@@ -81,20 +84,38 @@
                     }
                 </div>
                 <br />
-                <div>
-                    @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
-                    {
+
+                @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
+                {
+                    <div>
                         <img style="width:100%" src="@MovieEvent.PosterUrl" />
                         <br />
                         <br />
-                    }
-                </div>
-                <div>
-                    @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
-                    {
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
+                {
+                    <div>
                         <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
-                    }
-                </div>
+                    </div>
+                }
+
+                <!-- Displaying the synopsis -->
+                @if (!string.IsNullOrEmpty(Synopsis))
+                {
+                    <div>
+                        <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;<b>Synopsis:</b> @Synopsis</p>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(MovieEvent.IMDb))
+                {
+                    <div>
+                        <p style="text-align:justify; width:90%;margin-left:5%">IMDb: <a href="@MovieEvent.IMDb">Link</a></p>
+                    </div>
+                }
+
                 @if (string.IsNullOrEmpty(MovieEvent.Movie))
                 {
                     <div style="text-align:center;width:100%">
@@ -105,7 +126,6 @@
                 {
                     <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
                 }
-
             }
         </div>
     </div>
@@ -119,8 +139,15 @@ else
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
     private int selectedYear;
+    private string Synopsis = "Loading...";
+    private string _apiKey = string.Empty;
 
-    protected override void OnParametersSet()
+    protected override async Task OnInitializedAsync()
+    {
+        _apiKey = Configuration["TMDB:ApiKey"];
+    }
+
+    protected override async Task OnParametersSetAsync()
     {
         if (MovieEvent != null && MovieEvent.SeenDate.HasValue)
         {
@@ -129,6 +156,48 @@ else
         else
         {
             selectedYear = DateTime.Now.Year;
+        }
+
+        if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Movie))
+        {
+            await GetMovieSynopsisAsync(MovieEvent.Movie);
+        }
+    }
+
+    private async Task GetMovieSynopsisAsync(string movieTitle)
+    {
+        try
+        {
+            string encodedTitle = Uri.EscapeDataString(movieTitle);
+            string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
+
+            HttpResponseMessage response = await Http.GetAsync(searchUrl);
+            response.EnsureSuccessStatusCode();
+
+            string responseBody = await response.Content.ReadAsStringAsync();
+            JObject searchResult = JObject.Parse(responseBody);
+
+            if (searchResult["results"] != null && searchResult["results"].HasValues)
+            {
+                int movieId = (int)searchResult["results"][0]["id"];
+                string detailsUrl = $"https://api.themoviedb.org/3/movie/{movieId}?api_key={_apiKey}";
+
+                response = await Http.GetAsync(detailsUrl);
+                response.EnsureSuccessStatusCode();
+
+                responseBody = await response.Content.ReadAsStringAsync();
+                JObject movieDetails = JObject.Parse(responseBody);
+
+                Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
+            }
+            else
+            {
+                Synopsis = "Movie not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Synopsis = $"An error occurred: {ex.Message}";
         }
     }
 
