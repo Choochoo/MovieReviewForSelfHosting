@@ -1,8 +1,6 @@
 ﻿@page "/"
 @using MovieReviewApp.Components.Partials
-
 <PageTitle>Movie Review</PageTitle>
-
 <div class="container">
     @if (CurrentEvent != null)
     {
@@ -14,7 +12,6 @@
                 <p>
                     Questions:
                 </p>
-
                 <ol>
                     <li>Did I like the movie?</li>
                     <li>Am I glad I watched the movie?</li>
@@ -26,11 +23,14 @@
             </div>
         </div>
     }
+    else if (NextEvent != null)
+    {
+        <p>Movie Review cycle starts @NextEvent.StartDate.ToString("MMMM d, yyyy")</p>
+    }
     else
     {
         <p>Add some names to Settings</p>
     }
-
     @if (NextEvent != null)
     {
         <div class="row mt-4">
@@ -39,13 +39,15 @@
             </div>
         </div>
     }
-
     @if (Phases?.Any() ?? false)
     {
         <div class="row mt-4">
             <div class="col-md-12">
                 <div class="timeline">
-                    @foreach (var phase in Phases)
+                    @foreach (var phase in Phases.Where(p => p.Events.Any(e =>
+                   e != CurrentEvent &&
+                   e != NextEvent &&
+                   e.EndDate >= DateTime.Now)))
                     {
                         <div class="timeline-item">
                             <h5>Cycle @phase.Number (@phase.StartDate.ToString("MMMM yyyy") - @phase.EndDate.ToString("MMMM yyyy"))</h5>
@@ -65,5 +67,4 @@
             </div>
         </div>
     }
-
-    </div>
+</div>

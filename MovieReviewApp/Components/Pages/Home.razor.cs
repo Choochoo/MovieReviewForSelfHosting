@@ -117,6 +117,15 @@ namespace MovieReviewApp.Components.Pages
         private void SetCurrentAndNextPhases(Phase phase)
         {
             var isCurrentPhase = DateTime.Now.IsWithinRange(phase.StartDate, phase.EndDate.EndOfDay());
+
+            // Edge case: If we're before the first phase starts
+            if (phase.Number == 1 && DateTime.Now < phase.StartDate)
+            {
+                CurrentEvent = null;
+                NextEvent = phase.Events.OrderBy(x => x.StartDate).First();
+                return;
+            }
+
             if (isCurrentPhase)
             {
                 CurrentEvent = phase.Events.Single(x => DateTime.Now.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
@@ -124,11 +133,13 @@ namespace MovieReviewApp.Components.Pages
                 NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
                 return;
             }
+
             if (phase.Events.Count == 0)
             {
                 NextEvent = null;
                 return;
             }
+
             //Assume it must be first one of the next phase.
             NextEvent = NextEvent == null ? phase.Events.OrderBy(x => x.StartDate).First() : NextEvent;
         }
