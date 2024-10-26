@@ -1,5 +1,6 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
+@inject MongoDb db
 
 @if (MovieEvent != null)
 {
@@ -117,8 +118,6 @@ else
 @code {
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
-
-    private MongoDb db = new MongoDb();
     private int selectedYear;
 
     protected override void OnParametersSet()

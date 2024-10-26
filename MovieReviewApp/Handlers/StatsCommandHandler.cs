@@ -1,4 +1,5 @@
-﻿using MovieReviewApp.Database;
+﻿using Microsoft.AspNetCore.Components;
+using MovieReviewApp.Database;
 using MovieReviewApp.Enums;
 using MovieReviewApp.Helpers;
 using System.Collections.Generic;
@@ -8,7 +9,8 @@ namespace MovieReviewApp.Handlers
 {
     public class StatsCommandHandler
     {
-        private MongoDb _db = new MongoDb();
+        [Inject]
+        private MongoDb db { get; set; } = default!;
         private readonly string _webRootPath;
         private HashSet<string> CommonWords;
 

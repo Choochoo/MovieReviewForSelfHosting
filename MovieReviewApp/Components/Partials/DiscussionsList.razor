@@ -85,13 +85,13 @@ else
 @code {
     private List<string> Folders { get; set; } = new List<string>();
     private List<FileInfo> Files { get; set; } = new List<FileInfo>();
-    private string SelectedFolder { get; set; }
-    private string TextFileContent { get; set; }
-    private string _apiKey { get; set; }
-    private string ErrorMessage { get; set; }
+    private string SelectedFolder { get; set; } = "";
+    private string TextFileContent { get; set; } = "";
+    private string _apiKey { get; set; } = "";
+    private string ErrorMessage { get; set; } = "";
     private bool IsProcessing { get; set; }
     private int ProgressPercentage { get; set; }
-    private string StatusMessage { get; set; }
+    private string StatusMessage { get; set; } = "";
 
     protected override async Task OnInitializedAsync()
     {

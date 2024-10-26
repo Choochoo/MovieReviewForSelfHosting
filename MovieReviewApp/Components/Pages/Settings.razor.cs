@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MovieReviewApp.Database;
 using MovieReviewApp.Models;
@@ -8,12 +9,16 @@ namespace MovieReviewApp.Components.Pages
 {
     public partial class Settings
     {
-        public List<Person>? People;
-        private MongoDb db = new MongoDb();
-        public DateTime? StartDate;
+        [Inject]
+        private MongoDb db { get; set; } = default!;
+
+
+        public List<Person>? People { get; set; }
+        public DateTime? StartDate { get; set; }
         public int? TimeCount;
         public string? TimePeriod;
         public string NewPerson = "New Person";
+        public bool RespectOrder = false;
         public List<Setting> settings = new List<Setting>();
         public readonly List<SelectListItem> TimePeriods = new List<SelectListItem>
         {
@@ -24,11 +29,17 @@ namespace MovieReviewApp.Components.Pages
 
         protected override void OnInitialized()
         {
-            People = db.GetAllPeople();
             settings = db.GetSettings();
+
+            RespectOrder = false; // default value
+            var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            if (setting != null && !string.IsNullOrEmpty(setting.Value))
+                bool.TryParse(setting.Value, out RespectOrder);
             StartDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
             TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
             TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
+
+            People = db.GetAllPeople(RespectOrder);
         }
 
 
@@ -36,7 +47,7 @@ namespace MovieReviewApp.Components.Pages
         {
             db.AddPerson(new Person { Name = NewPerson });
             NewPerson = "New Person";
-            People = db.GetAllPeople();
+            People = db.GetAllPeople(RespectOrder);
         }
 
         private void Edit(Person person)
@@ -54,7 +65,7 @@ namespace MovieReviewApp.Components.Pages
             if (person != null)
             {
                 db.DeletePerson(person);
-                People = db.GetAllPeople();
+                People = db.GetAllPeople(RespectOrder);
             }
         }
         private void Save(Person person)

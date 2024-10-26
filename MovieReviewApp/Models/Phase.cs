@@ -6,10 +6,10 @@ namespace MovieReviewApp.Models
     public class Phase
     {
         public Guid Id { get; set; } = Guid.NewGuid();
-        public int? Number { get; set; }
+        public int? Number { get; set; } = null;
         [BsonIgnore]
         public List<MovieEvent> Events { get; set; } = new List<MovieEvent>();
-        public string People { get; set; }
+        public string People { get; set; } = "";
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
     }

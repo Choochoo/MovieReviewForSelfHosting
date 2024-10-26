@@ -1,5 +1,6 @@
 
 
+
 using MovieReviewApp.Database;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
@@ -8,11 +9,14 @@ namespace MovieReviewApp.Components.Pages
 {
     public partial class Home
     {
+        [Inject]
+        private MongoDb db { get; set; } = default!;
+
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
         public List<Phase> Phases { get; set; } = new();
         private readonly Random _rand = new Random(1337);
-        private MongoDb db = new MongoDb();
+        public bool RespectOrder = false;
 
         protected override void OnInitialized()
         {
@@ -22,8 +26,17 @@ namespace MovieReviewApp.Components.Pages
                 // Handle error: settings are missing or malformed
                 return;
             }
+            var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            if (setting != null && !string.IsNullOrEmpty(setting.Value))
+                bool.TryParse(setting.Value, out RespectOrder);
 
-            var allNames = db.GetAllPeople().Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+            var allNames = db.GetAllPeople(RespectOrder).Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+            if(allNames.Length == 0)
+            {
+                CurrentEvent = null;
+                NextEvent = null;
+                return;
+            }
             GeneratePhases(startDate, allNames);
         }
 
@@ -31,6 +44,7 @@ namespace MovieReviewApp.Components.Pages
         {
             var listNames = allNames?.ToList();
             var phase = GeneratePhase(1, startDate, listNames); // Always phase 1
+
             Phases.Add(phase);
             var isNextPhase = false;
             while (!isNextPhase)
@@ -46,8 +60,12 @@ namespace MovieReviewApp.Components.Pages
         {
             var phase = db.GetPhase(phaseNumber, peopleNames, startDate);
             var peopleUsed = phase.Events.Where(x => !string.IsNullOrEmpty(x.Person)).Select(x => x.Person).Distinct().ToList();
-            for (var i = 0; i < peopleUsed.Count; i++)
-                _rand.Next();//cycle to where we are in the seed.
+
+            if (RespectOrder)
+            {
+                for (var i = 0; i < peopleUsed.Count; i++)
+                    _rand.Next();//cycle to where we are in the seed.
+            }
 
             var peopleLeftNotInDb = peopleNames.Where(x => !peopleUsed.Contains(x)).ToList();
             GenerateMovieEvents(phaseNumber, startDate, phase, peopleUsed, peopleLeftNotInDb);
@@ -61,7 +79,7 @@ namespace MovieReviewApp.Components.Pages
             var moveEventStartDate = startDate.AddMonths(peopleUsed.Count);
             while (peopleLeftNotInDb.Count > 0)
             {
-                var person = peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
+                var person = RespectOrder ? peopleLeftNotInDb.First() : peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
                 phase.Events.Add(new MovieEvent
                 {
                     StartDate = moveEventStartDate,
@@ -86,7 +104,11 @@ namespace MovieReviewApp.Components.Pages
                 NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
                 return;
             }
-
+            if (phase.Events.Count == 0)
+            {
+                NextEvent = null;
+                return;
+            }
             //Assume it must be first one of the next phase.
             NextEvent = NextEvent == null ? phase.Events.OrderBy(x => x.StartDate).First() : NextEvent;
         }

@@ -1,4 +1,5 @@
-﻿using MovieReviewApp.Database;
+﻿using Microsoft.AspNetCore.Components;
+using MovieReviewApp.Database;
 using MovieReviewApp.Enums;
 using MovieReviewApp.Handlers;
 using MovieReviewApp.Models;
@@ -7,7 +8,8 @@ namespace MovieReviewApp.Services
 {
     public class StatsCommandProcessorService
     {
-        private MongoDb _db = new MongoDb();
+        [Inject]
+        private MongoDb db { get; set; } = default!;
         private readonly StatsCommandHandler statsCommandHandler;
 
         public StatsCommandProcessorService(string webRootPath)
@@ -35,7 +37,7 @@ namespace MovieReviewApp.Services
                         ProcessedDate = DateTime.Now,
                         FolderName = folderName
                     };
-                    _db.AddStatsCommand(commandResult);
+                    db.AddStatsCommand(commandResult);
                     results.Add(commandResult);
                 }
                 else
@@ -82,7 +84,7 @@ namespace MovieReviewApp.Services
             };
 
             // Save the result (this could be a database operation)
-            _db.AddStatsCommand(statsCommand);
+            db.AddStatsCommand(statsCommand);
 
             await Task.CompletedTask;
         }

@@ -8,9 +8,10 @@ namespace MovieReviewApp.Database
     {
         private IMongoDatabase? database;
 
-        public MongoDb()
+        public MongoDb(IConfiguration configuration)
         {
-            string mongoUri = Environment.GetEnvironmentVariable("MOVIEREVIEW_MONGO");
+            string mongoEnvVariable = configuration.GetValue<string>("MongoEnvironmentVariable");
+            string mongoUri = Environment.GetEnvironmentVariable(mongoEnvVariable);
             if (string.IsNullOrEmpty(mongoUri))
             {
                 throw new ArgumentNullException("MongoDB connection string not found in environment variables");
@@ -83,26 +84,20 @@ namespace MovieReviewApp.Database
                 .ToList();
         }
 
-        private List<Person> QueryPeople()
+        private List<Person> QueryPeople(bool respectOrder)
         {
-            var sortDefinition = Builders<Person>.Sort.Ascending(me => me.Name);
+            var sortDefinition = respectOrder 
+                ? Builders<Person>.Sort.Ascending(me => me.Order)
+                : Builders<Person>.Sort.Ascending(me => me.Name);
+
             return People.Find(_ => true)
                 .Sort(sortDefinition)
                 .ToList();
         }
 
-        public List<Person> GetAllPeople()
+        public List<Person> GetAllPeople(bool respectOrder)
         {
-            var people = QueryPeople();
-            if (people.Count == 0)
-            {
-                AddPerson(new Person { Name = "Jeremiah" });
-                AddPerson(new Person { Name = "Lacey" });
-                AddPerson(new Person { Name = "Jared" });
-                AddPerson(new Person { Name = "Dave" });
-                AddPerson(new Person { Name = "Keri" });
-                people = QueryPeople();
-            }
+            var people = QueryPeople(respectOrder);
             return people;
         }
 
@@ -136,13 +131,13 @@ namespace MovieReviewApp.Database
 
         public void AddPerson(Person person)
         {
-            // People.InsertOne(person);
+             People.InsertOne(person);
         }
 
         public void DeletePerson(Person person)
         {
-            // var filter = Builders<Person>.Filter.Eq("Id", person.Id);
-            //People.DeleteOne(filter);
+            var filter = Builders<Person>.Filter.Eq("Id", person.Id);
+            People.DeleteOne(filter);
         }
 
         internal void AddOrUpdatePerson(Person person)

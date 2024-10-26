@@ -38,8 +38,10 @@ else
 }
 
 @code {
+    [Inject]
+    private MongoDb db { get; set; } = default!;
+
     private List<StatsCommand>? StatsCommands { get; set; }
-    private MongoDb _db = new MongoDb();
 
     protected override void OnInitialized()
     {
@@ -49,6 +51,6 @@ else
     private void LoadAllStatsCommands()
     {
         // Load all processed stats commands from the database
-        StatsCommands = _db.GetProcessedStatCommands();
+        StatsCommands = db.GetProcessedStatCommands();
     }
 }
