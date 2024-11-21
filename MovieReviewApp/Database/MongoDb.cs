@@ -6,7 +6,7 @@ namespace MovieReviewApp.Database
 {
     public class MongoDb
     {
-        private IMongoDatabase? database;
+        private readonly IMongoDatabase? database;
 
         public MongoDb(IConfiguration configuration)
         {
@@ -26,6 +26,7 @@ namespace MovieReviewApp.Database
         private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
         private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
         private IMongoCollection<StatsCommand>? StatsCommands => database?.GetCollection<StatsCommand>("StatsCommands");
+        private IMongoCollection<SiteUpdate> SiteUpdates => database?.GetCollection<SiteUpdate>("SiteUpdates");
 
         public MovieEvent GetMovieEventBetweenDate(DateTime dt)
         {
@@ -35,9 +36,41 @@ namespace MovieReviewApp.Database
             );
             return MovieEvents.Find<MovieEvent>(filter).FirstOrDefault();
         }
+
+        public void AddSiteUpdate(string updateType, string description)
+        {
+            var update = new SiteUpdate
+            {
+                LastUpdateTime = DateTime.UtcNow,
+                UpdateType = updateType,
+                Description = description
+            };
+            SiteUpdates.InsertOne(update);
+        }
+
+        public DateTime? GetLatestUpdateTime()
+        {
+            var latestUpdate = SiteUpdates
+                .Find(_ => true)
+                .SortByDescending(x => x.LastUpdateTime)
+                .FirstOrDefault();
+            return latestUpdate?.LastUpdateTime;
+        }
+
+        public List<SiteUpdate> GetRecentUpdates(DateTime since)
+        {
+            return SiteUpdates
+                .Find(x => x.LastUpdateTime < since)
+                .SortByDescending(x => x.LastUpdateTime)
+                .ToList();
+        }
+
         public void AddOrUpdateMovieEvent(MovieEvent movieEvent)
         {
             var filter = Builders<MovieEvent>.Filter.Eq("Id", movieEvent.Id);
+            var existingMovie = MovieEvents.Find(filter).FirstOrDefault();
+            var isNew = existingMovie == null || string.IsNullOrEmpty(existingMovie.Movie);
+
             var update = Builders<MovieEvent>.Update
                 .Set("StartDate", movieEvent.StartDate)
                 .Set("EndDate", movieEvent.EndDate)
@@ -50,8 +83,94 @@ namespace MovieReviewApp.Database
                 .Set("AlreadySeen", movieEvent.AlreadySeen)
                 .Set("SeenDate", movieEvent.SeenDate)
                 .Set("MeetupTime", movieEvent.MeetupTime?.ToLocalTime())
-                .Set("PhaseNumber", movieEvent.PhaseNumber);
+                .Set("PhaseNumber", movieEvent.PhaseNumber)
+                .Set("Synopsis", movieEvent.Synopsis);
+
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+
+
+            if (string.IsNullOrEmpty(movieEvent.Movie)) return;
+
+            CreateUpdateNotification(movieEvent, existingMovie, isNew);
+        }
+
+        private void CreateUpdateNotification(MovieEvent movieEvent, MovieEvent existingMovie, bool isNew)
+        {
+            if (isNew)
+            {
+                var newMovieChanges = new List<string>
+        {
+            $"• Movie: {movieEvent.Movie}"
+        };
+
+                if (!string.IsNullOrEmpty(movieEvent.IMDb))
+                    newMovieChanges.Add("• IMDb Link Added");
+
+                if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
+                    newMovieChanges.Add("• Poster Added");
+
+                if (!string.IsNullOrEmpty(movieEvent.Reasoning))
+                    newMovieChanges.Add("• Reasoning Added");
+
+                if (movieEvent.MeetupTime.HasValue)
+                    newMovieChanges.Add($"• Meetup Time: {movieEvent.MeetupTime.Value:MM/dd/yyyy h:mm tt}");
+
+                newMovieChanges.Add(movieEvent.AlreadySeen
+                    ? $"• Previously seen in {movieEvent.SeenDate?.Year}"
+                    : "• Not previously seen");
+
+                AddSiteUpdate("MovieAdded",
+                    $"New movie added for {movieEvent.StartDate:MMMM yyyy} by {movieEvent.Person}:\n" +
+                    string.Join("\n", newMovieChanges));
+
+                return;
+            }
+
+            if (existingMovie == null) return;
+
+            var changes = new List<string>();
+
+            if (movieEvent.Movie != existingMovie.Movie)
+                changes.Add($"• Movie changed from '{existingMovie.Movie}' to '{movieEvent.Movie}'");
+
+            if (movieEvent.IMDb != existingMovie.IMDb)
+            {
+                var imdbStatus = string.IsNullOrEmpty(existingMovie.IMDb) ? "added" : "changed";
+                changes.Add($"• IMDb Link {imdbStatus}");
+            }
+
+            if (movieEvent.PosterUrl != existingMovie.PosterUrl)
+            {
+                var posterStatus = string.IsNullOrEmpty(existingMovie.PosterUrl) ? "added" : "changed";
+                changes.Add($"• Poster URL {posterStatus}");
+            }
+
+            if (movieEvent.Reasoning != existingMovie.Reasoning)
+            {
+                var reasonStatus = string.IsNullOrEmpty(existingMovie.Reasoning) ? "added" : "changed";
+                changes.Add($"• Reasoning {reasonStatus}");
+            }
+
+            if (movieEvent.MeetupTime != existingMovie.MeetupTime)
+            {
+                var oldTime = existingMovie.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set";
+                var newTime = movieEvent.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set";
+                changes.Add($"• Meetup Time changed from {oldTime} to {newTime}");
+            }
+
+            if (movieEvent.AlreadySeen != existingMovie.AlreadySeen || movieEvent.SeenDate != existingMovie.SeenDate)
+            {
+                changes.Add(movieEvent.AlreadySeen
+                    ? $"• Previously seen status changed to: seen in {movieEvent.SeenDate?.Year}"
+                    : "• Previously seen status changed to: not seen");
+            }
+
+            if (!changes.Any()) return;
+
+            var updateMessage = $"Movie {movieEvent.Movie} was changed by {movieEvent.Person}:\n" +
+                               string.Join("\n", changes);
+
+            AddSiteUpdate("MovieUpdated", updateMessage);
         }
 
         public List<StatsCommand> GetProcessedStatCommandsForMonth(string monthYear)
@@ -86,7 +205,7 @@ namespace MovieReviewApp.Database
 
         private List<Person> QueryPeople(bool respectOrder)
         {
-            var sortDefinition = respectOrder 
+            var sortDefinition = respectOrder
                 ? Builders<Person>.Sort.Ascending(me => me.Order)
                 : Builders<Person>.Sort.Ascending(me => me.Name);
 
@@ -131,7 +250,7 @@ namespace MovieReviewApp.Database
 
         public void AddPerson(Person person)
         {
-             People.InsertOne(person);
+            People.InsertOne(person);
         }
 
         public void DeletePerson(Person person)

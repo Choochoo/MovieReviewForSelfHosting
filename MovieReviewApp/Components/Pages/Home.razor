@@ -2,6 +2,20 @@
 @using MovieReviewApp.Components.Partials
 <PageTitle>Movie Review</PageTitle>
 <div class="container">
+    @if (RecentUpdates.Any() && showUpdates)
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <h5>Recent Updates:</h5>
+            <ul class="mb-0">
+                @foreach (var update in RecentUpdates.Take(3))
+                {
+                    <li>@update.Description - @update.LastUpdateTime.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</li>
+                }
+            </ul>
+            <button type="button" class="btn-close" @onclick="DismissUpdates"></button>
+        </div>
+    }
+
     @if (CurrentEvent != null)
     {
         <div class="row">

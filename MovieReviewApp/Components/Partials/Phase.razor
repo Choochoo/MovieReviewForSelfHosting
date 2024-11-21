@@ -168,6 +168,13 @@ else
     {
         try
         {
+            // First, check if we already have the synopsis in our database
+            if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Synopsis))
+            {
+                Synopsis = MovieEvent.Synopsis;
+                return;
+            }
+
             string encodedTitle = Uri.EscapeDataString(movieTitle);
             string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
 
@@ -189,6 +196,13 @@ else
                 JObject movieDetails = JObject.Parse(responseBody);
 
                 Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
+
+                // If we successfully got the synopsis, save it to the database
+                if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) && Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
+                {
+                    MovieEvent.Synopsis = Synopsis;
+                    await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                }
             }
             else
             {

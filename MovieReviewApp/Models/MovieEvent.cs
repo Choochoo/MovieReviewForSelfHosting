@@ -17,6 +17,7 @@ namespace MovieReviewApp.Models
         public bool AlreadySeen { get; set; }
         public DateTime? SeenDate { get; set; }
         public DateTime? MeetupTime { get; set; }
+        public string? Synopsis { get; set; }
 
         [NotMapped]
         public bool FromDatabase { get; set; }

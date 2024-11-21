@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.Extensions.Options;
 using MovieReviewApp.Components;
 using MovieReviewApp.Database;
 using MovieReviewApp.Extentions;
@@ -26,6 +24,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpClient(); // Register HttpClient
+builder.Services.AddHttpContextAccessor();
 
 // Configure file upload size limit (10GB)
 builder.Services.Configure<FormOptions>(options =>
@@ -39,6 +38,12 @@ builder.Services.AddSingleton<MongoDb>();
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.Limits.MaxRequestBodySize = 10L * 1024 * 1024 * 1024; // 10 GB
+});
+
+builder.Services.Configure<CookiePolicyOptions>(options =>
+{
+    options.CheckConsentNeeded = context => true;
+    options.MinimumSameSitePolicy = SameSiteMode.Strict;
 });
 
 var app = builder.Build();
