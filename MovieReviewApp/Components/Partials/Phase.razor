@@ -102,7 +102,7 @@
                 }
 
                 <!-- Displaying the synopsis -->
-                @if (!string.IsNullOrEmpty(Synopsis))
+                @if (!string.IsNullOrEmpty(MovieEvent.Movie) && !string.IsNullOrEmpty(Synopsis))
                 {
                     <div>
                         <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;<b>Synopsis:</b> @Synopsis</p>
