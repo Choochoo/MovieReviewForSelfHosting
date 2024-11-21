@@ -2,6 +2,7 @@
 
 
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using MovieReviewApp.Database;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
@@ -11,8 +12,13 @@ namespace MovieReviewApp.Components.Pages
     public partial class Home
     {
         [Inject]
+        private IJSRuntime JS { get; set; } = default!;
+
+        [Inject]
         private MongoDb db { get; set; } = default!;
 
+        private List<SiteUpdate> RecentUpdates { get; set; } = new();
+        private bool showUpdates = true;
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
         public List<Phase> Phases { get; set; } = new();
@@ -32,13 +38,42 @@ namespace MovieReviewApp.Components.Pages
                 bool.TryParse(setting.Value, out RespectOrder);
 
             var allNames = db.GetAllPeople(RespectOrder).Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).ToArray();
-            if(allNames.Length == 0)
+            if (allNames.Length == 0)
             {
                 CurrentEvent = null;
                 NextEvent = null;
                 return;
             }
             GeneratePhases(startDate, allNames);
+        }
+
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (firstRender)
+            {
+                // Get last visit time from localStorage, default to 24 hours ago if not found
+                var lastVisitStr = await JS.InvokeAsync<string>("localStorage.getItem", "lastVisit");
+                var lastVisit = string.IsNullOrEmpty(lastVisitStr)
+                    ? DateTime.UtcNow.AddDays(-1)
+                    : DateTime.Parse(lastVisitStr);
+
+                // Get updates since last visit
+                RecentUpdates = db.GetRecentUpdates(lastVisit);
+
+                // Update last visit time
+                await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
+
+                if (RecentUpdates.Any())
+                {
+                    StateHasChanged();
+                }
+            }
+        }
+        private async Task DismissUpdates()
+        {
+            showUpdates = false;
+            // Update last visit time when dismissed
+            await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
         }
 
         private void GeneratePhases(DateTime startDate, string?[]? allNames)
