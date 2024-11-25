@@ -7,128 +7,177 @@
 
 @if (MovieEvent != null)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <p style="text-align:center;font-size:1.2em">@MovieEvent.StartDate.ToString("MMMM, yyyy")</p>
-            <hr />
-            @if (MovieEvent.IsEditing)
-            {
-                <div><b>Person:</b> @MovieEvent.Person</div>
-                <div class="form-group">
-                    <label><b>Movie: </b></label>
-                    <input type="text" @bind="@MovieEvent.Movie" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label><b>IMDb: </b></label>
-                    <input type="text" @bind="@MovieEvent.IMDb" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label><b>Poster URL:</b></label>
-                    <input type="text" @bind="@MovieEvent.PosterUrl" class="form-control" />
-                </div>
-                <div class="form-group">
-                    <label><b>Reason:</b></label>
-                    <textarea placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" class="form-control"></textarea>
-                </div>
-                <div class="form-group">
-                    <label><b>Meetup Time:</b></label>
-                    <input type="datetime-local" @bind="MovieEvent.MeetupTime" class="form-control" step="900" />
-                </div>
-                <div class="form-group">
-                    <b>Have you already seen it?</b>
-                    <input type="checkbox" @bind="@MovieEvent.AlreadySeen" class="form-check-input" />
-                </div>
-                @if (MovieEvent.AlreadySeen)
-                {
-                    <div class="form-group">
-                        <b>When?</b>
-                        <select @bind="selectedYear" class="form-control">
-                            @foreach (var year in Enumerable.Range(1980, (DateTime.Now.Year+1)-1980))
-                            {
-                                <option value="@year">@year</option>
-                            }
-                        </select>
-                    </div>
-                }
-                <button type="button" class="btn btn-primary" @onclick="Save">Save</button>
-                <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
-            }
-            else
-            {
-                <div style="margin-left:10%;width:80%;text-align:center">
-                    @if (string.IsNullOrEmpty(MovieEvent.Movie))
+    try
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <p style="text-align:center;font-size:1.2em">
+                    @try
                     {
-                        <span>@MovieEvent.Person's turn to choose.</span>
+                        @MovieEvent.StartDate.ToString("MMMM, yyyy")
                     }
-                    else
+                    catch
                     {
-                        <span><b>@MovieEvent.Person</b> chose the movie <b>'@MovieEvent.Movie'</b></span>
-                        @if (MovieEvent.SeenDate != null)
-                        {
-                            <span> for the month of @MovieEvent.EndDate.AddDays(-1).ToString("MMMM")</span>
-                        }
-                        if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
-                        {
-                            <span> and last saw it in @MovieEvent.SeenDate.Value.Year.</span>
-                        }
-                        else
-                        {
-                            <span> and has never seen it before.</span>
-                        }
-                        @if (MovieEvent.MeetupTime.HasValue)
-                        {
-                            <br />
-                            <br />
-                            <span>We will discuss at <b>@MovieEvent.Person's</b> on <b>@MovieEvent.MeetupTime?.ToString("dddd M/d/yyyy h:mm tt").</b></span>
-                        }
+                        <span>Date not available</span>
                     }
-                </div>
-                <br />
-
-                @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
+                </p>
+                <hr />
+                @if (MovieEvent.IsEditing)
                 {
-                    <div>
-                        <img style="width:100%" src="@MovieEvent.PosterUrl" />
-                        <br />
-                        <br />
-                    </div>
-                }
-
-                @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
-                {
-                    <div>
-                        <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
-                    </div>
-                }
-
-                <!-- Displaying the synopsis -->
-                @if (!string.IsNullOrEmpty(MovieEvent.Movie) && !string.IsNullOrEmpty(Synopsis))
-                {
-                    <div>
-                        <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;<b>Synopsis:</b> @Synopsis</p>
-                    </div>
-                }
-
-                @if (!string.IsNullOrEmpty(MovieEvent.IMDb))
-                {
-                    <div>
-                        <p style="text-align:justify; width:90%;margin-left:5%">IMDb: <a href="@MovieEvent.IMDb">Link</a></p>
-                    </div>
-                }
-
-                @if (string.IsNullOrEmpty(MovieEvent.Movie))
-                {
-                    <div style="text-align:center;width:100%">
-                        <button type="button" style="background-color: blue; margin:20px" class="btn btn-secondary" @onclick="Edit">ADD MOVIE FOR @MovieEvent.StartDate.ToString("MMMM").ToUpper()</button>
-                    </div>
+                    try
+                    {
+                        <div><b>Person:</b> @MovieEvent.Person</div>
+                        <div class="form-group">
+                            <label><b>Movie: </b></label>
+                            <input type="text" @bind="@MovieEvent.Movie" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                            <label><b>IMDb: </b></label>
+                            <input type="text" @bind="@MovieEvent.IMDb" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                            <label><b>Poster URL:</b></label>
+                            <input type="text" @bind="@MovieEvent.PosterUrl" class="form-control" />
+                        </div>
+                        <div class="form-group">
+                            <label><b>Reason:</b></label>
+                            <textarea placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" class="form-control"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label><b>Meetup Time:</b></label>
+                            <input type="datetime-local" @bind="MovieEvent.MeetupTime" class="form-control" step="900" />
+                        </div>
+                        <div class="form-group">
+                            <b>Have you already seen it?</b>
+                            <input type="checkbox" @bind="@MovieEvent.AlreadySeen" class="form-check-input" />
+                        </div>
+                        @if (MovieEvent.AlreadySeen)
+                        {
+                            <div class="form-group">
+                                <b>When?</b>
+                                <select @bind="selectedYear" class="form-control">
+                                    @foreach (var year in Enumerable.Range(1980, (DateTime.Now.Year+1)-1980))
+                                    {
+                                        <option value="@year">@year</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <button type="button" class="btn btn-primary" @onclick="SaveAsync">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="Cancel">Cancel</button>
+                    }
+                    catch (Exception ex)
+                    {
+                        <div class="alert alert-danger">
+                            An error occurred while loading the edit form. Please try again.
+                        </div>
+                    }
                 }
                 else
                 {
-                    <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
+                    try
+                    {
+                        <div style="margin-left:10%;width:80%;text-align:center">
+                            @if (string.IsNullOrEmpty(MovieEvent.Movie))
+                            {
+                                <span>@MovieEvent.Person's turn to choose.</span>
+                            }
+                            else
+                            {
+                                <span><b>@MovieEvent.Person</b> chose the movie <b>'@MovieEvent.Movie'</b></span>
+                                @if (MovieEvent.SeenDate != null)
+                                {
+                                    try
+                                    {
+                                        <span> for the month of @MovieEvent.EndDate.AddDays(-1).ToString("MMMM")</span>
+                                    }
+                                    catch
+                                    {
+                                        <span> (month information unavailable)</span>
+                                    }
+                                }
+                                if (MovieEvent.AlreadySeen && MovieEvent.SeenDate.HasValue)
+                                {
+                                    <span> and last saw it in @MovieEvent.SeenDate.Value.Year.</span>
+                                }
+                                else
+                                {
+                                    <span> and has never seen it before.</span>
+                                }
+                                @if (MovieEvent.MeetupTime.HasValue)
+                                {
+                                    try
+                                    {
+                                        <br />
+                                        <br />
+                                        <span>We will discuss at <b>@MovieEvent.Person's</b> on <b>@MovieEvent.MeetupTime?.ToString("dddd M/d/yyyy h:mm tt").</b></span>
+                                    }
+                                    catch
+                                    {
+                                        <span>Meetup time format error</span>
+                                    }
+                                }
+                            }
+                        </div>
+                        <br />
+
+                        @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
+                        {
+                            <div>
+                                <img style="width:100%" src="@MovieEvent.PosterUrl" onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                                <br />
+                                <br />
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
+                        {
+                            <div>
+                                <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(MovieEvent.Movie) && !string.IsNullOrEmpty(Synopsis))
+                        {
+                            <div>
+                                <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;<b>Synopsis:</b> @Synopsis</p>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(MovieEvent.IMDb))
+                        {
+                            <div>
+                                <p style="text-align:justify; width:90%;margin-left:5%">IMDb: <a href="@MovieEvent.IMDb" target="_blank" rel="noopener noreferrer">Link</a></p>
+                            </div>
+                        }
+
+                        @if (string.IsNullOrEmpty(MovieEvent.Movie))
+                        {
+                            <div style="text-align:center;width:100%">
+                                <button type="button" style="background-color: blue; margin:20px" class="btn btn-secondary" @onclick="Edit">ADD MOVIE FOR @MovieEvent.StartDate.ToString("MMMM").ToUpper()</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary" @onclick="Edit">Edit</button>
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        <div class="alert alert-danger">
+                            An error occurred while displaying the movie information. Please refresh the page.
+                        </div>
+                    }
                 }
-            }
+            </div>
         </div>
-    </div>
+    }
+    catch (Exception ex)
+    {
+        <div class="alert alert-danger">
+            An error occurred while loading the page. Please refresh to try again.
+        </div>
+    }
 }
 else
 {
@@ -139,36 +188,62 @@ else
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
     private int selectedYear;
-    private string Synopsis = "Loading...";
+    private string? Synopsis = "Loading...";
     private string _apiKey = string.Empty;
+    private bool isLoading = false;
 
     protected override async Task OnInitializedAsync()
     {
-        _apiKey = Configuration["TMDB:ApiKey"];
+        try
+        {
+            _apiKey = Configuration["TMDB:ApiKey"] ?? string.Empty;
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                throw new Exception("API key not found in configuration");
+            }
+        }
+        catch (Exception ex)
+        {
+            Synopsis = "Error loading configuration";
+        }
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (MovieEvent != null && MovieEvent.SeenDate.HasValue)
+        try
         {
-            selectedYear = MovieEvent.SeenDate.Value.Year;
+            if (MovieEvent != null && MovieEvent.SeenDate.HasValue)
+            {
+                selectedYear = MovieEvent.SeenDate.Value.Year;
+            }
+            else
+            {
+                selectedYear = DateTime.Now.Year;
+            }
+
+            if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Movie))
+            {
+                await GetMovieSynopsisAsync(MovieEvent.Movie);
+            }
         }
-        else
+        catch (Exception ex)
         {
             selectedYear = DateTime.Now.Year;
-        }
-
-        if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Movie))
-        {
-            await GetMovieSynopsisAsync(MovieEvent.Movie);
+            Synopsis = "Error loading movie details";
         }
     }
 
     private async Task GetMovieSynopsisAsync(string movieTitle)
     {
+        if (string.IsNullOrEmpty(movieTitle))
+        {
+            Synopsis = "No movie title provided";
+            return;
+        }
+
         try
         {
-            // First, check if we already have the synopsis in our database
+            // Check for cached synopsis
             if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Synopsis))
             {
                 Synopsis = MovieEvent.Synopsis;
@@ -178,30 +253,45 @@ else
             string encodedTitle = Uri.EscapeDataString(movieTitle);
             string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
 
-            HttpResponseMessage response = await Http.GetAsync(searchUrl);
-            response.EnsureSuccessStatusCode();
+            using var response = await Http.GetAsync(searchUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Error: {response.StatusCode}");
+            }
 
             string responseBody = await response.Content.ReadAsStringAsync();
-            JObject searchResult = JObject.Parse(responseBody);
+            var searchResult = JObject.Parse(responseBody);
 
             if (searchResult["results"] != null && searchResult["results"].HasValues)
             {
                 int movieId = (int)searchResult["results"][0]["id"];
                 string detailsUrl = $"https://api.themoviedb.org/3/movie/{movieId}?api_key={_apiKey}";
 
-                response = await Http.GetAsync(detailsUrl);
-                response.EnsureSuccessStatusCode();
+                using var detailsResponse = await Http.GetAsync(detailsUrl);
+                if (!detailsResponse.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Error: {detailsResponse.StatusCode}");
+                }
 
-                responseBody = await response.Content.ReadAsStringAsync();
-                JObject movieDetails = JObject.Parse(responseBody);
+                string detailsBody = await detailsResponse.Content.ReadAsStringAsync();
+                var movieDetails = JObject.Parse(detailsBody);
 
                 Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
 
-                // If we successfully got the synopsis, save it to the database
-                if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) && Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
+                // Cache the synopsis
+                if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) &&
+                    Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
                 {
-                    MovieEvent.Synopsis = Synopsis;
-                    await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                    try
+                    {
+                        MovieEvent.Synopsis = Synopsis;
+                        await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log the error but don't throw - caching failure shouldn't affect the user experience
+                        Console.WriteLine($"Failed to cache synopsis: {ex.Message}");
+                    }
                 }
             }
             else
@@ -209,32 +299,69 @@ else
                 Synopsis = "Movie not found.";
             }
         }
+        catch (HttpRequestException ex)
+        {
+            Synopsis = "Unable to fetch movie information. Please try again later.";
+        }
         catch (Exception ex)
         {
-            Synopsis = $"An error occurred: {ex.Message}";
+            Synopsis = "An unexpected error occurred while fetching the movie information.";
         }
     }
 
     private void Edit()
     {
-        if (MovieEvent != null)
-            MovieEvent.IsEditing = true;
+        try
+        {
+            if (MovieEvent != null)
+                MovieEvent.IsEditing = true;
+        }
+        catch (Exception ex)
+        {
+            // Handle the error silently and try to continue
+            Console.WriteLine($"Edit error: {ex.Message}");
+        }
     }
+
     private void Cancel()
     {
-        if (MovieEvent != null)
-            MovieEvent.IsEditing = false;
-    }
-    private void Save()
-    {
-        if (MovieEvent != null)
+        try
         {
-            if (MovieEvent.AlreadySeen)
-            {
-                MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
-            }
-            db.AddOrUpdateMovieEvent(MovieEvent);
+            if (MovieEvent != null)
+                MovieEvent.IsEditing = false;
         }
-        this.Cancel();
+        catch (Exception ex)
+        {
+            // Handle the error silently and try to continue
+            Console.WriteLine($"Cancel error: {ex.Message}");
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (isLoading) return;
+
+        try
+        {
+            isLoading = true;
+            if (MovieEvent != null)
+            {
+                if (MovieEvent.AlreadySeen)
+                {
+                    MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
+                }
+                await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                this.Cancel();
+            }
+        }
+        catch (Exception ex)
+        {
+            // You might want to show an error message to the user here
+            Console.WriteLine($"Save error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }
