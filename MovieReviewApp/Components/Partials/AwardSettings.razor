@@ -1,0 +1,119 @@
+﻿@using MovieReviewApp.Database
+@using MovieReviewApp.Models
+@* AwardSettings.razor *@
+@inject MongoDb db
+
+<div class="card mb-3">
+    <div class="card-header">
+        <h5 class="mb-0">Award Settings</h5>
+    </div>
+    <div class="card-body">
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" @bind="settings.AwardsEnabled" id="awardsEnabled">
+            <label class="form-check-label" for="awardsEnabled">
+                Enable Awards
+            </label>
+        </div>
+
+        @if (settings.AwardsEnabled)
+        {
+            <div class="mb-3">
+                <label class="form-label">Phases Before Award</label>
+                <input type="number" class="form-control" @bind="settings.PhasesBeforeAward" min="1" />
+            </div>
+
+            <div class="mb-3">
+                <h6>Award Questions</h6>
+                @foreach (var question in questions)
+                {
+                    <div class="d-flex align-items-center mb-2">
+                        <input type="text" class="form-control me-2" @bind="question.Question"
+                               placeholder="Enter award question..." />
+                        <input type="number" class="form-control me-2" style="width: 100px"
+                               @bind="question.MaxVotes" min="1" max="10" />
+                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteQuestion(question)">
+                            Delete
+                        </button>
+                    </div>
+                }
+                <button class="btn btn-secondary" @onclick="AddQuestion">Add Question</button>
+            </div>
+        }
+
+        <button class="btn btn-primary" @onclick="SaveSettings">Save Settings</button>
+    </div>
+</div>
+
+@code {
+    private AwardSetting settings = new();
+    private List<AwardQuestion> questions = new();
+    private List<string> questionsToDelete = new();
+    private const string DEFAULT_QUESTION = "New Question";
+
+    protected override async Task OnInitializedAsync()
+    {
+        settings = db.GetAwardSettings();
+        questions = db.GetActiveAwardQuestions()
+            .Where(q => q.Question != DEFAULT_QUESTION)
+            .ToList();
+    }
+
+    private void AddQuestion()
+    {
+        questions.Add(new AwardQuestion { Question = "", MaxVotes = 3 });
+    }
+
+    private void DeleteQuestion(AwardQuestion question)
+    {
+        questions.Remove(question);
+        if (!string.IsNullOrEmpty(question.Id))
+        {
+            questionsToDelete.Add(question.Id);
+        }
+    }
+
+    private async Task SaveSettings()
+    {
+        try
+        {
+            // Remove any questions that are empty or default
+            questions.RemoveAll(q => string.IsNullOrWhiteSpace(q.Question) || q.Question == DEFAULT_QUESTION);
+
+            // First save the AwardSettings
+            var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
+            db.AddOrUpdateSetting(new Setting
+                {
+                    Key = "AwardSettings",
+                    Value = settingsJson
+                });
+
+            // Delete any existing default questions in the database
+            db.DeleteDefaultQuestions();
+
+            // Delete questions that were removed
+            foreach (var questionId in questionsToDelete)
+            {
+                db.DeleteAwardQuestion(questionId);
+            }
+
+            // Then save each valid question
+            foreach (var question in questions)
+            {
+                if (!string.IsNullOrWhiteSpace(question.Question) && question.Question != DEFAULT_QUESTION)
+                {
+                    db.AddOrUpdateAwardQuestion(question);
+                }
+            }
+
+            // Clear the delete list after successful save
+            questionsToDelete.Clear();
+
+            // Add a site update
+            db.AddSiteUpdate("Settings", "Award settings updated");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving award settings: {ex.Message}");
+        }
+    }
+}

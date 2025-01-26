@@ -1,67 +1,196 @@
 ﻿using MongoDB.Driver;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Services;
 
 namespace MovieReviewApp.Database
 {
     public class MongoDb
     {
         private readonly IMongoDatabase? database;
-
-        public MongoDb(IConfiguration configuration)
-        {
-            string mongoEnvVariable = configuration.GetValue<string>("MongoEnvironmentVariable");
-            string mongoUri = Environment.GetEnvironmentVariable(mongoEnvVariable);
-            if (string.IsNullOrEmpty(mongoUri))
-            {
-                throw new ArgumentNullException("MongoDB connection string not found in environment variables");
-            }
-            IMongoClient client;
-            client = new MongoClient(mongoUri);
-            database = client.GetDatabase("MovieReview");
-        }
-
         private IMongoCollection<Phase>? Phases => database?.GetCollection<Phase>("Phases");
         private IMongoCollection<MovieEvent>? MovieEvents => database?.GetCollection<MovieEvent>("MovieReviews");
         private IMongoCollection<Person>? People => database?.GetCollection<Person>("People");
         private IMongoCollection<Setting>? Settings => database?.GetCollection<Setting>("Settings");
         private IMongoCollection<StatsCommand>? StatsCommands => database?.GetCollection<StatsCommand>("StatsCommands");
         private IMongoCollection<SiteUpdate> SiteUpdates => database?.GetCollection<SiteUpdate>("SiteUpdates");
+        private IMongoCollection<AwardQuestion> AwardQuestions => database?.GetCollection<AwardQuestion>("AwardQuestions");
+        private IMongoCollection<AwardEvent> AwardEvents => database?.GetCollection<AwardEvent>("AwardEvents");
+        private IMongoCollection<AwardVote> AwardVotes => database?.GetCollection<AwardVote>("AwardVotes");
 
-        public MovieEvent GetMovieEventBetweenDate(DateTime dt)
+        public MongoDb(IConfiguration configuration)
         {
-            var filter = Builders<MovieEvent>.Filter.And(
-                Builders<MovieEvent>.Filter.Lte("StartDate", dt),
-                Builders<MovieEvent>.Filter.Gte("EndDate", dt)
+            string mongoEnvVariable = configuration.GetValue<string>("MongoEnvironmentVariable");
+            string mongoUri = Environment.GetEnvironmentVariable(mongoEnvVariable);
+            if (string.IsNullOrEmpty(mongoUri))
+                throw new ArgumentNullException("MongoDB connection string not found in environment variables");
+
+            var client = new MongoClient(mongoUri);
+            database = client.GetDatabase("MovieReview");
+        }
+
+        public async Task<bool> AddVote(AwardVote vote)
+        {
+            var existingVotes = await AwardVotes
+                .Find(v => v.AwardEventId == vote.AwardEventId &&
+                        v.QuestionId == vote.QuestionId &&
+                        v.VoterIp == vote.VoterIp)
+                .ToListAsync();
+
+            if (existingVotes.Count >= 3)
+                return false;
+
+            vote.VoteOrder = existingVotes.Count + 1;
+            vote.VoteDate = DateTime.UtcNow;
+            await AwardVotes.InsertOneAsync(vote);
+            return true;
+        }
+
+        public AwardEvent GetAwardEventForDate(DateTime date)
+        {
+            var filter = Builders<AwardEvent>.Filter.And(
+                Builders<AwardEvent>.Filter.Lte("StartDate", date),
+                Builders<AwardEvent>.Filter.Gte("EndDate", date),
+                Builders<AwardEvent>.Filter.Eq("IsActive", true)
             );
-            return MovieEvents.Find<MovieEvent>(filter).FirstOrDefault();
+            return AwardEvents.Find(filter).FirstOrDefault();
         }
 
-        public void AddSiteUpdate(string updateType, string description)
+        public void AddOrUpdateAwardQuestion(AwardQuestion question)
         {
-            var update = new SiteUpdate
+            var filter = Builders<AwardQuestion>.Filter.Eq("Id", question.Id);
+            var update = Builders<AwardQuestion>.Update
+                .Set("Question", question.Question)
+                .Set("IsActive", question.IsActive)
+                .Set("MaxVotes", question.MaxVotes);
+            AwardQuestions.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+        }
+
+        public List<AwardQuestion> GetActiveAwardQuestions() =>
+            AwardQuestions.Find(x => x.IsActive).ToList();
+
+        public void AddAwardEvent(AwardEvent awardEvent) =>
+            AwardEvents.InsertOne(awardEvent);
+
+        public List<AwardVote> GetVotesForAwardEvent(string awardEventId) =>
+            AwardVotes.Find(v => v.AwardEventId == awardEventId).ToList();
+
+        public int GetVoteCountForIp(string awardEventId, string questionId, string voterIp) =>
+            (int)AwardVotes.CountDocuments(v =>
+                v.AwardEventId == awardEventId &&
+                v.QuestionId == questionId &&
+                v.VoterIp == voterIp);
+
+        public AwardSetting GetAwardSettings()
+        {
+            var filter = Builders<Setting>.Filter.Eq("Key", "AwardSettings");
+            var setting = Settings.Find(filter).FirstOrDefault();
+
+            if (setting == null)
             {
-                LastUpdateTime = DateTime.UtcNow,
-                UpdateType = updateType,
-                Description = description
-            };
-            SiteUpdates.InsertOne(update);
+                var defaultSettings = new AwardSetting
+                {
+                    AwardsEnabled = false,
+                    PhasesBeforeAward = 2
+                };
+                AddOrUpdateSetting(new Setting
+                {
+                    Key = "AwardSettings",
+                    Value = System.Text.Json.JsonSerializer.Serialize(defaultSettings)
+                });
+                return defaultSettings;
+            }
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<AwardSetting>(setting.Value)
+                       ?? new AwardSetting();
+            }
+            catch
+            {
+                return new AwardSetting();
+            }
         }
 
-        public DateTime? GetLatestUpdateTime()
+        public Phase GetPhase(int phaseNumber, List<string> listNames, DateTime startDate)
         {
-            var latestUpdate = SiteUpdates
-                .Find(_ => true)
-                .SortByDescending(x => x.LastUpdateTime)
-                .FirstOrDefault();
-            return latestUpdate?.LastUpdateTime;
+            var awardSettings = GetAwardSettings();
+            if (awardSettings.AwardsEnabled && phaseNumber > 0 &&
+                phaseNumber % awardSettings.PhasesBeforeAward == 0)
+            {
+                var awardEvent = GetAwardEventForDate(startDate);
+                if (awardEvent == null)
+                {
+                    awardEvent = new AwardEvent
+                    {
+                        StartDate = startDate,
+                        EndDate = startDate.AddMonths(1).EndOfDay(),
+                        PhaseNumber = phaseNumber,
+                        Questions = GetActiveAwardQuestions().Select(q => q.Id).ToList(),
+                        EligibleMovieIds = GetAllMovieEvents()
+                            .Where(m => m.PhaseNumber <= phaseNumber &&
+                                      m.PhaseNumber > phaseNumber - awardSettings.PhasesBeforeAward)
+                            .Select(m => m.Id)
+                            .ToList()
+                    };
+                    AddAwardEvent(awardEvent);
+                }
+
+                return new Phase
+                {
+                    Number = phaseNumber,
+                    StartDate = startDate,
+                    EndDate = startDate.AddMonths(1).EndOfDay(),
+                    IsAwardPhase = true,
+                    Events = new List<MovieEvent>()
+                };
+            }
+
+            var filter = Builders<Phase>.Filter.Eq("Number", phaseNumber);
+            var foundPhase = Phases.Find(filter).FirstOrDefault();
+            var endDate = startDate.AddMonths(listNames.Count).EndOfDay();
+            var isCurrentPhase = DateProvider.Now.IsWithinRange(startDate.AddMonths(-1), endDate);
+
+            if (foundPhase == null)
+            {
+                foundPhase = new Phase
+                {
+                    Number = phaseNumber,
+                    Events = new List<MovieEvent>(),
+                    People = string.Join(',', listNames),
+                    StartDate = startDate,
+                    EndDate = endDate,
+                    IsAwardPhase = false
+                };
+                if (!isCurrentPhase)
+                    return foundPhase;
+                Phases.InsertOne(foundPhase);
+            }
+
+            if (foundPhase.People != string.Join(',', listNames) && isCurrentPhase)
+            {
+                foundPhase.People = string.Join(',', listNames);
+                foundPhase.EndDate = endDate;
+                Phases.ReplaceOne(filter, foundPhase);
+            }
+
+            foundPhase = Phases.Find(filter).FirstOrDefault();
+            foundPhase.Events = GetAllMovieEvents(phaseNumber);
+
+            return foundPhase;
         }
 
-        public List<SiteUpdate> GetRecentUpdates(DateTime since)
+        public MovieEvent GetMovieEventBetweenDate(DateTime dt) =>
+            MovieEvents.Find(e => e.StartDate <= dt && e.EndDate >= dt).FirstOrDefault();
+
+        public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)
         {
-            return SiteUpdates
-                .Find(x => x.LastUpdateTime < since)
-                .SortByDescending(x => x.LastUpdateTime)
+            var filter = phaseNumber.HasValue
+                ? Builders<MovieEvent>.Filter.Eq("PhaseNumber", phaseNumber.Value)
+                : Builders<MovieEvent>.Filter.Empty;
+
+            return MovieEvents.Find(filter)
+                .SortBy(me => me.StartDate)
                 .ToList();
         }
 
@@ -88,178 +217,124 @@ namespace MovieReviewApp.Database
 
             MovieEvents.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
 
-
-            if (string.IsNullOrEmpty(movieEvent.Movie)) return;
-
-            CreateUpdateNotification(movieEvent, existingMovie, isNew);
+            if (!string.IsNullOrEmpty(movieEvent.Movie))
+                CreateUpdateNotification(movieEvent, existingMovie, isNew);
         }
 
         private void CreateUpdateNotification(MovieEvent movieEvent, MovieEvent existingMovie, bool isNew)
         {
             if (isNew)
             {
-                var newMovieChanges = new List<string>
-        {
-            $"• Movie: {movieEvent.Movie}"
-        };
-
-                if (!string.IsNullOrEmpty(movieEvent.IMDb))
-                    newMovieChanges.Add("• IMDb Link Added");
-
-                if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
-                    newMovieChanges.Add("• Poster Added");
-
-                if (!string.IsNullOrEmpty(movieEvent.Reasoning))
-                    newMovieChanges.Add("• Reasoning Added");
-
+                var changes = new List<string> { $"• Movie: {movieEvent.Movie}" };
+                if (!string.IsNullOrEmpty(movieEvent.IMDb)) changes.Add("• IMDb Link Added");
+                if (!string.IsNullOrEmpty(movieEvent.PosterUrl)) changes.Add("• Poster Added");
+                if (!string.IsNullOrEmpty(movieEvent.Reasoning)) changes.Add("• Reasoning Added");
                 if (movieEvent.MeetupTime.HasValue)
-                    newMovieChanges.Add($"• Meetup Time: {movieEvent.MeetupTime.Value:MM/dd/yyyy h:mm tt}");
-
-                newMovieChanges.Add(movieEvent.AlreadySeen
+                    changes.Add($"• Meetup Time: {movieEvent.MeetupTime.Value:MM/dd/yyyy h:mm tt}");
+                changes.Add(movieEvent.AlreadySeen
                     ? $"• Previously seen in {movieEvent.SeenDate?.Year}"
                     : "• Not previously seen");
 
                 AddSiteUpdate("MovieAdded",
                     $"New movie added for {movieEvent.StartDate:MMMM yyyy} by {movieEvent.Person}:\n" +
-                    string.Join("\n", newMovieChanges));
-
+                    string.Join("\n", changes));
                 return;
             }
 
             if (existingMovie == null) return;
 
-            var changes = new List<string>();
-
+            var updates = new List<string>();
             if (movieEvent.Movie != existingMovie.Movie)
-                changes.Add($"• Movie changed from '{existingMovie.Movie}' to '{movieEvent.Movie}'");
-
+                updates.Add($"• Movie changed from '{existingMovie.Movie}' to '{movieEvent.Movie}'");
             if (movieEvent.IMDb != existingMovie.IMDb)
-            {
-                var imdbStatus = string.IsNullOrEmpty(existingMovie.IMDb) ? "added" : "changed";
-                changes.Add($"• IMDb Link {imdbStatus}");
-            }
-
+                updates.Add($"• IMDb Link {(string.IsNullOrEmpty(existingMovie.IMDb) ? "added" : "changed")}");
             if (movieEvent.PosterUrl != existingMovie.PosterUrl)
-            {
-                var posterStatus = string.IsNullOrEmpty(existingMovie.PosterUrl) ? "added" : "changed";
-                changes.Add($"• Poster URL {posterStatus}");
-            }
-
+                updates.Add($"• Poster URL {(string.IsNullOrEmpty(existingMovie.PosterUrl) ? "added" : "changed")}");
             if (movieEvent.Reasoning != existingMovie.Reasoning)
-            {
-                var reasonStatus = string.IsNullOrEmpty(existingMovie.Reasoning) ? "added" : "changed";
-                changes.Add($"• Reasoning {reasonStatus}");
-            }
-
+                updates.Add($"• Reasoning {(string.IsNullOrEmpty(existingMovie.Reasoning) ? "added" : "changed")}");
             if (movieEvent.MeetupTime != existingMovie.MeetupTime)
-            {
-                var oldTime = existingMovie.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set";
-                var newTime = movieEvent.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set";
-                changes.Add($"• Meetup Time changed from {oldTime} to {newTime}");
-            }
-
+                updates.Add($"• Meetup Time changed from {existingMovie.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set"} to {movieEvent.MeetupTime?.ToString("MM/dd/yyyy h:mm tt") ?? "not set"}");
             if (movieEvent.AlreadySeen != existingMovie.AlreadySeen || movieEvent.SeenDate != existingMovie.SeenDate)
-            {
-                changes.Add(movieEvent.AlreadySeen
+                updates.Add(movieEvent.AlreadySeen
                     ? $"• Previously seen status changed to: seen in {movieEvent.SeenDate?.Year}"
                     : "• Previously seen status changed to: not seen");
-            }
 
-            if (!changes.Any()) return;
-
-            var updateMessage = $"Movie {movieEvent.Movie} was changed by {movieEvent.Person}:\n" +
-                               string.Join("\n", changes);
-
-            AddSiteUpdate("MovieUpdated", updateMessage);
+            if (updates.Any())
+                AddSiteUpdate("MovieUpdated",
+                    $"Movie {movieEvent.Movie} was changed by {movieEvent.Person}:\n" +
+                    string.Join("\n", updates));
         }
 
-        public List<StatsCommand> GetProcessedStatCommandsForMonth(string monthYear)
-        {
-            var filter = Builders<StatsCommand>.Filter.Eq("MonthYear", monthYear);
+        public void AddSiteUpdate(string updateType, string description) =>
+            SiteUpdates.InsertOne(new SiteUpdate
+            {
+                LastUpdateTime = DateTime.UtcNow,
+                UpdateType = updateType,
+                Description = description
+            });
 
-            return StatsCommands.Find(filter).ToList();
-        }
+        public DateTime? GetLatestUpdateTime() =>
+            SiteUpdates.Find(_ => true)
+                .SortByDescending(x => x.LastUpdateTime)
+                .FirstOrDefault()?.LastUpdateTime;
 
-        public List<StatsCommand> GetProcessedStatCommands()
-        {
-            return StatsCommands.Find(_ => true).ToList();
-        }
-
-        public void AddStatsCommand(StatsCommand commandResult)
-        {
-            StatsCommands?.InsertOne(commandResult);
-        }
-
-        public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)
-        {
-            var sortDefinition = Builders<MovieEvent>.Sort.Ascending(me => me.StartDate);
-
-            var filter = phaseNumber.HasValue
-                ? Builders<MovieEvent>.Filter.Eq("PhaseNumber", phaseNumber.Value)
-                : Builders<MovieEvent>.Filter.Empty;
-
-            return MovieEvents.Find(filter)
-                .Sort(sortDefinition)
+        public List<SiteUpdate> GetRecentUpdates(DateTime since) =>
+            SiteUpdates.Find(x => x.LastUpdateTime < since)
+                .SortByDescending(x => x.LastUpdateTime)
                 .ToList();
-        }
 
-        private List<Person> QueryPeople(bool respectOrder)
-        {
-            var sortDefinition = respectOrder
-                ? Builders<Person>.Sort.Ascending(me => me.Order)
-                : Builders<Person>.Sort.Ascending(me => me.Name);
-
-            return People.Find(_ => true)
-                .Sort(sortDefinition)
+        public List<Person> GetAllPeople(bool respectOrder) =>
+            People.Find(_ => true)
+                .SortBy(x => respectOrder ? x.Order : x.Name)
                 .ToList();
-        }
-
-        public List<Person> GetAllPeople(bool respectOrder)
-        {
-            var people = QueryPeople(respectOrder);
-            return people;
-        }
-
-        private List<Setting> QuerySetting()
-        {
-            return Settings.Find(_ => true).ToList();
-        }
 
         public List<Setting> GetSettings()
         {
-            var settings = QuerySetting();
+            var settings = Settings.Find(_ => true).ToList();
             if (settings.Count == 0)
             {
-                AddOrUpdateSetting(new Setting { Key = "StartDate", Value = (new DateTime(2024, 1, 1)).ToString() });
+                AddOrUpdateSetting(new Setting { Key = "StartDate", Value = new DateTime(2024, 1, 1).ToString() });
                 AddOrUpdateSetting(new Setting { Key = "TimeCount", Value = "1" });
                 AddOrUpdateSetting(new Setting { Key = "TimePeriod", Value = "Month" });
-
-                settings = QuerySetting();
+                settings = Settings.Find(_ => true).ToList();
             }
             return settings;
         }
 
-        internal void AddOrUpdateSetting(Setting setting)
+        public void AddOrUpdateSetting(Setting setting)
         {
-            var filter = Builders<Setting>.Filter.Eq("Id", setting.Id);
-            var update = Builders<Setting>.Update
-                .Set("Key", setting.Key)
-                .Set("Value", setting.Value);
-            Settings.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
+            var filter = Builders<Setting>.Filter.Eq("Key", setting.Key);
+            var existingSetting = Settings.Find(filter).FirstOrDefault();
+
+            if (existingSetting != null)
+            {
+                setting.Id = existingSetting.Id;
+                Settings.UpdateOne(filter, Builders<Setting>.Update.Set("Value", setting.Value));
+            }
+            else
+            {
+                Settings.InsertOne(setting);
+            }
+
+            // Clean up duplicates
+            var duplicates = Settings.Find(filter).ToList()
+                .Where(s => s.Id != (existingSetting?.Id ?? setting.Id))
+                .ToList();
+
+            foreach (var duplicate in duplicates)
+                Settings.DeleteOne(Builders<Setting>.Filter.Eq("_id", duplicate.Id));
         }
 
-        public void AddPerson(Person person)
-        {
+        public void DeleteDefaultQuestions() =>
+            AwardQuestions.DeleteMany(x => x.Question == "New Question");
+
+        public void AddPerson(Person person) =>
             People.InsertOne(person);
-        }
 
-        public void DeletePerson(Person person)
-        {
-            var filter = Builders<Person>.Filter.Eq("Id", person.Id);
-            People.DeleteOne(filter);
-        }
+        public void DeletePerson(Person person) =>
+            People.DeleteOne(x => x.Id == person.Id);
 
-        internal void AddOrUpdatePerson(Person person)
+        public void AddOrUpdatePerson(Person person)
         {
             var filter = Builders<Person>.Filter.Eq("Id", person.Id);
             var update = Builders<Person>.Update
@@ -268,33 +343,21 @@ namespace MovieReviewApp.Database
             People.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
         }
 
-        internal Phase GetPhase(int phaseNumber, List<string> listNames, DateTime startDate)
-        {
-            var filter = Builders<Phase>.Filter.Eq("Number", phaseNumber);
-            var foundPhase = Phases.Find(filter).FirstOrDefault();
-            var endDate = startDate.AddMonths(listNames.Count).EndOfDay();
-            //Minus a month so it adds a new phase 1 month before the current phase ends.
-            var isCurrentPhase = DateTime.Now.IsWithinRange(startDate.AddMonths(-1), endDate);
+        public void DeleteAwardQuestion(string questionId) =>
+            AwardQuestions.DeleteOne(x => x.Id == questionId);
 
-            if (foundPhase == null)
-            {
-                foundPhase = new Phase { Number = phaseNumber, Events = new List<MovieEvent>(), People = string.Join(',', listNames), StartDate =  startDate, EndDate = endDate };
-                if (!isCurrentPhase)
-                    return foundPhase;
-                Phases.InsertOne(foundPhase);
-            }
+       // public List<StatsCommand> GetProcessedStatCommandsForMonth(string monthYear) =>
+         //   StatsCommands.Find(x => x.MonthYear == monthYear).ToList();
 
-            if (foundPhase.People != string.Join(',', listNames) && isCurrentPhase)
-            {
-                foundPhase.People = string.Join(',', listNames);
-                foundPhase.EndDate = endDate;
-                Phases.ReplaceOne(filter, foundPhase);
-            }
+        public List<MovieEvent> GetPhaseEvents(int phaseNumber) =>
+            MovieEvents.Find(x => x.PhaseNumber == phaseNumber)
+                .SortBy(x => x.StartDate)
+                .ToList();
 
-            foundPhase = Phases.Find(filter).FirstOrDefault();
-            foundPhase.Events = GetAllMovieEvents(phaseNumber);
+        public List<StatsCommand> GetProcessedStatCommands() =>
+            StatsCommands.Find(_ => true).ToList();
 
-            return foundPhase;
-        }
+        public void AddStatsCommand(StatsCommand command) =>
+            StatsCommands?.InsertOne(command);
     }
 }

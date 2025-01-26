@@ -2,6 +2,7 @@
 @using AssemblyAI;
 @using AssemblyAI.Transcripts;
 @using MovieReviewApp.Enums
+@using MovieReviewApp.Services
 @using NAudio.Wave
 @using System.Globalization
 @using System.Text
@@ -34,10 +35,10 @@
 
 @code {
     private bool Processing = false;
-    private string SelectedMonth { get; set; } = DateTime.Now.ToString("MMMM");
-    private int SelectedYear { get; set; } = DateTime.Now.Year;
+    private string SelectedMonth { get; set; } = DateProvider.Now.ToString("MMMM");
+    private int SelectedYear { get; set; } = DateProvider.Now.Year;
     private List<string> Months = CultureInfo.CurrentCulture.DateTimeFormat.MonthNames.Take(12).ToList();
-    private List<int> Years = Enumerable.Range(DateTime.Now.Year - 20, 21).ToList();
+    private List<int> Years = Enumerable.Range(DateProvider.Now.Year - 20, 21).ToList();
     private string PIN { get; set; } = "";
     public string Error = string.Empty;
     public string SuccessMessage = string.Empty;

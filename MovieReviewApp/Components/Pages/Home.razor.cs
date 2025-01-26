@@ -6,6 +6,7 @@ using Microsoft.JSInterop;
 using MovieReviewApp.Database;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Services;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -17,12 +18,17 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private MongoDb db { get; set; } = default!;
 
+        private bool IsCurrentPhaseAwardPhase =>
+            DateProvider.Now.IsWithinRange(CurrentAwardPeriod?.StartDate ?? DateTime.MaxValue,
+                                         CurrentAwardPeriod?.EndDate ?? DateTime.MinValue);
+
         private List<SiteUpdate> RecentUpdates { get; set; } = new();
         private bool showUpdates = true;
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
         public List<Phase> Phases { get; set; } = new();
-        private readonly Random _rand = new Random(1337);
+        public AwardPeriod? CurrentAwardPeriod;
+        private readonly Random _rand = new(1337);
         public bool RespectOrder = false;
 
         protected override void OnInitialized()
@@ -30,21 +36,130 @@ namespace MovieReviewApp.Components.Pages
             var settings = db.GetSettings();
             if (!DateTime.TryParse(settings.FirstOrDefault(x => x.Key == "StartDate")?.Value, out var startDate))
             {
-                // Handle error: settings are missing or malformed
                 return;
             }
+
             var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
             if (setting != null && !string.IsNullOrEmpty(setting.Value))
                 bool.TryParse(setting.Value, out RespectOrder);
 
-            var allNames = db.GetAllPeople(RespectOrder).Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).ToArray();
+            var allNames = db.GetAllPeople(RespectOrder).Select(x => x.Name)
+                .Where(x => !string.IsNullOrEmpty(x)).ToArray();
+
             if (allNames.Length == 0)
             {
                 CurrentEvent = null;
                 NextEvent = null;
                 return;
             }
-            GeneratePhases(startDate, allNames);
+
+            GenerateSchedule(startDate, allNames);
+        }
+
+        private void GenerateSchedule(DateTime startDate, string[] allNames)
+        {
+            var currentDate = startDate;
+            var phaseNumber = 1;
+            var awardSettings = db.GetAwardSettings();
+
+            while (currentDate <= DateProvider.Now.AddYears(1)) // Generate schedule for next year
+            {
+                // Generate regular phase
+                var phase = GeneratePhase(phaseNumber, currentDate, allNames.ToList());
+                Phases.Add(phase);
+
+                // Update current and next events if we're in this phase
+                if (DateProvider.Now.IsWithinRange(phase.StartDate, phase.EndDate))
+                {
+                    UpdateCurrentAndNextEvents(phase);
+                }
+
+                // Check if we need to add an awards period after this phase
+                if (awardSettings.AwardsEnabled && phaseNumber % awardSettings.PhasesBeforeAward == 0)
+                {
+                    var awardPeriod = new AwardPeriod
+                    {
+                        StartDate = phase.EndDate.AddDays(1),
+                        EndDate = phase.EndDate.AddDays(1).AddMonths(1).EndOfDay(),
+                        PhaseNumber = phaseNumber
+                    };
+
+                    // Check if we're currently in an awards period
+                    if (DateProvider.Now.IsWithinRange(awardPeriod.StartDate, awardPeriod.EndDate))
+                    {
+                        CurrentAwardPeriod = awardPeriod;
+                        CurrentEvent = null;
+                    }
+
+                    currentDate = awardPeriod.EndDate.AddDays(1);
+                }
+                else
+                {
+                    currentDate = phase.EndDate.AddDays(1);
+                }
+
+                phaseNumber++;
+            }
+        }
+
+        private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
+        {
+            var phase = new Phase
+            {
+                Number = phaseNumber,
+                StartDate = startDate,
+                EndDate = startDate.AddMonths(peopleNames.Count).EndOfDay(),
+                Events = new List<MovieEvent>(),
+                People = string.Join(',', peopleNames)
+            };
+
+            var currentDate = startDate;
+            var availablePeople = new List<string>(peopleNames);
+
+            // Get existing events from database
+            var existingEvents = db.GetPhaseEvents(phaseNumber);
+            foreach (var existingEvent in existingEvents)
+            {
+                phase.Events.Add(existingEvent);
+                availablePeople.Remove(existingEvent.Person);
+                currentDate = existingEvent.EndDate.AddDays(1);
+            }
+
+            // Generate remaining events
+            while (availablePeople.Any())
+            {
+                var person = RespectOrder
+                    ? availablePeople[0]
+                    : availablePeople[_rand.Next(availablePeople.Count)];
+
+                phase.Events.Add(new MovieEvent
+                {
+                    StartDate = currentDate,
+                    EndDate = currentDate.EndOfMonth(),
+                    Person = person,
+                    PhaseNumber = phaseNumber,
+                    FromDatabase = false,
+                    IsEditing = false
+                });
+
+                availablePeople.Remove(person);
+                currentDate = currentDate.AddMonths(1);
+            }
+
+            return phase;
+        }
+
+        private void UpdateCurrentAndNextEvents(Phase phase)
+        {
+            var currentMonthEvents = phase.Events
+                .Where(e => DateProvider.Now.IsWithinRange(e.StartDate, e.EndDate))
+                .ToList();
+
+            CurrentEvent = currentMonthEvents.FirstOrDefault();
+
+            var nextMonthDate = DateProvider.Now.AddMonths(1);
+            NextEvent = phase.Events
+                .FirstOrDefault(e => nextMonthDate.IsWithinRange(e.StartDate, e.EndDate));
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -76,107 +191,5 @@ namespace MovieReviewApp.Components.Pages
             await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
         }
 
-        private void GeneratePhases(DateTime startDate, string?[]? allNames)
-        {
-            var listNames = allNames?.ToList();
-            var phase = GeneratePhase(1, startDate, listNames); // Start with Phase 1
-            Phases.Add(phase);
-
-            // Keep generating phases until we reach a future date
-            var isNextPhase = false;
-            while (!isNextPhase)
-            {
-                startDate = phase.EndDate.AddDays(1);
-                phase = GeneratePhase(phase.Number.Value + 1, startDate, listNames);
-                Phases.Add(phase);
-                isNextPhase = phase.StartDate > DateTime.Now; // Stop when we reach a future phase
-            }
-        }
-
-        private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
-        {
-            // Get existing phase data from database
-            var phase = db.GetPhase(phaseNumber, peopleNames, startDate);
-
-            // Find who's already been assigned in this phase
-            var peopleUsed = phase.Events.Where(x => !string.IsNullOrEmpty(x.Person))
-                                        .Select(x => x.Person)
-                                        .Distinct()
-                                        .ToList();
-
-            // If respecting order, cycle random seed to maintain consistent ordering
-            if (!RespectOrder)
-            {
-                for (var i = 0; i < peopleUsed.Count; i++)
-                    _rand.Next();
-            }
-
-            // Get remaining people who haven't been assigned yet
-            var peopleLeftNotInDb = peopleNames.Where(x => !peopleUsed.Contains(x)).ToList();
-
-            // Generate events for remaining people
-            GenerateMovieEvents(phaseNumber, startDate, phase, peopleUsed, peopleLeftNotInDb);
-            SetCurrentAndNextPhases(phase);
-
-            return phase;
-        }
-
-        private void GenerateMovieEvents(int phaseNumber, DateTime startDate, Phase phase,
-            List<string?> peopleUsed, List<string> peopleLeftNotInDb)
-        {
-            var moveEventStartDate = startDate.AddMonths(peopleUsed.Count);
-
-            while (peopleLeftNotInDb.Count > 0)
-            {
-                // Pick next person - either in order or randomly
-                var person = RespectOrder
-                    ? peopleLeftNotInDb.First()
-                    : peopleLeftNotInDb[_rand.Next(peopleLeftNotInDb.Count)];
-
-                // Create event for this person
-                phase.Events.Add(new MovieEvent
-                {
-                    StartDate = moveEventStartDate,
-                    EndDate = moveEventStartDate.EndOfMonth(),
-                    Person = person,
-                    FromDatabase = false,
-                    IsEditing = false,
-                    PhaseNumber = phaseNumber
-                });
-
-                moveEventStartDate = moveEventStartDate.AddMonths(1);
-                peopleLeftNotInDb.Remove(person);
-            }
-        }
-
-        private void SetCurrentAndNextPhases(Phase phase)
-        {
-            var isCurrentPhase = DateTime.Now.IsWithinRange(phase.StartDate, phase.EndDate.EndOfDay());
-
-            // Edge case: If we're before the first phase starts
-            if (phase.Number == 1 && DateTime.Now < phase.StartDate)
-            {
-                CurrentEvent = null;
-                NextEvent = phase.Events.OrderBy(x => x.StartDate).First();
-                return;
-            }
-
-            if (isCurrentPhase)
-            {
-                CurrentEvent = phase.Events.Single(x => DateTime.Now.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
-                var nextMonth = DateTime.Now.AddMonths(1);
-                NextEvent = phase.Events.FirstOrDefault(x => nextMonth.IsWithinRange(x.StartDate, x.EndDate.EndOfDay()));
-                return;
-            }
-
-            if (phase.Events.Count == 0)
-            {
-                NextEvent = null;
-                return;
-            }
-
-            //Assume it must be first one of the next phase.
-            NextEvent = NextEvent == null ? phase.Events.OrderBy(x => x.StartDate).First() : NextEvent;
-        }
     }
 }

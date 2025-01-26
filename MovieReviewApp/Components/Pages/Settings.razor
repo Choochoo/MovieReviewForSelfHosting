@@ -1,5 +1,6 @@
 ﻿@* Settings.razor *@
 @page "/settings"
+@using MovieReviewApp.Components.Partials
 @attribute [StreamRendering]
 
 <PageTitle>Settings</PageTitle>
@@ -124,6 +125,7 @@
             </table>
         </div>
     }
+    <AwardSettings />
 </div>
 
 <style>

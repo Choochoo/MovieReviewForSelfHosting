@@ -34,7 +34,7 @@ namespace MovieReviewApp.Services
                     {
                         Command = command,
                         Results = result,
-                        ProcessedDate = DateTime.Now,
+                        ProcessedDate = DateProvider.Now,
                         FolderName = folderName
                     };
                     db.AddStatsCommand(commandResult);
@@ -79,7 +79,7 @@ namespace MovieReviewApp.Services
             {
                 Command = commandString,
                 Results = results, // Saving the entire list of results
-                ProcessedDate = DateTime.Now,
+                ProcessedDate = DateProvider.Now,
                 FolderName = folder
             };
 

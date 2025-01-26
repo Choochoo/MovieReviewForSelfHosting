@@ -3,6 +3,7 @@ using MovieReviewApp.Components;
 using MovieReviewApp.Database;
 using MovieReviewApp.Extentions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,8 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 builder.Services.AddSingleton<MongoDb>();
+builder.Services.AddScoped<MessengerService>();
+builder.Services.Configure<FacebookSettings>( builder.Configuration.GetSection("FacebookSettings"));
 
 // Configure Kestrel
 builder.WebHost.ConfigureKestrel(serverOptions =>

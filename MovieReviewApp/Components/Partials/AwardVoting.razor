@@ -1,0 +1,109 @@
+﻿@using MovieReviewApp.Database
+@using MovieReviewApp.Models
+@inject MongoDb db
+@inject IHttpContextAccessor HttpContextAccessor
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Awards Month</h5>
+    </div>
+    <div class="card-body">
+        @if (awardEvent == null)
+        {
+            <p>No active award event.</p>
+            return;
+        }
+
+        @foreach (var questionId in awardEvent.Questions)
+        {
+            var question = questions.FirstOrDefault(q => q.Id == questionId);
+            if (question == null) continue;
+
+            <div class="mb-4">
+                <h6>@question.Question</h6>
+                @{
+                    var votesLeft = question.MaxVotes - 
+                        db.GetVoteCountForIp(awardEvent.Id, question.Id, GetUserIp());
+                }
+                
+                @if (votesLeft > 0)
+                {
+                    <p class="text-muted">You have @votesLeft votes remaining</p>
+                    <select class="form-select mb-2" @bind="selectedMovies[question.Id]">
+                        <option value="">Select a movie...</option>
+                        @foreach (var movie in availableMovies)
+                        {
+                            <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
+                        }
+                    </select>
+                    <button class="btn btn-primary" 
+                            @onclick="() => CastVote(question.Id)">
+                        Vote
+                    </button>
+                }
+                else
+                {
+                    <p>You have used all your votes for this category.</p>
+                }
+
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public DateTime CurrentDate { get; set; }
+
+    private AwardEvent awardEvent;
+    private List<AwardQuestion> questions = new();
+    private List<MovieEvent> availableMovies = new();
+    private List<AwardVote> votes = new();
+    private Dictionary<string, string> selectedMovies = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        awardEvent = db.GetAwardEventForDate(CurrentDate);
+        if (awardEvent == null) return;
+
+        questions = db.GetActiveAwardQuestions();
+        // Get movies from completed phases only
+        availableMovies = db.GetAllMovieEvents()
+            .Where(m => m.EndDate < awardEvent.StartDate && !string.IsNullOrEmpty(m.Movie))
+            .ToList();
+        votes = db.GetVotesForAwardEvent(awardEvent.Id);
+        
+        // Initialize selectedMovies dictionary for each question
+        foreach (var questionId in awardEvent.Questions)
+        {
+            selectedMovies[questionId] = "";
+        }
+    }
+
+    private string GetUserIp()
+    {
+        return HttpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
+    }
+
+    private async Task CastVote(string questionId)
+    {
+        if (!selectedMovies.ContainsKey(questionId) || 
+            string.IsNullOrEmpty(selectedMovies[questionId]))
+            return;
+
+        var vote = new AwardVote
+        {
+            AwardEventId = awardEvent.Id,
+            QuestionId = questionId,
+            MovieEventId = selectedMovies[questionId],
+            VoterIp = GetUserIp()
+        };
+
+        if (await db.AddVote(vote))
+        {
+            votes = db.GetVotesForAwardEvent(awardEvent.Id);
+            selectedMovies[questionId] = "";
+            StateHasChanged();
+        }
+    }
+}
