@@ -12,6 +12,5 @@ namespace MovieReviewApp.Models
         public string People { get; set; } = "";
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public bool IsAwardPhase { get; set; }
     }
 }

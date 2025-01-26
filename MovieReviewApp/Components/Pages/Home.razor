@@ -25,9 +25,9 @@
             <div class="col-12">
                 <div class="alert alert-warning">
                     <h4>🏆 Awards Month!</h4>
-                    <p>Vote for your favorites from Phase @CurrentAwardPeriod.PhaseNumber</p>
+                    <p>Vote for your favorites</p>
                 </div>
-                <AwardVoting CurrentDate="DateProvider.Now" />
+@*                 <AwardVoting CurrentDate="DateProvider.Now" /> *@
             </div>
         </div>
     }
@@ -90,7 +90,7 @@
                         x != NextEvent &&
                         x.EndDate >= DateProvider.Now).ToList();
 
-                        @if (futureEvents.Any() || phase.IsAwardPhase)
+                        @if (futureEvents.Any())
                         {
                             <div class="timeline-item">
                                 <h5>Phase @phase.Number (@phase.StartDate.ToString("MMMM yyyy") - @phase.EndDate.ToString("MMMM yyyy"))</h5>

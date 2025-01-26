@@ -29,6 +29,32 @@ namespace MovieReviewApp.Database
             database = client.GetDatabase("MovieReview");
         }
 
+        public List<VoteResult> GetQuestionResults(string awardEventId, string questionId)
+        {
+            var votes = AwardVotes.Find(v =>
+                v.AwardEventId == awardEventId &&
+                v.QuestionId == questionId)
+                .ToList();
+
+            var movieEvents = MovieEvents.Find(Builders<MovieEvent>.Filter.Empty).ToList()
+                .ToDictionary(m => m.Id);
+
+            return votes
+                .GroupBy(v => v.MovieEventId)
+                .Select(g => new VoteResult
+                {
+                    MovieEventId = g.Key,
+                    MovieTitle = movieEvents.TryGetValue(Guid.Parse(g.Key), out var movie) ? movie.Movie : "Unknown",
+                    TotalPoints = g.Sum(v => v.GetPoints()),
+                    FirstPlaceVotes = g.Count(v => v.VoteOrder == 1),
+                    SecondPlaceVotes = g.Count(v => v.VoteOrder == 2),
+                    ThirdPlaceVotes = g.Count(v => v.VoteOrder == 3)
+                })
+                .OrderByDescending(r => r.TotalPoints)
+                .ThenByDescending(r => r.FirstPlaceVotes)
+                .ToList();
+        }
+
         public async Task<bool> AddVote(AwardVote vote)
         {
             var existingVotes = await AwardVotes
@@ -50,10 +76,49 @@ namespace MovieReviewApp.Database
         {
             var filter = Builders<AwardEvent>.Filter.And(
                 Builders<AwardEvent>.Filter.Lte("StartDate", date),
-                Builders<AwardEvent>.Filter.Gte("EndDate", date),
-                Builders<AwardEvent>.Filter.Eq("IsActive", true)
+                Builders<AwardEvent>.Filter.Gte("EndDate", date)
             );
-            return AwardEvents.Find(filter).FirstOrDefault();
+
+            var awardEvent = AwardEvents.Find(filter).FirstOrDefault();
+            if (awardEvent == null)
+            {
+                // Get latest phase number to determine if we need an award event
+                var latestPhase = Phases.Find(_ => true)
+                    .SortByDescending(p => p.Number)
+                    .FirstOrDefault();
+
+                if (latestPhase == null) return null;
+
+                var awardSettings = GetAwardSettings();
+                if (!awardSettings.AwardsEnabled) return null;
+
+                // Check if we're at an award month boundary
+                bool isAwardMonth = latestPhase.Number % awardSettings.PhasesBeforeAward == 0;
+                if (!isAwardMonth) return null;
+
+                // Only create if we're in the award month or within a month of it
+                var awardMonthStart = latestPhase.EndDate.AddDays(1);
+                var awardMonthEnd = awardMonthStart.AddMonths(1);
+                var isWithinAwardPeriod = date >= awardMonthStart.AddMonths(-1) &&
+                                         date <= awardMonthEnd;
+
+                if (!isWithinAwardPeriod) return null;
+
+                var questions = GetActiveAwardQuestions();
+                if (!questions.Any()) return null;
+
+                awardEvent = new AwardEvent
+                {
+                    StartDate = awardMonthStart,
+                    EndDate = awardMonthEnd.AddDays(-1),
+                    IsActive = true,
+                    Questions = questions.Select(q => q.Id).ToList()
+                };
+
+                AddAwardEvent(awardEvent);
+            }
+
+            return awardEvent;
         }
 
         public void AddOrUpdateAwardQuestion(AwardQuestion question)
@@ -111,77 +176,6 @@ namespace MovieReviewApp.Database
                 return new AwardSetting();
             }
         }
-
-        public Phase GetPhase(int phaseNumber, List<string> listNames, DateTime startDate)
-        {
-            var awardSettings = GetAwardSettings();
-            if (awardSettings.AwardsEnabled && phaseNumber > 0 &&
-                phaseNumber % awardSettings.PhasesBeforeAward == 0)
-            {
-                var awardEvent = GetAwardEventForDate(startDate);
-                if (awardEvent == null)
-                {
-                    awardEvent = new AwardEvent
-                    {
-                        StartDate = startDate,
-                        EndDate = startDate.AddMonths(1).EndOfDay(),
-                        PhaseNumber = phaseNumber,
-                        Questions = GetActiveAwardQuestions().Select(q => q.Id).ToList(),
-                        EligibleMovieIds = GetAllMovieEvents()
-                            .Where(m => m.PhaseNumber <= phaseNumber &&
-                                      m.PhaseNumber > phaseNumber - awardSettings.PhasesBeforeAward)
-                            .Select(m => m.Id)
-                            .ToList()
-                    };
-                    AddAwardEvent(awardEvent);
-                }
-
-                return new Phase
-                {
-                    Number = phaseNumber,
-                    StartDate = startDate,
-                    EndDate = startDate.AddMonths(1).EndOfDay(),
-                    IsAwardPhase = true,
-                    Events = new List<MovieEvent>()
-                };
-            }
-
-            var filter = Builders<Phase>.Filter.Eq("Number", phaseNumber);
-            var foundPhase = Phases.Find(filter).FirstOrDefault();
-            var endDate = startDate.AddMonths(listNames.Count).EndOfDay();
-            var isCurrentPhase = DateProvider.Now.IsWithinRange(startDate.AddMonths(-1), endDate);
-
-            if (foundPhase == null)
-            {
-                foundPhase = new Phase
-                {
-                    Number = phaseNumber,
-                    Events = new List<MovieEvent>(),
-                    People = string.Join(',', listNames),
-                    StartDate = startDate,
-                    EndDate = endDate,
-                    IsAwardPhase = false
-                };
-                if (!isCurrentPhase)
-                    return foundPhase;
-                Phases.InsertOne(foundPhase);
-            }
-
-            if (foundPhase.People != string.Join(',', listNames) && isCurrentPhase)
-            {
-                foundPhase.People = string.Join(',', listNames);
-                foundPhase.EndDate = endDate;
-                Phases.ReplaceOne(filter, foundPhase);
-            }
-
-            foundPhase = Phases.Find(filter).FirstOrDefault();
-            foundPhase.Events = GetAllMovieEvents(phaseNumber);
-
-            return foundPhase;
-        }
-
-        public MovieEvent GetMovieEventBetweenDate(DateTime dt) =>
-            MovieEvents.Find(e => e.StartDate <= dt && e.EndDate >= dt).FirstOrDefault();
 
         public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)
         {
@@ -345,9 +339,6 @@ namespace MovieReviewApp.Database
 
         public void DeleteAwardQuestion(string questionId) =>
             AwardQuestions.DeleteOne(x => x.Id == questionId);
-
-       // public List<StatsCommand> GetProcessedStatCommandsForMonth(string monthYear) =>
-         //   StatsCommands.Find(x => x.MonthYear == monthYear).ToList();
 
         public List<MovieEvent> GetPhaseEvents(int phaseNumber) =>
             MovieEvents.Find(x => x.PhaseNumber == phaseNumber)

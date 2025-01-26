@@ -80,8 +80,7 @@ namespace MovieReviewApp.Components.Pages
                     var awardPeriod = new AwardPeriod
                     {
                         StartDate = phase.EndDate.AddDays(1),
-                        EndDate = phase.EndDate.AddDays(1).AddMonths(1).EndOfDay(),
-                        PhaseNumber = phaseNumber
+                        EndDate = phase.EndDate.AddDays(1).AddMonths(1).EndOfDay()
                     };
 
                     // Check if we're currently in an awards period
@@ -97,7 +96,6 @@ namespace MovieReviewApp.Components.Pages
                 {
                     currentDate = phase.EndDate.AddDays(1);
                 }
-
                 phaseNumber++;
             }
         }
