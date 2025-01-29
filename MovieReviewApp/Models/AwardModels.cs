@@ -13,7 +13,6 @@
         public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public int PhaseNumber { get; set; }
         public bool IsActive { get; set; } = true;
         public List<string> Questions { get; set; } = new();
         public List<Guid> EligibleMovieIds { get; set; } = new();

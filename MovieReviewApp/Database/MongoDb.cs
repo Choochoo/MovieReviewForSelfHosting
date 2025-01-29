@@ -78,7 +78,6 @@ namespace MovieReviewApp.Database
                 Builders<AwardEvent>.Filter.Lte("StartDate", date),
                 Builders<AwardEvent>.Filter.Gte("EndDate", date)
             );
-
             var awardEvent = AwardEvents.Find(filter).FirstOrDefault();
             if (awardEvent == null)
             {
@@ -86,38 +85,46 @@ namespace MovieReviewApp.Database
                 var latestPhase = Phases.Find(_ => true)
                     .SortByDescending(p => p.Number)
                     .FirstOrDefault();
-
                 if (latestPhase == null) return null;
-
                 var awardSettings = GetAwardSettings();
                 if (!awardSettings.AwardsEnabled) return null;
-
                 // Check if we're at an award month boundary
                 bool isAwardMonth = latestPhase.Number % awardSettings.PhasesBeforeAward == 0;
                 if (!isAwardMonth) return null;
 
-                // Only create if we're in the award month or within a month of it
                 var awardMonthStart = latestPhase.EndDate.AddDays(1);
-                var awardMonthEnd = awardMonthStart.AddMonths(1);
-                var isWithinAwardPeriod = date >= awardMonthStart.AddMonths(-1) &&
-                                         date <= awardMonthEnd;
+                var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
 
-                if (!isWithinAwardPeriod) return null;
+                // Only create if we're within 1 month of the award period starting
+                var isWithinCreationWindow = DateProvider.Now >= awardMonthStart.AddMonths(-1) &&
+                                           DateProvider.Now <= awardMonthEnd;
+                if (!isWithinCreationWindow) return null;
 
                 var questions = GetActiveAwardQuestions();
                 if (!questions.Any()) return null;
 
+                // Get all MovieEvents that fall within the award period
+                var movieEventFilter = Builders<MovieEvent>.Filter.And(
+                    Builders<MovieEvent>.Filter.Gte("Date", awardMonthStart),
+                    Builders<MovieEvent>.Filter.Lte("Date", awardMonthEnd)
+                );
+                var eligibleMovieIds = MovieEvents
+                    .Find(movieEventFilter)
+                    .ToList()
+                    .Select(me => me.Id)
+                    .Distinct()
+                    .ToList();
+
                 awardEvent = new AwardEvent
                 {
                     StartDate = awardMonthStart,
-                    EndDate = awardMonthEnd.AddDays(-1),
+                    EndDate = awardMonthEnd,
                     IsActive = true,
-                    Questions = questions.Select(q => q.Id).ToList()
+                    Questions = questions.Select(q => q.Id).ToList(),
+                    EligibleMovieIds = eligibleMovieIds
                 };
-
                 AddAwardEvent(awardEvent);
             }
-
             return awardEvent;
         }
 

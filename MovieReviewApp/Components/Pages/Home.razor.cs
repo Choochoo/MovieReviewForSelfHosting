@@ -53,6 +53,13 @@ namespace MovieReviewApp.Components.Pages
                 return;
             }
 
+            // Advance random number generator based on all existing events
+            var totalEvents = db.GetAllMovieEvents().Count();
+            for (int i = 0; i < totalEvents; i++)
+            {
+                _rand.Next(allNames.Length);
+            }
+
             GenerateSchedule(startDate, allNames);
         }
 
@@ -126,9 +133,8 @@ namespace MovieReviewApp.Components.Pages
             // Generate remaining events
             while (availablePeople.Any())
             {
-                var person = RespectOrder
-                    ? availablePeople[0]
-                    : availablePeople[_rand.Next(availablePeople.Count)];
+                var personIndex = RespectOrder ? 0 : _rand.Next(availablePeople.Count);
+                var person = availablePeople[personIndex];
 
                 phase.Events.Add(new MovieEvent
                 {
