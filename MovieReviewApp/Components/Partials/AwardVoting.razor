@@ -134,8 +134,8 @@
                                     </select>
                                 </div>
                                 <button class="btn btn-primary"
-                                        @onclick="() => CastVote(question.Id)"
-                                        disabled="@(selectedMovies[question.Id] == Guid.Empty)">
+                                @onclick="() => CastVote(question.Id)"
+                                disabled="@(selectedMovies[question.Id] == Guid.Empty)">
                                     Cast Vote
                                 </button>
                             }
@@ -147,46 +147,72 @@
                             }
                         }
 
-                        @if (showResults && (meetupPassed || awardSettings?.ShowResultsDuringVoting == true))
+                        @if (showResults)
                         {
-                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
-                            @if (results.Any())
+                            @if (!isPasswordVerified)
                             {
-                                <div class="mt-4">
-                                    <h6>Current Results:</h6>
-                                    @{
-                                        var totalVoters = db.GetTotalVoters();
-                                        var totalPossiblePoints = totalVoters * 6;
-                                        var maxPoints = results.Max(r => r.TotalPoints);
-                                    }
-                                    <div class="list-group">
-                                        @foreach (var result in results)
+                                <div class="mt-4 card">
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Enter Password to View Results</label>
+                                            <div class="input-group">
+                                                <input type="password" class="form-control" @bind="enteredPassword" 
+                                                @onkeypress="@(e => HandleKeyPress(e))" />
+                                                <button class="btn btn-primary" @onclick="VerifyPassword">
+                                                    View Results
+                                                </button>
+                                            </div>
+                                        </div>
+                                        @if (showPasswordError)
                                         {
-                                            var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
-                                            <div class="list-group-item">
-                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                    <strong>@result.MovieTitle</strong>
-                                                    <span>
-                                                        @result.TotalPoints points
-                                                        <small class="text-muted">(@result.TotalPoints of @totalPossiblePoints possible)</small>
-                                                    </span>
-                                                </div>
-                                                <div class="progress" style="height: 20px;">
-                                                    <div class="progress-bar" role="progressbar"
-                                                         style="width: @percentage%"
-                                                         aria-valuenow="@percentage"
-                                                         aria-valuemin="0"
-                                                         aria-valuemax="100">
-                                                        @percentage.ToString("F1")%
-                                                    </div>
-                                                </div>
-                                                <small class="text-muted">
-                                                    (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
-                                                </small>
+                                            <div class="alert alert-danger">
+                                                Incorrect password. Please try again.
                                             </div>
                                         }
                                     </div>
                                 </div>
+                            }
+                            else if (meetupPassed || awardSettings?.ShowResultsDuringVoting == true)
+                            {
+                                var results = db.GetQuestionResults(awardEvent.Id, question.Id);
+                                @if (results.Any())
+                                {
+                                    <div class="mt-4">
+                                        <h6>Current Results:</h6>
+                                        @{
+                                            var totalVoters = db.GetAllPeople(true).Count;
+                                            var totalPossiblePoints = totalVoters * 3;  // Each person can give max 3 points once
+                                            var maxPoints = results.Max(r => r.TotalPoints);
+                                        }
+                                        <div class="list-group">
+                                            @foreach (var result in results)
+                                            {
+                                                var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                                                <div class="list-group-item">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <strong>@result.MovieTitle</strong>
+                                                        <span>
+                                                            @result.TotalPoints points
+                                                            <small class="text-muted">(@result.TotalPoints of @totalPossiblePoints possible)</small>
+                                                        </span>
+                                                    </div>
+                                                    <div class="progress" style="height: 20px;">
+                                                        <div class="progress-bar" role="progressbar"
+                                                             style="width: @percentage%"
+                                                             aria-valuenow="@percentage"
+                                                             aria-valuemin="0"
+                                                             aria-valuemax="100">
+                                                            @percentage.ToString("F1")%
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                    </small>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
                             }
                         }
                     </div>
@@ -219,6 +245,12 @@
     private AwardSetting awardSettings;
     private Dictionary<Guid, int> remainingVotes = new();
 
+    // Password protection properties
+    private bool isPasswordVerified = false;
+    private string enteredPassword = "";
+    private bool showPasswordError = false;
+    private const string RESULTS_PASSWORD = "006514";
+
     private bool meetupPassed =>
         awardEvent?.Questions.Any() == true &&
         allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
@@ -234,25 +266,18 @@
 
     private async Task LoadUserData()
     {
-        // Get users who still have remaining votes
         existingUsers = await db.GetAvailableVoters(awardEvent.Id);
 
         if (!string.IsNullOrEmpty(selectedUser))
         {
-            // Get the remaining votes for each question for this user
             remainingVotes = await db.GetRemainingVotesForUser(selectedUser, awardEvent.Id);
-
-            // Get available questions for this user (questions with remaining votes)
             var availableQuestions = await db.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
             questions = availableQuestions.Select(x => x.Question).ToList();
-
-            // Load movies and votes
             allMovies = db.GetAllMovieEvents()
                 .Where(m => m.EndDate < awardEvent.StartDate && !string.IsNullOrEmpty(m.Movie))
                 .ToList();
             votes = await db.GetVotesForAwardEvent(awardEvent.Id);
             awardSettings = db.GetAwardSettings();
-
             selectedMovies = questions.ToDictionary(q => q.Id, _ => Guid.Empty);
         }
     }
@@ -260,14 +285,47 @@
     private string GetUserIp() =>
         HttpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
 
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await VerifyPassword();
+        }
+    }
+
+    private async Task VerifyPassword()
+    {
+        if (enteredPassword == RESULTS_PASSWORD)
+        {
+            isPasswordVerified = true;
+            showPasswordError = false;
+        }
+        else
+        {
+            showPasswordError = true;
+            isPasswordVerified = false;
+        }
+        enteredPassword = "";  // Clear password field
+    }
+
+    private void ToggleResults()
+    {
+        showResults = !showResults;
+        if (!showResults)
+        {
+            // Reset password verification when hiding results
+            isPasswordVerified = false;
+            showPasswordError = false;
+            enteredPassword = "";
+        }
+    }
+
     private async Task SetUser()
     {
         if (string.IsNullOrWhiteSpace(tempUserName)) return;
-
         selectedUser = tempUserName;
         await StoreUser(selectedUser);
         await LoadUserData();
-
         tempUserName = "";
     }
 
@@ -312,8 +370,7 @@
 
         var userVotes = GetUserVotesForQuestion(questionId);
         var remainingVotesCount = GetRemainingVotesForQuestion(questionId);
-        if (remainingVotesCount <= 0) return;
-
+        
         var points = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
 
         var vote = new AwardVote
@@ -334,8 +391,6 @@
             StateHasChanged();
         }
     }
-
-    private void ToggleResults() => showResults = !showResults;
 
     private async Task RemoveVote(Guid questionId, Guid voteId)
     {

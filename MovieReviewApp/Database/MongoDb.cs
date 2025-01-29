@@ -17,8 +17,6 @@ namespace MovieReviewApp.Database
         private IMongoCollection<AwardQuestion> AwardQuestions => database?.GetCollection<AwardQuestion>("AwardQuestions");
         private IMongoCollection<AwardEvent> AwardEvents => database?.GetCollection<AwardEvent>("AwardEvents");
         private IMongoCollection<AwardVote> AwardVotes => database?.GetCollection<AwardVote>("AwardVotes");
-        private IMongoCollection<VoterProfile> VoterProfiles => database?.GetCollection<VoterProfile>("VoterProfiles");
-        private IMongoCollection<VoteHistory> VoteHistory => database?.GetCollection<VoteHistory>("VoteHistory");
 
         public MongoDb(IConfiguration configuration)
         {
@@ -144,7 +142,6 @@ namespace MovieReviewApp.Database
         public List<AwardQuestion> GetActiveAwardQuestions() =>
             AwardQuestions.Find(x => x.IsActive).ToList();  // Make sure this isn't accidentally filtering anything
 
-        public int GetTotalVoters() => (int)VoterProfiles.CountDocuments(_ => true);
 
         // Award Votes
         public async Task<List<AwardVote>> GetVotesForAwardEvent(Guid awardEventId)
@@ -214,23 +211,6 @@ namespace MovieReviewApp.Database
                     v.QuestionId == vote.QuestionId &&
                     v.VoterName == vote.VoterName)
                     .ToListAsync();
-
-                // Create history records for all votes before deleting
-                foreach (var voteToDelete in allUserVotes)
-                {
-                    var history = new VoteHistory
-                    {
-                        Id = Guid.NewGuid(),
-                        AwardEventId = voteToDelete.AwardEventId,
-                        QuestionId = voteToDelete.QuestionId,
-                        MovieEventId = voteToDelete.MovieEventId,
-                        VoterName = voteToDelete.VoterName,
-                        Points = voteToDelete.Points,
-                        CreatedAt = voteToDelete.CreatedAt,
-                        DeletedAt = DateTime.UtcNow
-                    };
-                    await VoteHistory.InsertOneAsync(history);
-                }
 
                 // Delete all votes for this question
                 var result = await AwardVotes.DeleteManyAsync(v =>
