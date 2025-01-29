@@ -29,47 +29,23 @@ namespace MovieReviewApp.Database
             database = client.GetDatabase("MovieReview");
         }
 
-        public List<VoteResult> GetQuestionResults(string awardEventId, string questionId)
+        public async Task<List<AwardVote>> GetVotesForAwardEvent(Guid awardEventId)
         {
-            var votes = AwardVotes.Find(v =>
-                v.AwardEventId == awardEventId &&
-                v.QuestionId == questionId)
-                .ToList();
-
-            var movieEvents = MovieEvents.Find(Builders<MovieEvent>.Filter.Empty).ToList()
-                .ToDictionary(m => m.Id);
-
-            return votes
-                .GroupBy(v => v.MovieEventId)
-                .Select(g => new VoteResult
-                {
-                    MovieEventId = g.Key,
-                    MovieTitle = movieEvents.TryGetValue(Guid.Parse(g.Key), out var movie) ? movie.Movie : "Unknown",
-                    TotalPoints = g.Sum(v => v.GetPoints()),
-                    FirstPlaceVotes = g.Count(v => v.VoteOrder == 1),
-                    SecondPlaceVotes = g.Count(v => v.VoteOrder == 2),
-                    ThirdPlaceVotes = g.Count(v => v.VoteOrder == 3)
-                })
-                .OrderByDescending(r => r.TotalPoints)
-                .ThenByDescending(r => r.FirstPlaceVotes)
-                .ToList();
+            // Use the GUID for querying
+            return await _votes.Find(v => v.AwardEventId == awardEventId).ToListAsync();
         }
 
         public async Task<bool> AddVote(AwardVote vote)
         {
-            var existingVotes = await AwardVotes
-                .Find(v => v.AwardEventId == vote.AwardEventId &&
-                        v.QuestionId == vote.QuestionId &&
-                        v.VoterIp == vote.VoterIp)
-                .ToListAsync();
-
-            if (existingVotes.Count >= 3)
+            try
+            {
+                await _votes.InsertOneAsync(vote);
+                return true;
+            }
+            catch
+            {
                 return false;
-
-            vote.VoteOrder = existingVotes.Count + 1;
-            vote.VoteDate = DateTime.UtcNow;
-            await AwardVotes.InsertOneAsync(vote);
-            return true;
+            }
         }
 
         public AwardEvent GetAwardEventForDate(DateTime date)

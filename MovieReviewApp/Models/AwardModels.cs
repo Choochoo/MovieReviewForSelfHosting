@@ -1,45 +1,32 @@
 ﻿namespace MovieReviewApp.Models
 {
-    public class AwardQuestion
-    {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string Question { get; set; }
-        public bool IsActive { get; set; } = true;
-        public int MaxVotes { get; set; } = 3;
-    }
 
-    public class AwardEvent
+    public class AwardEvent : BaseModel
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public bool IsActive { get; set; } = true;
-        public List<string> Questions { get; set; } = new();
-        public List<Guid> EligibleMovieIds { get; set; } = new();
+        public List<Guid> Questions { get; set; } = new();
     }
 
-    public class AwardVote
+    public class AwardQuestion : BaseModel
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string AwardEventId { get; set; }
-        public string QuestionId { get; set; }
-        public string MovieEventId { get; set; }
+        public string Question { get; set; }
+        public int MaxVotes { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    public class AwardVote : BaseModel
+    {
+        public Guid AwardEventId { get; set; }
+        public Guid QuestionId { get; set; }
+        public Guid MovieEventId { get; set; }
         public string VoterIp { get; set; }
-        public DateTime VoteDate { get; set; }
-        public int VoteOrder { get; set; }  // 1st=3pts, 2nd=2pts, 3rd=1pt
-
-        public int GetPoints() => VoteOrder switch
-        {
-            1 => 3,
-            2 => 2,
-            3 => 1,
-            _ => 0
-        };
+        public string VoterName { get; set; }
+        public int Points { get; set; }
     }
 
-    public class VoteResult
+    public class QuestionResult
     {
-        public string MovieEventId { get; set; }
         public string MovieTitle { get; set; }
         public int TotalPoints { get; set; }
         public int FirstPlaceVotes { get; set; }

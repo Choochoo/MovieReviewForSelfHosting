@@ -28,7 +28,7 @@
                     <h4>🏆 Awards Month!</h4>
                     <p>Vote for your favorites</p>
                 </div>
-                <AwardVoting CurrentDate="DateProvider.Now" /> 
+                <AwardVoting CurrentDate="DateProvider.Now" />
             </div>
         </div>
     }
@@ -106,22 +106,16 @@
                         }
 
                         @if (phase.EndDate >= DateProvider.Now &&
-                       phase.Number % db.GetAwardSettings().PhasesBeforeAward == 0)
+                       phase.Number % AwardSettings.PhasesBeforeAward == 0)
                         {
-                            var awardMonthStart = phase.EndDate.AddDays(1);
-                            var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
+                            var nextMonth = phase.EndDate.AddDays(1);
+                            var awardMonthStart = new DateTime(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, DateTimeKind.Local);
+                            var awardMonthEnd = awardMonthStart.AddMonths(1).AddMilliseconds(-1);
 
-                            // Only skip showing this specific award month if it's the current one
-                            var isThisTheCurrentAwardPhase = DateProvider.Now.IsWithinRange(awardMonthStart, awardMonthEnd);
-
-                            @if (!isThisTheCurrentAwardPhase)
+                            // Only show it in the timeline if it's not the current award phase
+                            if (!DateProvider.Now.IsWithinRange(awardMonthStart, awardMonthEnd))
                             {
-                                var eligibleMovies = db.GetAllMovieEvents()
-                                .Where(m => m.PhaseNumber <= phase.Number &&
-                                m.PhaseNumber > phase.Number - db.GetAwardSettings().PhasesBeforeAward &&
-                                !string.IsNullOrEmpty(m.Movie))
-                                .Select(m => m.Movie)
-                                .ToList();
+                                var eligibleMovies = GetEligibleMoviesForPhase(phase.Number);
 
                                 <div class="timeline-item award-period">
                                     <h5>🏆 Awards Month</h5>

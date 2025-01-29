@@ -2,10 +2,13 @@
 
 namespace MovieReviewApp.Models
 {
-    public class MovieEvent
+    public abstract class BaseModel
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+    }
+    public class MovieEvent : BaseModel
     {
         public int? PhaseNumber { get; set; }
-        public Guid Id { get; set; } = Guid.NewGuid();
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public string? Person { get; set; }
