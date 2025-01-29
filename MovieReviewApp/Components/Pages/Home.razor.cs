@@ -127,11 +127,17 @@ namespace MovieReviewApp.Components.Pages
                 if (AwardSettings.AwardsEnabled && phaseNumber % AwardSettings.PhasesBeforeAward == 0)
                 {
                     var awardDate = phase.EndDate.AddDays(1);
-                    var awardEvent = db.GetAwardEventForDate(awardDate);
+                    var awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
 
-                    if (DateProvider.Now.IsWithinRange(awardDate, awardDate.AddMonths(1).AddDays(-1)))
+                    // Only get or create award event if we're within a month of its start
+                    if (DateProvider.Now >= awardDate.AddMonths(-1) && DateProvider.Now <= awardMonthEnd)
                     {
-                        CurrentEvent = null;
+                        var awardEvent = db.GetAwardEventForDate(awardDate);
+
+                        if (DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
+                        {
+                            CurrentEvent = null;
+                        }
                     }
 
                     currentDate = awardDate.AddMonths(1);

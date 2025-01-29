@@ -23,6 +23,7 @@
         public string VoterIp { get; set; }
         public string VoterName { get; set; }
         public int Points { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public class QuestionResult
@@ -39,5 +40,24 @@
         public int PhasesBeforeAward { get; set; } = 2;
         public bool AwardsEnabled { get; set; } = false;
         public bool ShowResultsDuringVoting { get; set; } = false;
+        public bool AllowVoteChanges { get; set; } = true;
+        public int VoteChangeTimeLimit { get; set; } = 24; // hours
+    }
+
+    public class VoterProfile : BaseModel
+    {
+        public string Name { get; set; }
+        public List<string> KnownIps { get; set; } = new();
+    }
+
+    public class VoteHistory : BaseModel
+    {
+        public Guid AwardEventId { get; set; }
+        public Guid QuestionId { get; set; }
+        public Guid MovieEventId { get; set; }
+        public string VoterName { get; set; }
+        public int Points { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime DeletedAt { get; set; }
     }
 }

@@ -1,7 +1,8 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
-@* AwardSettings.razor *@
+
 @inject MongoDb db
+@inject ILogger<AwardSettings> Logger
 
 <div class="card mb-3">
     <div class="card-header">
@@ -23,32 +24,96 @@
             </div>
 
             <div class="mb-3">
-                <h6>Award Questions</h6>
-                @foreach (var question in questions)
+                <label class="form-label">Show Results During Voting</label>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" @bind="settings.ShowResultsDuringVoting" id="showResults">
+                    <label class="form-check-label" for="showResults">
+                        Allow voters to see current results while voting is in progress
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Award Questions</h6>
+                    <button class="btn btn-secondary btn-sm" @onclick="AddQuestion">Add Question</button>
+                </div>
+                @if (!questions.Any())
                 {
-                    <div class="d-flex align-items-center mb-2">
-                        <input type="text" class="form-control me-2" @bind="question.Question"
-                               placeholder="Enter award question..." />
-                        <input type="number" class="form-control me-2" style="width: 100px"
-                               @bind="question.MaxVotes" min="1" max="10" />
-                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteQuestion(question)">
-                            Delete
-                        </button>
+                    <div class="alert alert-info">
+                        No questions added yet. Click "Add Question" to create your first award question.
                     </div>
                 }
-                <button class="btn btn-secondary" @onclick="AddQuestion">Add Question</button>
+                else
+                {
+                    @foreach (var question in questions)
+                    {
+                        <div class="card mb-2">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="flex-grow-1">
+                                        <input type="text" class="form-control" @bind="question.Question"
+                                               placeholder="Enter award question..." />
+                                    </div>
+                                    <div style="width: 150px">
+                                        <div class="input-group">
+                                            <span class="input-group-text">Max Votes</span>
+                                            <input type="number" class="form-control"
+                                                   @bind="question.MaxVotes" min="1" max="10" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   @bind="question.IsActive"
+                                                   id="@($"active_{question.Id}")">
+                                            <label class="form-check-label" for="@($"active_{question.Id}")">
+                                                Active
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-danger btn-sm"
+                                            @onclick="() => DeleteQuestion(question)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
             </div>
         }
 
-        <button class="btn btn-primary" @onclick="SaveSettings">Save Settings</button>
+        <div class="d-flex justify-content-between align-items-center">
+            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <span>Save Settings</span>
+                }
+            </button>
+            @if (showSaveSuccess)
+            {
+                <div class="text-success">
+                    <i class="fas fa-check-circle me-1"></i>
+                    Settings saved successfully!
+                </div>
+            }
+        </div>
     </div>
 </div>
 
 @code {
     private AwardSetting settings = new();
     private List<AwardQuestion> questions = new();
-    private List<string> questionsToDelete = new();
+    private List<Guid> questionsToDelete = new();
     private const string DEFAULT_QUESTION = "New Question";
+    private bool isSaving;
+    private bool showSaveSuccess;
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,13 +125,20 @@
 
     private void AddQuestion()
     {
-        questions.Add(new AwardQuestion { Question = "", MaxVotes = 3 });
+        var newQuestion = new AwardQuestion
+            {
+                Id = Guid.NewGuid(),
+                Question = "",
+                MaxVotes = 3,
+                IsActive = true
+            };
+        questions.Add(newQuestion);
     }
 
     private void DeleteQuestion(AwardQuestion question)
     {
         questions.Remove(question);
-        if (!string.IsNullOrEmpty(question.Id))
+        if (question.Id != Guid.Empty)
         {
             questionsToDelete.Add(question.Id);
         }
@@ -76,6 +148,9 @@
     {
         try
         {
+            isSaving = true;
+            showSaveSuccess = false;
+
             // Remove any questions that are empty or default
             questions.RemoveAll(q => string.IsNullOrWhiteSpace(q.Question) || q.Question == DEFAULT_QUESTION);
 
@@ -83,6 +158,7 @@
             var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
             db.AddOrUpdateSetting(new Setting
                 {
+                    Id = Guid.NewGuid(),
                     Key = "AwardSettings",
                     Value = settingsJson
                 });
@@ -101,16 +177,35 @@
             {
                 if (!string.IsNullOrWhiteSpace(question.Question) && question.Question != DEFAULT_QUESTION)
                 {
+                    // Ensure question has a valid GUID
+                    if (question.Id == Guid.Empty)
+                    {
+                        question.Id = Guid.NewGuid();
+                    }
                     db.AddOrUpdateAwardQuestion(question);
                 }
             }
 
             // Clear the delete list after successful save
             questionsToDelete.Clear();
+            showSaveSuccess = true;
+
+            // Auto-hide success message after 3 seconds
+            await InvokeAsync(async () =>
+            {
+                await Task.Delay(3000);
+                showSaveSuccess = false;
+                StateHasChanged();
+            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving award settings: {ex.Message}");
+            Logger.LogError(ex, "Error saving award settings");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
         }
     }
 }

@@ -2,137 +2,376 @@
 @using MovieReviewApp.Models
 @inject MongoDb db
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JS
 
 <div class="card">
-    <div class="card-header">
-        <h5 class="mb-0">Awards Month</h5>
-    </div>
-    <div class="card-body">
-        @if (awardEvent == null)
-        {
-            <p>No active award event.</p>
-        }
-        else
-        {
-            @foreach (var questionId in awardEvent.Questions)
+    @if (string.IsNullOrEmpty(selectedUser))
+    {
+        <div class="card-header">
+            <h5 class="mb-0">Welcome to Awards Voting</h5>
+        </div>
+        <div class="card-body">
+            <p>Your IP Address: @GetUserIp()</p>
+            @if (!existingUsers.Any())
             {
-                var question = questions.FirstOrDefault(q => q.Id == questionId);
-                if (question == null) { continue; }
-
-                <div class="mb-4">
-                    <h6>@question.Question</h6>
-                    @{
-                        var votesLeft = question.MaxVotes -
-                        db.GetVoteCountForIp(awardEvent.Id, question.Id, GetUserIp());
-                    }
-
-                    @if (votesLeft > 0)
-                    {
-                        <p class="text-muted">You have @votesLeft votes remaining</p>
-                        <select class="form-select mb-2" @bind="selectedMovies[question.Id]">
-                            <option value="">Select a movie...</option>
-                            @foreach (var movie in availableMovies)
-                            {
-                                <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
-                            }
-                        </select>
-                        <button class="btn btn-primary"
-                                @onclick="() => CastVote(question.Id)">
-                            Vote
-                        </button>
-                    }
-                    else
-                    {
-                        <p>You have used all your votes for this category.</p>
-                    }
-
-                    @if (showResults && meetupPassed)
-                    {
-                        var results = db.GetQuestionResults(awardEvent.Id, questionId);
-                        @if (results.Any())
+                <div class="alert alert-info">
+                    There are currently no eligible voters. This could mean all votes have been cast
+                    or no questions are available.
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label">Select Your Name:</label>
+                    <select class="form-select" @bind="tempUserName">
+                        <option value="">Choose your name...</option>
+                        @foreach (var user in existingUsers)
                         {
-                            <div class="mt-3">
-                                <h6>Results:</h6>
-                                <ul class="list-unstyled">
-                                    @foreach (var result in results)
+                            <option value="@user">@user</option>
+                        }
+                    </select>
+                    <small class="text-muted">Only showing people with remaining votes</small>
+                </div>
+                <button class="btn btn-primary" @onclick="SetUser">Continue</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Awards Month</h5>
+            <div class="d-flex align-items-center">
+                <small class="text-muted me-2">Voting as: @selectedUser</small>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="LogOut">Change User</button>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (awardEvent == null)
+            {
+                <p>No active award event.</p>
+            }
+            else if (!questions.Any())
+            {
+                <div class="alert alert-info">
+                    You have completed all your votes! Thank you for participating.
+                    <button class="btn btn-link" @onclick="LogOut">Click here to change user</button>
+                </div>
+            }
+            else
+            {
+                @foreach (var question in questions)
+                {
+                    var remainingVotesCount = GetRemainingVotesForQuestion(question.Id);
+
+                    <div class="mb-4 p-3 border rounded">
+                        <h6 class="mb-3">@question.Question</h6>
+                        @{
+                            var userVotes = GetUserVotesForQuestion(question.Id);
+                            var pointsForNextVote = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
+                        }
+
+                        <div class="mb-3">
+                            <h6 class="text-muted">Your Current Votes:</h6>
+                            @if (userVotes.Any())
+                            {
+                                <ul class="list-group">
+                                    @foreach (var vote in userVotes.OrderByDescending(v => v.Points))
                                     {
-                                        <li>
-                                            @result.MovieTitle - @result.TotalPoints points
-                                            <small class="text-muted">
-                                                (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
-                                            </small>
+                                        var movie = allMovies.FirstOrDefault(m => m.Id == vote.MovieEventId);
+                                        var voteAge = DateTime.UtcNow - vote.CreatedAt;
+                                        var canChange = awardSettings.AllowVoteChanges &&
+                                        (awardSettings.VoteChangeTimeLimit == 0 ||
+                                        voteAge.TotalHours <= awardSettings.VoteChangeTimeLimit);
+
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div class="d-flex align-items-center">
+                                                @if (canChange)
+                                                {
+                                                    <button class="btn btn-sm btn-outline-danger me-2"
+                                                    @onclick="() => RemoveVote(question.Id, vote.Id)"
+                                                    title="Remove this vote">
+                                                        Recast
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                }
+                                                <div>
+                                                    @movie?.Movie
+                                                    @if (!canChange)
+                                                    {
+                                                        <small class="text-muted d-block">
+                                                            Vote locked (over @awardSettings.VoteChangeTimeLimit hours old)
+                                                        </small>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <span class="badge bg-primary">@vote.Points points</span>
                                         </li>
                                     }
                                 </ul>
-                            </div>
-                        }
-                    }
-                </div>
-            }
+                            }
+                            else
+                            {
+                                <p class="text-muted">No votes cast yet</p>
+                            }
+                        </div>
 
-            @if (meetupPassed)
-            {
-                <button class="btn btn-secondary" @onclick="ToggleResults">
-                    @(showResults ? "Hide" : "Show") Results
-                </button>
+                        @if (remainingVotesCount > 0)
+                        {
+                            var availableMovies = GetAvailableMoviesForQuestion(question.Id);
+                            <div class="alert alert-info">
+                                You have @remainingVotesCount @(remainingVotesCount == 1 ? "vote" : "votes") remaining
+                                <strong>(Vote worth @pointsForNextVote @(pointsForNextVote == 1 ? "point" : "points"))</strong>
+                            </div>
+                            @if (availableMovies.Any())
+                            {
+                                <div class="mb-3">
+                                    <select class="form-select" @bind="selectedMovies[question.Id]">
+                                        <option value="@Guid.Empty">Select a movie...</option>
+                                        @foreach (var movie in availableMovies)
+                                        {
+                                            <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary"
+                                        @onclick="() => CastVote(question.Id)"
+                                        disabled="@(selectedMovies[question.Id] == Guid.Empty)">
+                                    Cast Vote
+                                </button>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning">
+                                    No more movies available to vote for in this category
+                                </div>
+                            }
+                        }
+
+                        @if (showResults && (meetupPassed || awardSettings?.ShowResultsDuringVoting == true))
+                        {
+                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
+                            @if (results.Any())
+                            {
+                                <div class="mt-4">
+                                    <h6>Current Results:</h6>
+                                    @{
+                                        var totalVoters = db.GetTotalVoters();
+                                        var totalPossiblePoints = totalVoters * 6;
+                                        var maxPoints = results.Max(r => r.TotalPoints);
+                                    }
+                                    <div class="list-group">
+                                        @foreach (var result in results)
+                                        {
+                                            var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                                            <div class="list-group-item">
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <strong>@result.MovieTitle</strong>
+                                                    <span>
+                                                        @result.TotalPoints points
+                                                        <small class="text-muted">(@result.TotalPoints of @totalPossiblePoints possible)</small>
+                                                    </span>
+                                                </div>
+                                                <div class="progress" style="height: 20px;">
+                                                    <div class="progress-bar" role="progressbar"
+                                                         style="width: @percentage%"
+                                                         aria-valuenow="@percentage"
+                                                         aria-valuemin="0"
+                                                         aria-valuemax="100">
+                                                        @percentage.ToString("F1")%
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted">
+                                                    (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+
+                @if (meetupPassed || awardSettings?.ShowResultsDuringVoting == true)
+                {
+                    <button class="btn btn-secondary" @onclick="ToggleResults">
+                        @(showResults ? "Hide" : "Show") Results
+                    </button>
+                }
             }
-        }
-    </div>
+        </div>
+    }
 </div>
 
 @code {
     [Parameter]
     public DateTime CurrentDate { get; set; }
+
     private AwardEvent awardEvent;
     private List<AwardQuestion> questions = new();
-    private List<MovieEvent> availableMovies = new();
+    private List<MovieEvent> allMovies = new();
     private List<AwardVote> votes = new();
-    private Dictionary<string, string> selectedMovies = new();
+    private Dictionary<Guid, Guid> selectedMovies = new();
     private bool showResults = false;
+    private string selectedUser = "";
+    private string tempUserName = "";
+    private List<string> existingUsers = new();
+    private AwardSetting awardSettings;
+    private Dictionary<Guid, int> remainingVotes = new();
+
     private bool meetupPassed =>
         awardEvent?.Questions.Any() == true &&
-        availableMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
-
-    private void ToggleResults() => showResults = !showResults;
+        allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
 
     protected override async Task OnInitializedAsync()
     {
         awardEvent = db.GetAwardEventForDate(CurrentDate);
         if (awardEvent == null) return;
-        questions = db.GetActiveAwardQuestions();
-        availableMovies = db.GetAllMovieEvents()
-            .Where(m => m.EndDate < awardEvent.StartDate && !string.IsNullOrEmpty(m.Movie))
-            .ToList();
-        votes = db.GetVotesForAwardEvent(awardEvent.Id);
 
-        foreach (var questionId in awardEvent.Questions)
+        selectedUser = await GetStoredUser();
+        await LoadUserData();
+    }
+
+    private async Task LoadUserData()
+    {
+        // Get users who still have remaining votes
+        existingUsers = await db.GetAvailableVoters(awardEvent.Id);
+
+        if (!string.IsNullOrEmpty(selectedUser))
         {
-            selectedMovies[questionId] = "";
+            // Get the remaining votes for each question for this user
+            remainingVotes = await db.GetRemainingVotesForUser(selectedUser, awardEvent.Id);
+
+            // Get available questions for this user (questions with remaining votes)
+            var availableQuestions = await db.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
+            questions = availableQuestions.Select(x => x.Question).ToList();
+
+            // Load movies and votes
+            allMovies = db.GetAllMovieEvents()
+                .Where(m => m.EndDate < awardEvent.StartDate && !string.IsNullOrEmpty(m.Movie))
+                .ToList();
+            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
+            awardSettings = db.GetAwardSettings();
+
+            selectedMovies = questions.ToDictionary(q => q.Id, _ => Guid.Empty);
         }
     }
 
     private string GetUserIp() =>
         HttpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
 
-    private async Task CastVote(string questionId)
+    private async Task SetUser()
+    {
+        if (string.IsNullOrWhiteSpace(tempUserName)) return;
+
+        selectedUser = tempUserName;
+        await StoreUser(selectedUser);
+        await LoadUserData();
+
+        tempUserName = "";
+    }
+
+    private async Task LogOut()
+    {
+        selectedUser = "";
+        await JS.InvokeVoidAsync("localStorage.removeItem", "awardVoterName");
+        await LoadUserData();
+    }
+
+    private List<AwardVote> GetUserVotesForQuestion(Guid questionId)
+    {
+        return votes.Where(v =>
+            v.QuestionId == questionId &&
+            v.VoterName == selectedUser)
+            .OrderByDescending(v => v.Points)
+            .ToList();
+    }
+
+    private int GetRemainingVotesForQuestion(Guid questionId)
+    {
+        return remainingVotes.GetValueOrDefault(questionId, 0);
+    }
+
+    private List<MovieEvent> GetAvailableMoviesForQuestion(Guid questionId)
+    {
+        var votedMovieIds = GetUserVotesForQuestion(questionId)
+            .Select(v => v.MovieEventId)
+            .ToList();
+
+        return allMovies
+            .Where(m => !votedMovieIds.Contains(m.Id))
+            .OrderBy(m => m.Movie)
+            .ToList();
+    }
+
+    private async Task CastVote(Guid questionId)
     {
         if (!selectedMovies.ContainsKey(questionId) ||
-            string.IsNullOrEmpty(selectedMovies[questionId]))
+            selectedMovies[questionId] == Guid.Empty)
             return;
+
+        var userVotes = GetUserVotesForQuestion(questionId);
+        var remainingVotesCount = GetRemainingVotesForQuestion(questionId);
+        if (remainingVotesCount <= 0) return;
+
+        var points = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
 
         var vote = new AwardVote
             {
                 AwardEventId = awardEvent.Id,
                 QuestionId = questionId,
                 MovieEventId = selectedMovies[questionId],
-                VoterIp = GetUserIp()
+                VoterName = selectedUser,
+                VoterIp = GetUserIp(),
+                Points = points
             };
 
         if (await db.AddVote(vote))
         {
-            votes = db.GetVotesForAwardEvent(awardEvent.Id);
-            selectedMovies[questionId] = "";
+            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
+            selectedMovies[questionId] = Guid.Empty;
+            await LoadUserData();
             StateHasChanged();
+        }
+    }
+
+    private void ToggleResults() => showResults = !showResults;
+
+    private async Task RemoveVote(Guid questionId, Guid voteId)
+    {
+        var confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
+        if (!confirmDelete) return;
+
+        if (await db.RemoveVote(voteId))
+        {
+            // Refresh votes and remaining votes
+            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
+            await LoadUserData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string> GetStoredUser()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string>("localStorage.getItem", "awardVoterName") ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private async Task StoreUser(string username)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "awardVoterName", username);
+        }
+        catch
+        {
+            // Handle storage errors
         }
     }
 }
