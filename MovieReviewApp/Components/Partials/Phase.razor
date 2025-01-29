@@ -246,6 +246,14 @@ else
 
         try
         {
+            // First, verify API key
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                Console.WriteLine("API Key is empty or null");
+                Synopsis = "Configuration error: API key not found";
+                return;
+            }
+
             // Check for cached synopsis
             if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Synopsis))
             {
@@ -256,13 +264,27 @@ else
             string encodedTitle = Uri.EscapeDataString(movieTitle);
             string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
 
-            using var response = await Http.GetAsync(searchUrl);
+            Console.WriteLine($"Making request to TMDB API for movie: {movieTitle}");
+            Console.WriteLine($"Request URL (excluding API key): https://api.themoviedb.org/3/search/movie?api_key=HIDDEN&query={encodedTitle}");
+
+            // Add headers for better error tracking
+            var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+            request.Headers.Add("User-Agent", "MovieReviewApp/1.0");
+            request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await Http.SendAsync(request);
+            string responseBody = await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine($"Response Status Code: {response.StatusCode}");
+            Console.WriteLine($"Response Headers: {string.Join(", ", response.Headers.Select(h => $"{h.Key}={string.Join(";", h.Value)}"))}");
+
             if (!response.IsSuccessStatusCode)
             {
-                throw new HttpRequestException($"Error: {response.StatusCode}");
+                Console.WriteLine($"Error Response Body: {responseBody}");
+                Synopsis = $"API Error: {response.StatusCode} - {responseBody}";
+                return;
             }
 
-            string responseBody = await response.Content.ReadAsStringAsync();
             var searchResult = JObject.Parse(responseBody);
 
             if (searchResult["results"] != null && searchResult["results"].HasValues)
@@ -270,18 +292,23 @@ else
                 int movieId = (int)searchResult["results"][0]["id"];
                 string detailsUrl = $"https://api.themoviedb.org/3/movie/{movieId}?api_key={_apiKey}";
 
-                using var detailsResponse = await Http.GetAsync(detailsUrl);
+                var detailsRequest = new HttpRequestMessage(HttpMethod.Get, detailsUrl);
+                detailsRequest.Headers.Add("User-Agent", "MovieReviewApp/1.0");
+                detailsRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                using var detailsResponse = await Http.SendAsync(detailsRequest);
+                string detailsBody = await detailsResponse.Content.ReadAsStringAsync();
+
                 if (!detailsResponse.IsSuccessStatusCode)
                 {
-                    throw new HttpRequestException($"Error: {detailsResponse.StatusCode}");
+                    Console.WriteLine($"Details Error Response: {detailsBody}");
+                    Synopsis = $"Movie Details Error: {detailsResponse.StatusCode}";
+                    return;
                 }
 
-                string detailsBody = await detailsResponse.Content.ReadAsStringAsync();
                 var movieDetails = JObject.Parse(detailsBody);
-
                 Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
 
-                // Cache the synopsis
                 if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) &&
                     Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
                 {
@@ -292,23 +319,33 @@ else
                     }
                     catch (Exception ex)
                     {
-                        // Log the error but don't throw - caching failure shouldn't affect the user experience
-                        Console.WriteLine($"Failed to cache synopsis: {ex.Message}");
+                        Console.WriteLine($"Cache error: {ex.Message}");
+                        Console.WriteLine($"Stack trace: {ex.StackTrace}");
                     }
                 }
             }
             else
             {
                 Synopsis = "Movie not found.";
+                Console.WriteLine("No results found in TMDB response");
             }
         }
         catch (HttpRequestException ex)
         {
-            Synopsis = "Unable to fetch movie information. Please try again later.";
+            Console.WriteLine($"HTTP Request Exception:");
+            Console.WriteLine($"Message: {ex.Message}");
+            Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            Synopsis = $"Network Error: {ex.Message}";
         }
         catch (Exception ex)
         {
-            Synopsis = "An unexpected error occurred while fetching the movie information.";
+            Console.WriteLine($"General Exception:");
+            Console.WriteLine($"Type: {ex.GetType().FullName}");
+            Console.WriteLine($"Message: {ex.Message}");
+            Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            Synopsis = $"Error: {ex.Message}";
         }
     }
 
