@@ -19,15 +19,13 @@ namespace MovieReviewApp.Components.Pages
         private MongoDb db { get; set; } = default!;
 
         private bool IsCurrentPhaseAwardPhase =>
-            DateProvider.Now.IsWithinRange(CurrentAwardPeriod?.StartDate ?? DateTime.MaxValue,
-                                         CurrentAwardPeriod?.EndDate ?? DateTime.MinValue);
+            db.GetAwardEventForDate(DateProvider.Now) != null;
 
         private List<SiteUpdate> RecentUpdates { get; set; } = new();
         private bool showUpdates = true;
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
         public List<Phase> Phases { get; set; } = new();
-        public AwardPeriod? CurrentAwardPeriod;
         private readonly Random _rand = new(1337);
         public bool RespectOrder = false;
 
@@ -84,20 +82,18 @@ namespace MovieReviewApp.Components.Pages
                 // Check if we need to add an awards period after this phase
                 if (awardSettings.AwardsEnabled && phaseNumber % awardSettings.PhasesBeforeAward == 0)
                 {
-                    var awardPeriod = new AwardPeriod
-                    {
-                        StartDate = phase.EndDate.AddDays(1),
-                        EndDate = phase.EndDate.AddDays(1).AddMonths(1).EndOfDay()
-                    };
+                    var awardDate = phase.EndDate.AddDays(1);
+                    var awardEvent = db.GetAwardEventForDate(awardDate);
 
                     // Check if we're currently in an awards period
-                    if (DateProvider.Now.IsWithinRange(awardPeriod.StartDate, awardPeriod.EndDate))
+                    if (DateProvider.Now.IsWithinRange(awardDate, awardDate.AddMonths(1).AddDays(-1)))
                     {
-                        CurrentAwardPeriod = awardPeriod;
+                        // If we're in the award period, clear the current event
                         CurrentEvent = null;
                     }
 
-                    currentDate = awardPeriod.EndDate.AddDays(1);
+                    // Move the current date past the award month
+                    currentDate = awardDate.AddMonths(1);
                 }
                 else
                 {

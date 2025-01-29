@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using MovieReviewApp.Components.Partials
+@using MovieReviewApp.Extensions
 @using MovieReviewApp.Services
 
 <PageTitle>Movie Review</PageTitle>
@@ -19,7 +20,7 @@
         </div>
     }
 
-    @if (IsCurrentPhaseAwardPhase && CurrentAwardPeriod != null)
+    @if (IsCurrentPhaseAwardPhase)
     {
         <div class="row">
             <div class="col-12">
@@ -27,7 +28,7 @@
                     <h4>🏆 Awards Month!</h4>
                     <p>Vote for your favorites</p>
                 </div>
-@*                 <AwardVoting CurrentDate="DateProvider.Now" /> *@
+                <AwardVoting CurrentDate="DateProvider.Now" /> 
             </div>
         </div>
     }
@@ -104,39 +105,53 @@
                             </div>
                         }
 
-                        @* Show award month if this phase ends with an award period *@
                         @if (phase.EndDate >= DateProvider.Now &&
                        phase.Number % db.GetAwardSettings().PhasesBeforeAward == 0)
                         {
                             var awardMonthStart = phase.EndDate.AddDays(1);
                             var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
-                            var eligibleMovies = db.GetAllMovieEvents()
-                            .Where(m => m.PhaseNumber <= phase.Number &&
-                            m.PhaseNumber > phase.Number - db.GetAwardSettings().PhasesBeforeAward &&
-                            !string.IsNullOrEmpty(m.Movie))
-                            .Select(m => m.Movie)
-                            .ToList();
 
-                            <div class="timeline-item award-period">
-                                <h5>🏆 Awards Month</h5>
-                                <div class="timeline-content">
-                                    <span class="date">@awardMonthStart.ToString("MMMM yyyy")</span>
-                                    @if (eligibleMovies.Any())
-                                    {
-                                        <div class="mt-2">
-                                            <div class="font-semibold mb-1">Eligible Movies:</div>
-                                            <div class="flex flex-wrap gap-2">
-                                                @foreach (var movie in eligibleMovies)
-                                                {
-                                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                                                        @movie.Trim()
-                                                    </span>
-                                                }
+                            // Only skip showing this specific award month if it's the current one
+                            var isThisTheCurrentAwardPhase = DateProvider.Now.IsWithinRange(awardMonthStart, awardMonthEnd);
+
+                            @if (!isThisTheCurrentAwardPhase)
+                            {
+                                var eligibleMovies = db.GetAllMovieEvents()
+                                .Where(m => m.PhaseNumber <= phase.Number &&
+                                m.PhaseNumber > phase.Number - db.GetAwardSettings().PhasesBeforeAward &&
+                                !string.IsNullOrEmpty(m.Movie))
+                                .Select(m => m.Movie)
+                                .ToList();
+
+                                <div class="timeline-item award-period">
+                                    <h5>🏆 Awards Month</h5>
+                                    <div class="timeline-content">
+                                        <span class="date">@awardMonthStart.ToString("MMMM yyyy")</span>
+                                        @if (eligibleMovies.Any())
+                                        {
+                                            <div class="mt-2">
+                                                <div class="font-semibold mb-1">Eligible Movies:</div>
+                                                <div class="flex flex-wrap gap-2">
+                                                    @{
+                                                        var rand = new Random(phase.Number);
+                                                        var randomizedMovies = eligibleMovies
+                                                        .Select(m => new { Movie = m, Order = rand.Next() })
+                                                        .OrderBy(x => x.Order)
+                                                        .Select(x => x.Movie)
+                                                        .ToList();
+                                                    }
+                                                    @foreach (var movie in randomizedMovies)
+                                                    {
+                                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                                                            [@movie.Trim()]
+                                                        </span>
+                                                    }
+                                                </div>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
                                 </div>
-                            </div>
+                            }
                         }
                     }
                 </div>

@@ -53,10 +53,4 @@
         public bool AwardsEnabled { get; set; } = false;
         public bool ShowResultsDuringVoting { get; set; } = false;
     }
-
-    public class AwardPeriod
-    {
-        public DateTime StartDate { get; set; }
-        public DateTime EndDate { get; set; }
-    }
 }
