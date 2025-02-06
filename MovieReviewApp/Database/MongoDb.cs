@@ -281,7 +281,7 @@ namespace MovieReviewApp.Database
                 var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
 
                 // Only create if we're within 1 month of the award period starting
-                var isWithinCreationWindow = DateProvider.Now >= awardMonthStart.AddMonths(-1) &&
+                var isWithinCreationWindow = DateProvider.Now >= awardMonthStart &&
                                            DateProvider.Now <= awardMonthEnd;
                 if (!isWithinCreationWindow) return null;
 
