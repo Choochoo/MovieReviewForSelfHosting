@@ -5,6 +5,22 @@
 @inject IJSRuntime JS
 
 <div class="card">
+    @if (incompleteVoters.Any() && awardEvent != null)
+    {
+        <div class="alert alert-warning mb-3">
+            <h5 class="mb-2">Waiting for votes from:</h5>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var voter in incompleteVoters)
+                {
+                    var voteCount = voterVoteCounts.ContainsKey(voter.Name) ? voterVoteCounts[voter.Name] : 0;
+                    <span class="badge bg-warning text-dark">
+                        @voter.Name (@voteCount/18)
+                    </span>
+                }
+            </div>
+        </div>
+    }
+
     @if (string.IsNullOrEmpty(selectedUser))
     {
         <div class="card-header">
@@ -227,7 +243,7 @@
             }
         </div>
     }
-</div>
+    </div>
 
 @code {
     [Parameter]
@@ -251,6 +267,11 @@
     private bool showPasswordError = false;
     private const string RESULTS_PASSWORD = "006514";
 
+    // New properties to store voter information
+    private List<Person> allVoters = new();
+    private Dictionary<string, int> voterVoteCounts = new();
+    private List<Person> incompleteVoters = new();
+
     private bool meetupPassed =>
         awardEvent?.Questions.Any() == true &&
         allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
@@ -259,6 +280,21 @@
     {
         awardEvent = db.GetAwardEventForDate(CurrentDate);
         if (awardEvent == null) return;
+
+        // Get all voters and votes
+        allVoters = db.GetAllPeople(true);
+        var allVotesForEvent = await db.GetVotesForAwardEvent(awardEvent.Id);
+        
+        // Group votes by voter and count them
+        voterVoteCounts = allVotesForEvent
+            .GroupBy(v => v.VoterName)
+            .ToDictionary(g => g.Key, g => g.Count());
+        
+        // Calculate incomplete voters
+        incompleteVoters = allVoters
+            .Where(voter => !voterVoteCounts.ContainsKey(voter.Name) || voterVoteCounts[voter.Name] < 18)
+            .OrderBy(voter => voter.Name)
+            .ToList();
 
         selectedUser = await GetStoredUser();
         await LoadUserData();
