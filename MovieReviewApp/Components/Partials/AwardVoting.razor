@@ -310,7 +310,7 @@
             var availableQuestions = await db.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
             questions = availableQuestions.Select(x => x.Question).ToList();
             allMovies = db.GetAllMovieEvents()
-                .Where(m => m.EndDate < awardEvent.StartDate && !string.IsNullOrEmpty(m.Movie))
+                .Where(m => m.EndDate < awardEvent.EndDate && !string.IsNullOrEmpty(m.Movie))
                 .ToList();
             votes = await db.GetVotesForAwardEvent(awardEvent.Id);
             awardSettings = db.GetAwardSettings();
