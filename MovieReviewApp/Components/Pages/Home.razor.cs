@@ -148,11 +148,40 @@ namespace MovieReviewApp.Components.Pages
                             var newPhaseNumber = phase.Number + 1;
                             var newPhaseStartDate = awardMonthEnd.AddDays(1);
                             var newGeneratedPhase = GeneratePhase(newPhaseNumber, newPhaseStartDate, allNames.ToList());
+                            Phases.Add(newGeneratedPhase);
                             NextEvent = newGeneratedPhase.Events.FirstOrDefault();
                         }
                     }
                 }
             }
+
+                // Generate additional future phases for display purposes without saving to DB
+    // This ensures the timeline always shows future phases even if they're not yet in the database
+    if (Phases.Any())
+    {
+        var lastPhase = Phases.OrderByDescending(p => p.Number).First();
+        var additionalPhasesToGenerate = 2; // Generate next 2 phases beyond what's in the database
+        
+        for (int i = 1; i <= additionalPhasesToGenerate; i++)
+        {
+            var newPhaseNumber = lastPhase.Number + i;
+            DateTime newPhaseStart;
+            
+            // If the last phase ends with an award month
+            if (lastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
+            {
+                var awardMonthEnd = lastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
+                newPhaseStart = awardMonthEnd.AddDays(1);
+            }
+            else
+            {
+                newPhaseStart = lastPhase.EndDate.AddDays(1);
+            }
+            
+            var futurePhase = GeneratePhase(newPhaseNumber, newPhaseStart, allNames.ToList());
+            Phases.Add(futurePhase);
+        }
+    }
         }
 
         private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
