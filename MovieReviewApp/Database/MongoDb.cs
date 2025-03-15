@@ -537,6 +537,26 @@ namespace MovieReviewApp.Database
 
         public void AddStatsCommand(StatsCommand command) =>
             StatsCommands?.InsertOne(command);
+
+        public List<Phase> GetAllPhases()
+        {
+            // Get all phases from the Phases collection
+            var phases = Phases.Find(Builders<Phase>.Filter.Empty)
+                .SortBy(p => p.Number)  // Sort by phase number
+                .ToList();
+
+            // For each phase, get its events
+            foreach (var phase in phases)
+            {
+                phase.Events = GetPhaseEvents(phase.Number);
+            }
+
+            return phases;
+        }
+
+        public void AddPhase(Phase phase) => 
+            Phases.InsertOne(phase);
+
     }
 
     // Model for voter profiles

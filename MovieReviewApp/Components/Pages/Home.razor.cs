@@ -91,6 +91,10 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
+        // Add new cached property for phases
+        private List<Phase> _dbPhases;
+        private List<Phase> DbPhases => _dbPhases ??= db.GetAllPhases().OrderBy(p => p.StartDate).ToList();
+
         protected override void OnInitialized()
         {
             if (AllNames.Length == 0 || StartDate == DateTime.MinValue)
@@ -111,42 +115,43 @@ namespace MovieReviewApp.Components.Pages
 
         private void GenerateSchedule(DateTime startDate, string[] allNames)
         {
-            var currentDate = startDate;
-            var phaseNumber = 1;
-
-            while (currentDate <= DateProvider.Now.AddYears(1))
+            foreach (var phase in DbPhases)
             {
-                var phase = GeneratePhase(phaseNumber, currentDate, allNames.ToList());
-                Phases.Add(phase);
+                // Generate events for this phase
+                var generatedPhase = GeneratePhase(phase.Number, phase.StartDate, allNames.ToList());
+                Phases.Add(generatedPhase);
 
+                // If we're in this phase's time period
                 if (DateProvider.Now.IsWithinRange(phase.StartDate, phase.EndDate))
                 {
-                    UpdateCurrentAndNextEvents(phase);
+                    UpdateCurrentAndNextEvents(generatedPhase);
                 }
-
-                if (AwardSettings.AwardsEnabled && phaseNumber % AwardSettings.PhasesBeforeAward == 0)
+                
+                // If we're in an award month after this phase
+                if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
                 {
                     var awardDate = phase.EndDate.AddDays(1);
                     var awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
 
-                    // Only get or create award event if we're within a month of its start
-                    if (DateProvider.Now >= awardDate.AddMonths(-1) && DateProvider.Now <= awardMonthEnd)
+                    if (DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
                     {
-                        var awardEvent = db.GetAwardEventForDate(awardDate);
-
-                        if (DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
+                        CurrentEvent = null;
+                        var nextPhase = DbPhases.FirstOrDefault(p => p.Number == phase.Number + 1);
+                        if (nextPhase != null)
                         {
-                            CurrentEvent = null;
+                            var nextGeneratedPhase = GeneratePhase(nextPhase.Number, nextPhase.StartDate, allNames.ToList());
+                            NextEvent = nextGeneratedPhase.Events.FirstOrDefault();
+                        }
+                        else
+                        {
+                            // Create a new phase if it doesn't exist yet
+                            var newPhaseNumber = phase.Number + 1;
+                            var newPhaseStartDate = awardMonthEnd.AddDays(1);
+                            var newGeneratedPhase = GeneratePhase(newPhaseNumber, newPhaseStartDate, allNames.ToList());
+                            NextEvent = newGeneratedPhase.Events.FirstOrDefault();
                         }
                     }
-
-                    currentDate = awardDate.AddMonths(1);
                 }
-                else
-                {
-                    currentDate = phase.EndDate.AddDays(1);
-                }
-                phaseNumber++;
             }
         }
 

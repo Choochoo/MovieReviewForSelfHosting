@@ -57,18 +57,6 @@
             </div>
         </div>
     }
-    else if (NextEvent != null)
-    {
-        <div class="alert alert-info">
-            <p class="mb-0">Next movie review cycle starts @NextEvent.StartDate.ToString("MMMM d, yyyy")</p>
-        </div>
-    }
-    else
-    {
-        <div class="alert alert-warning">
-            <p class="mb-0">Please add some names in Settings to get started</p>
-        </div>
-    }
 
     @if (NextEvent != null)
     {
