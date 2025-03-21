@@ -4,254 +4,277 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IJSRuntime JS
 
-<div class="card">
-    @if (incompleteVoters.Any() && awardEvent != null)
+<div class="row">
+    @if (!meetupPassed)
     {
-        <div class="alert alert-warning mb-3">
-            <h5 class="mb-2">Waiting for votes from:</h5>
-            <div class="d-flex flex-wrap gap-2">
-                @foreach (var voter in incompleteVoters)
-                {
-                    var voteCount = voterVoteCounts.ContainsKey(voter.Name) ? voterVoteCounts[voter.Name] : 0;
-                    <span class="badge bg-warning text-dark">
-                        @voter.Name (@voteCount/18)
-                    </span>
-                }
-            </div>
-        </div>
-    }
-
-    @if (string.IsNullOrEmpty(selectedUser))
-    {
-        <div class="card-header">
-            <h5 class="mb-0">Welcome to Awards Voting</h5>
-        </div>
-        <div class="card-body">
-            <p>Your IP Address: @GetUserIp()</p>
-            @if (!existingUsers.Any())
-            {
-                <div class="alert alert-info">
-                    There are currently no eligible voters. This could mean all votes have been cast
-                    or no questions are available.
+        <!-- Voting Section -->
+        <div class="col-md-6">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Awards Voting</h5>
                 </div>
-            }
-            else
-            {
-                <div class="mb-3">
-                    <label class="form-label">Select Your Name:</label>
-                    <select class="form-select" @bind="tempUserName">
-                        <option value="">Choose your name...</option>
-                        @foreach (var user in existingUsers)
-                        {
-                            <option value="@user">@user</option>
-                        }
-                    </select>
-                    <small class="text-muted">Only showing people with remaining votes</small>
-                </div>
-                <button class="btn btn-primary" @onclick="SetUser">Continue</button>
-            }
-        </div>
-    }
-    else
-    {
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Awards Month</h5>
-            <div class="d-flex align-items-center">
-                <small class="text-muted me-2">Voting as: @selectedUser</small>
-                <button class="btn btn-sm btn-outline-secondary" @onclick="LogOut">Change User</button>
-            </div>
-        </div>
-        <div class="card-body">
-            @if (awardEvent == null)
-            {
-                <p>No active award event.</p>
-            }
-            else if (!questions.Any())
-            {
-                <div class="alert alert-info">
-                    You have completed all your votes! Thank you for participating.
-                    <button class="btn btn-link" @onclick="LogOut">Click here to change user</button>
-                </div>
-            }
-            else
-            {
-                @foreach (var question in questions)
-                {
-                    var remainingVotesCount = GetRemainingVotesForQuestion(question.Id);
+                <div class="card-body">
+                    @if (incompleteVoters.Any() && awardEvent != null)
+                    {
+                        <div class="alert alert-warning mb-3">
+                            <h5 class="mb-2">Waiting for votes from:</h5>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var voter in incompleteVoters)
+                                {
+                                    var voteCount = voterVoteCounts.ContainsKey(voter.Name) ? voterVoteCounts[voter.Name] : 0;
+                                    <span class="badge bg-warning text-dark">
+                                        @voter.Name (@voteCount/18)
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
 
-                    <div class="mb-4 p-3 border rounded">
-                        <h6 class="mb-3">@question.Question</h6>
-                        @{
-                            var userVotes = GetUserVotesForQuestion(question.Id);
-                            var pointsForNextVote = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
-                        }
-
-                        <div class="mb-3">
-                            <h6 class="text-muted">Your Current Votes:</h6>
-                            @if (userVotes.Any())
-                            {
-                                <ul class="list-group">
-                                    @foreach (var vote in userVotes.OrderByDescending(v => v.Points))
+                    @if (string.IsNullOrEmpty(selectedUser))
+                    {
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Welcome to Awards Voting</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Your IP Address: @GetUserIp()</p>
+                                @if (!existingUsers.Any())
+                                {
+                                    <div class="alert alert-info">
+                                        There are currently no eligible voters. This could mean all votes have been cast
+                                        or no questions are available.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Select Your Name:</label>
+                                        <select class="form-select" @bind="tempUserName">
+                                            <option value="">Choose your name...</option>
+                                            @foreach (var user in existingUsers)
+                                            {
+                                                <option value="@user">@user</option>
+                                            }
+                                        </select>
+                                        <small class="text-muted">Only showing people with remaining votes</small>
+                                    </div>
+                                    <button class="btn btn-primary" @onclick="SetUser">Continue</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Awards Month</h5>
+                                <div class="d-flex align-items-center">
+                                    <small class="text-muted me-2">Voting as: @selectedUser</small>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="LogOut">Change User</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                @if (awardEvent == null)
+                                {
+                                    <p>No active award event.</p>
+                                }
+                                else if (!questions.Any())
+                                {
+                                    <div class="alert alert-info">
+                                        You have completed all your votes! Thank you for participating.
+                                        <button class="btn btn-link" @onclick="LogOut">Click here to change user</button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var question in questions)
                                     {
-                                        var movie = allMovies.FirstOrDefault(m => m.Id == vote.MovieEventId);
-                                        var voteAge = DateTime.UtcNow - vote.CreatedAt;
-                                        var canChange = awardSettings.AllowVoteChanges &&
-                                        (awardSettings.VoteChangeTimeLimit == 0 ||
-                                        voteAge.TotalHours <= awardSettings.VoteChangeTimeLimit);
+                                        var remainingVotesCount = GetRemainingVotesForQuestion(question.Id);
 
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                                            <div class="d-flex align-items-center">
-                                                @if (canChange)
+                                        <div class="mb-4 p-3 border rounded">
+                                            <h6 class="mb-3">@question.Question</h6>
+                                            @{
+                                                var userVotes = GetUserVotesForQuestion(question.Id);
+                                                var pointsForNextVote = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
+                                            }
+
+                                            <div class="mb-3">
+                                                <h6 class="text-muted">Your Current Votes:</h6>
+                                                @if (userVotes.Any())
                                                 {
-                                                    <button class="btn btn-sm btn-outline-danger me-2"
-                                                    @onclick="() => RemoveVote(question.Id, vote.Id)"
-                                                    title="Remove this vote">
-                                                        Recast
-                                                        <i class="fas fa-times"></i>
+                                                    <ul class="list-group">
+                                                        @foreach (var vote in userVotes.OrderByDescending(v => v.Points))
+                                                        {
+                                                            var movie = allMovies.FirstOrDefault(m => m.Id == vote.MovieEventId);
+                                                            var voteAge = DateTime.UtcNow - vote.CreatedAt;
+                                                            var canChange = awardSettings.AllowVoteChanges &&
+                                                            (awardSettings.VoteChangeTimeLimit == 0 ||
+                                                            voteAge.TotalHours <= awardSettings.VoteChangeTimeLimit);
+
+                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                <div class="d-flex align-items-center">
+                                                                    @if (canChange)
+                                                                    {
+                                                                        <button class="btn btn-sm btn-outline-danger me-2"
+                                                                        @onclick="() => RemoveVote(question.Id, vote.Id)"
+                                                                        title="Remove this vote">
+                                                                            Recast
+                                                                            <i class="fas fa-times"></i>
+                                                                        </button>
+                                                                    }
+                                                                    <div>
+                                                                        @movie?.Movie
+                                                                        @if (!canChange)
+                                                                        {
+                                                                            <small class="text-muted d-block">
+                                                                                Vote locked (over @awardSettings.VoteChangeTimeLimit hours old)
+                                                                            </small>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                                <span class="badge bg-primary">@vote.Points points</span>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                                else
+                                                {
+                                                    <p class="text-muted">No votes cast yet</p>
+                                                }
+                                            </div>
+
+                                            @if (remainingVotesCount > 0)
+                                            {
+                                                var availableMovies = GetAvailableMoviesForQuestion(question.Id);
+                                                <div class="alert alert-info">
+                                                    You have @remainingVotesCount @(remainingVotesCount == 1 ? "vote" : "votes") remaining
+                                                    <strong>(Vote worth @pointsForNextVote @(pointsForNextVote == 1 ? "point" : "points"))</strong>
+                                                </div>
+                                                @if (availableMovies.Any())
+                                                {
+                                                    <div class="mb-3">
+                                                        <select class="form-select" @bind="selectedMovies[question.Id]">
+                                                            <option value="@Guid.Empty">Select a movie...</option>
+                                                            @foreach (var movie in availableMovies)
+                                                            {
+                                                                <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
+                                                            }
+                                                        </select>
+                                                    </div>
+                                                    <button class="btn btn-primary"
+                                                    @onclick="() => CastVote(question.Id)"
+                                                    disabled="@(selectedMovies[question.Id] == Guid.Empty)">
+                                                        Cast Vote
                                                     </button>
                                                 }
-                                                <div>
-                                                    @movie?.Movie
-                                                    @if (!canChange)
-                                                    {
-                                                        <small class="text-muted d-block">
-                                                            Vote locked (over @awardSettings.VoteChangeTimeLimit hours old)
-                                                        </small>
-                                                    }
-                                                </div>
-                                            </div>
-                                            <span class="badge bg-primary">@vote.Points points</span>
-                                        </li>
+                                                else
+                                                {
+                                                    <div class="alert alert-warning">
+                                                        No more movies available to vote for in this category
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
                                     }
-                                </ul>
-                            }
-                            else
-                            {
-                                <p class="text-muted">No votes cast yet</p>
-                            }
-                        </div>
-
-                        @if (remainingVotesCount > 0)
-                        {
-                            var availableMovies = GetAvailableMoviesForQuestion(question.Id);
-                            <div class="alert alert-info">
-                                You have @remainingVotesCount @(remainingVotesCount == 1 ? "vote" : "votes") remaining
-                                <strong>(Vote worth @pointsForNextVote @(pointsForNextVote == 1 ? "point" : "points"))</strong>
+                                }
                             </div>
-                            @if (availableMovies.Any())
-                            {
-                                <div class="mb-3">
-                                    <select class="form-select" @bind="selectedMovies[question.Id]">
-                                        <option value="@Guid.Empty">Select a movie...</option>
-                                        @foreach (var movie in availableMovies)
-                                        {
-                                            <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
-                                        }
-                                    </select>
-                                </div>
-                                <button class="btn btn-primary"
-                                @onclick="() => CastVote(question.Id)"
-                                disabled="@(selectedMovies[question.Id] == Guid.Empty)">
-                                    Cast Vote
-                                </button>
-                            }
-                            else
-                            {
-                                <div class="alert alert-warning">
-                                    No more movies available to vote for in this category
-                                </div>
-                            }
-                        }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 
-                        @if (showResults)
-                        {
-                            @if (!isPasswordVerified)
+    <!-- Results Section -->
+    <div class="@(!meetupPassed ? "col-md-6" : "col-md-12")">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">Awards Results</h5>
+            </div>
+            <div class="card-body">
+                @if (awardEvent != null && questions != null)
+                {
+                    @foreach (var question in questions)
+                    {
+                        <div class="card mb-4">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">@question.Question</h6>
+                                <button class="btn btn-sm btn-secondary" @onclick="() => ToggleCategoryResults(question.Id)">
+                                    @(IsShowingResults(question.Id) ? "Hide" : "Show") Results
+                                </button>
+                            </div>
+                            
+                            @if (IsShowingResults(question.Id))
                             {
-                                <div class="mt-4 card">
+                                @if (!IsVerified(question.Id))
+                                {
                                     <div class="card-body">
                                         <div class="mb-3">
                                             <label class="form-label">Enter Password to View Results</label>
                                             <div class="input-group">
-                                                <input type="password" class="form-control" @bind="enteredPassword" 
-                                                @onkeypress="@(e => HandleKeyPress(e))" />
-                                                <button class="btn btn-primary" @onclick="VerifyPassword">
+                                                <input type="password" class="form-control" 
+                                                       @bind-value="passwordInputs[question.Id]"
+                                                       @bind-value:event="oninput"
+                                                       @onkeypress="@(e => HandleKeyPress(e, question.Id))" />
+                                                <button class="btn btn-primary" @onclick="() => VerifyPassword(question.Id)">
                                                     View Results
                                                 </button>
                                             </div>
-                                        </div>
-                                        @if (showPasswordError)
-                                        {
-                                            <div class="alert alert-danger">
-                                                Incorrect password. Please try again.
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                            else if (meetupPassed || awardSettings?.ShowResultsDuringVoting == true)
-                            {
-                                var results = db.GetQuestionResults(awardEvent.Id, question.Id);
-                                @if (results.Any())
-                                {
-                                    <div class="mt-4">
-                                        <h6>Current Results:</h6>
-                                        @{
-                                            var totalVoters = db.GetAllPeople(true).Count;
-                                            var totalPossiblePoints = totalVoters * 3;  // Each person can give max 3 points once
-                                            var maxPoints = results.Max(r => r.TotalPoints);
-                                        }
-                                        <div class="list-group">
-                                            @foreach (var result in results)
+                                            @if (passwordErrors.ContainsKey(question.Id) && passwordErrors[question.Id])
                                             {
-                                                var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
-                                                <div class="list-group-item">
-                                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                                        <strong>@result.MovieTitle</strong>
-                                                        <span>
-                                                            @result.TotalPoints points
-                                                            <small class="text-muted">(@result.TotalPoints of @totalPossiblePoints possible)</small>
-                                                        </span>
-                                                    </div>
-                                                    <div class="progress" style="height: 20px;">
-                                                        <div class="progress-bar" role="progressbar"
-                                                             style="width: @percentage%"
-                                                             aria-valuenow="@percentage"
-                                                             aria-valuemin="0"
-                                                             aria-valuemax="100">
-                                                            @percentage.ToString("F1")%
-                                                        </div>
-                                                    </div>
-                                                    <small class="text-muted">
-                                                        (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
-                                                    </small>
+                                                <div class="alert alert-danger mt-2">
+                                                    Incorrect password. Please try again.
                                                 </div>
                                             }
                                         </div>
                                     </div>
                                 }
+                                else
+                                {
+                                    <div class="card-body">
+                                        @{
+                                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
+                                            var totalVoters = db.GetAllPeople(true).Count;
+                                            var totalPossiblePoints = totalVoters * 3;
+                                        }
+                                        @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
+                                        {
+                                            var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between">
+                                                    <strong>@result.MovieTitle</strong>
+                                                    <span>@result.TotalPoints points</span>
+                                                </div>
+                                                <div class="progress" style="height: 25px;">
+                                                    <div class="progress-bar" 
+                                                         role="progressbar" 
+                                                         style="width: @percentage%">
+                                                        @percentage.ToString("F1")%
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted">
+                                                    (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                }
                             }
-                        }
-                    </div>
+                        </div>
+                    }
                 }
-
-                @if (meetupPassed || awardSettings?.ShowResultsDuringVoting == true)
-                {
-                    <button class="btn btn-secondary" @onclick="ToggleResults">
-                        @(showResults ? "Hide" : "Show") Results
-                    </button>
-                }
-            }
+            </div>
         </div>
-    }
     </div>
+</div>
 
 @code {
     [Parameter]
     public DateTime CurrentDate { get; set; }
 
     private AwardEvent awardEvent;
-    private List<AwardQuestion> questions = new();
-    private List<MovieEvent> allMovies = new();
+    private List<AwardQuestion> questions = new List<AwardQuestion>();
+    private List<MovieEvent> allMovies = new List<MovieEvent>();
     private List<AwardVote> votes = new();
     private Dictionary<Guid, Guid> selectedMovies = new();
     private bool showResults = false;
@@ -276,6 +299,11 @@
         awardEvent?.Questions.Any() == true &&
         allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
 
+    private Dictionary<string, bool> showResultsDict = new Dictionary<string, bool>();
+    private Dictionary<Guid, string> passwordInputs = new Dictionary<Guid, string>();
+    private HashSet<Guid> verifiedQuestions = new HashSet<Guid>();
+    private Dictionary<Guid, bool> passwordErrors = new Dictionary<Guid, bool>();
+
     protected override async Task OnInitializedAsync()
     {
         awardEvent = db.GetAwardEventForDate(CurrentDate);
@@ -298,6 +326,15 @@
 
         selectedUser = await GetStoredUser();
         await LoadUserData();
+
+        // Get all questions
+        questions = db.GetActiveAwardQuestions();
+        
+        // Initialize password inputs
+        foreach (var question in questions)
+        {
+            passwordInputs[question.Id] = "";
+        }
     }
 
     private async Task LoadUserData()
@@ -321,27 +358,31 @@
     private string GetUserIp() =>
         HttpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
 
-    private async Task HandleKeyPress(KeyboardEventArgs e)
+    private async Task HandleKeyPress(KeyboardEventArgs e, Guid questionId)
     {
         if (e.Key == "Enter")
         {
-            await VerifyPassword();
+            await VerifyPassword(questionId);
         }
     }
 
-    private async Task VerifyPassword()
+    private async Task VerifyPassword(Guid categoryId)
     {
-        if (enteredPassword == RESULTS_PASSWORD)
+        if (!passwordInputs.ContainsKey(categoryId))
         {
-            isPasswordVerified = true;
-            showPasswordError = false;
+            passwordInputs[categoryId] = "";
+        }
+
+        if (passwordInputs[categoryId] == RESULTS_PASSWORD)
+        {
+            verifiedQuestions.Add(categoryId);
+            passwordErrors[categoryId] = false;
         }
         else
         {
-            showPasswordError = true;
-            isPasswordVerified = false;
+            passwordErrors[categoryId] = true;
         }
-        enteredPassword = "";  // Clear password field
+        passwordInputs[categoryId] = "";
     }
 
     private void ToggleResults()
@@ -464,5 +505,19 @@
         {
             // Handle storage errors
         }
+    }
+
+    private bool IsShowingResults(Guid questionId) => 
+        showResultsDict.ContainsKey($"show_{questionId}") && showResultsDict[$"show_{questionId}"];
+
+    private bool IsVerified(Guid questionId) => 
+        verifiedQuestions.Contains(questionId);
+
+    private void ToggleCategoryResults(Guid questionId)
+    {
+        var key = $"show_{questionId}";
+        if (!showResultsDict.ContainsKey(key))
+            showResultsDict[key] = false;
+        showResultsDict[key] = !showResultsDict[key];
     }
 }
