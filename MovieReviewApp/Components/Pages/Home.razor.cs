@@ -4,6 +4,7 @@ using MovieReviewApp.Database;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+using MongoDB.Driver;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -272,6 +273,71 @@ namespace MovieReviewApp.Components.Pages
                            !string.IsNullOrEmpty(m.Movie))
                 .Select(m => m.Movie)
                 .ToList();
+        }
+
+        private AwardEvent GetPreviousAwardEvent()
+        {
+            // If we're currently in a phase after an award month, get the previous award event
+            if (DateProvider.Now < StartDate || DbPhases.Count == 0)
+            {
+                Console.WriteLine("No phases or before start date");
+                return null;
+            }
+            
+            // Find the current phase we're in
+            var currentPhase = DbPhases.FirstOrDefault(p => 
+                DateProvider.Now.IsWithinRange(p.StartDate, p.EndDate));
+            
+            if (currentPhase == null)
+            {
+                Console.WriteLine("Current phase not found");
+                return null;
+            }
+            
+            Console.WriteLine($"Current phase: {currentPhase.Number}, Start: {currentPhase.StartDate:yyyy-MM-dd}, End: {currentPhase.EndDate:yyyy-MM-dd}");
+            
+            // If the previous phase was an award phase
+            var previousPhaseNumber = currentPhase.Number - 1;
+            Console.WriteLine($"Previous phase number: {previousPhaseNumber}");
+            
+            if (previousPhaseNumber > 0 && previousPhaseNumber % AwardSettings.PhasesBeforeAward == 0)
+            {
+                Console.WriteLine("Previous phase was an award phase");
+                
+                // Calculate when the award month would have been
+                var previousPhase = DbPhases.FirstOrDefault(p => p.Number == previousPhaseNumber);
+                if (previousPhase == null)
+                {
+                    Console.WriteLine("Previous phase not found in database");
+                    return null;
+                }
+                
+                var awardMonthStart = previousPhase.EndDate.AddDays(1);
+                var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
+                
+                Console.WriteLine($"Award month period: {awardMonthStart:yyyy-MM-dd} to {awardMonthEnd:yyyy-MM-dd}");
+                
+                // Get award event for that month
+                var filter = Builders<AwardEvent>.Filter.And(
+                    Builders<AwardEvent>.Filter.Gte(e => e.StartDate, awardMonthStart),
+                    Builders<AwardEvent>.Filter.Lte(e => e.EndDate, awardMonthEnd)
+                );
+                
+                var previousAwardEvent = db.GetAwardEventByFilter(filter);
+                if (previousAwardEvent == null)
+                {
+                    Console.WriteLine("No award event found for previous phase");
+                }
+                else
+                {
+                    Console.WriteLine($"Found previous award event: {previousAwardEvent.Id}, {previousAwardEvent.StartDate:yyyy-MM-dd}");
+                }
+                
+                return previousAwardEvent;
+            }
+            
+            Console.WriteLine("Previous phase was not an award phase");
+            return null;
         }
     }
 }

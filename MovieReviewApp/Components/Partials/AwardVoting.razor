@@ -1,5 +1,6 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
+@using MovieReviewApp.Extensions
 @inject MongoDb db
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IJSRuntime JS
@@ -192,75 +193,98 @@
                 <h5 class="mb-0">Awards Results</h5>
             </div>
             <div class="card-body">
-                @if (awardEvent != null && questions != null)
+                @if (awardEvent != null)
                 {
-                    @foreach (var question in questions)
+                    <!-- Show all award events, including the current one -->
+                    @foreach (var currentEvent in GetAllAwardEvents())
                     {
-                        <div class="card mb-4">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h6 class="mb-0">@question.Question</h6>
-                                <button class="btn btn-sm btn-secondary" @onclick="() => ToggleCategoryResults(question.Id)">
-                                    @(IsShowingResults(question.Id) ? "Hide" : "Show") Results
-                                </button>
-                            </div>
-                            
-                            @if (IsShowingResults(question.Id))
+                        <h6 class="mt-3 mb-4">
+                            Awards for @currentEvent.StartDate.ToString("MMMM yyyy")
+                            @if (currentEvent.Id == awardEvent.Id)
                             {
-                                @if (!IsVerified(question.Id))
+                                <span class="badge bg-primary ms-2">Current</span>
+                            }
+                        </h6>
+                        
+                        @foreach (var question in db.GetActiveAwardQuestions())
+                        {
+                            var isPastEvent = currentEvent.Id != awardEvent.Id;
+                            var questionKey = isPastEvent 
+                                ? $"past_{currentEvent.Id}_{question.Id}" 
+                                : $"show_{question.Id}";
+                            
+                            <div class="card mb-4">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">@question.Question</h6>
+                                    <button class="btn btn-sm btn-secondary" 
+                                            @onclick="() => ToggleEventResults(currentEvent.Id, question.Id, isPastEvent)">
+                                        @(IsEventResultShowing(currentEvent.Id, question.Id, isPastEvent) ? "Hide" : "Show") Results
+                                    </button>
+                                </div>
+                                
+                                @if (IsEventResultShowing(currentEvent.Id, question.Id, isPastEvent))
                                 {
-                                    <div class="card-body">
-                                        <div class="mb-3">
-                                            <label class="form-label">Enter Password to View Results</label>
-                                            <div class="input-group">
-                                                <input type="password" class="form-control" 
-                                                       @bind-value="passwordInputs[question.Id]"
-                                                       @bind-value:event="oninput"
-                                                       @onkeypress="@(e => HandleKeyPress(e, question.Id))" />
-                                                <button class="btn btn-primary" @onclick="() => VerifyPassword(question.Id)">
-                                                    View Results
-                                                </button>
+                                    @if (!IsAuthorizedToSeeResults(currentEvent.Id, question.Id))
+                                    {
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <label class="form-label">Enter Password to View Results</label>
+                                                <div class="input-group">
+                                                    <input type="password" class="form-control" 
+                                                           @bind-value="passwordInputs[question.Id]"
+                                                           @bind-value:event="oninput"
+                                                           @onkeypress="@(e => HandleKeyPress(e, question.Id))" />
+                                                    <button class="btn btn-primary" @onclick="() => VerifyPassword(question.Id)">
+                                                        View Results
+                                                    </button>
+                                                </div>
+                                                @if (passwordErrors.ContainsKey(question.Id) && passwordErrors[question.Id])
+                                                {
+                                                    <div class="alert alert-danger mt-2">
+                                                        Incorrect password. Please try again.
+                                                    </div>
+                                                }
                                             </div>
-                                            @if (passwordErrors.ContainsKey(question.Id) && passwordErrors[question.Id])
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="card-body">
+                                            @{
+                                                var results = db.GetQuestionResults(currentEvent.Id, question.Id);
+                                                var totalVoters = db.GetAllPeople(true).Count;
+                                                var totalPossiblePoints = totalVoters * 3;
+                                            }
+                                            @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
                                             {
-                                                <div class="alert alert-danger mt-2">
-                                                    Incorrect password. Please try again.
+                                                var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                                                <div class="mb-3">
+                                                    <div class="d-flex justify-content-between">
+                                                        <strong>@result.MovieTitle</strong>
+                                                        <span>@result.TotalPoints points</span>
+                                                    </div>
+                                                    <div class="progress" style="height: 25px;">
+                                                        <div class="progress-bar" 
+                                                             role="progressbar" 
+                                                             style="width: @percentage%">
+                                                            @percentage.ToString("F1")%
+                                                        </div>
+                                                    </div>
+                                                    <small class="text-muted">
+                                                        (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                    </small>
                                                 </div>
                                             }
                                         </div>
-                                    </div>
+                                    }
                                 }
-                                else
-                                {
-                                    <div class="card-body">
-                                        @{
-                                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
-                                            var totalVoters = db.GetAllPeople(true).Count;
-                                            var totalPossiblePoints = totalVoters * 3;
-                                        }
-                                        @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
-                                        {
-                                            var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
-                                            <div class="mb-3">
-                                                <div class="d-flex justify-content-between">
-                                                    <strong>@result.MovieTitle</strong>
-                                                    <span>@result.TotalPoints points</span>
-                                                </div>
-                                                <div class="progress" style="height: 25px;">
-                                                    <div class="progress-bar" 
-                                                         role="progressbar" 
-                                                         style="width: @percentage%">
-                                                        @percentage.ToString("F1")%
-                                                    </div>
-                                                </div>
-                                                <small class="text-muted">
-                                                    (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
-                                                </small>
-                                            </div>
-                                        }
-                                    </div>
-                                }
-                            }
-                        </div>
+                            </div>
+                        }
+                        
+                        @if (currentEvent.Id != awardEvent.Id)
+                        {
+                            <hr class="my-4" />
+                        }
                     }
                 }
             </div>
@@ -304,6 +328,9 @@
     private HashSet<Guid> verifiedQuestions = new HashSet<Guid>();
     private Dictionary<Guid, bool> passwordErrors = new Dictionary<Guid, bool>();
 
+    private List<AwardEvent> pastAwardEvents = new List<AwardEvent>();
+    private Dictionary<string, bool> showPastResultsDict = new Dictionary<string, bool>();
+
     protected override async Task OnInitializedAsync()
     {
         awardEvent = db.GetAwardEventForDate(CurrentDate);
@@ -324,12 +351,36 @@
             .OrderBy(voter => voter.Name)
             .ToList();
 
+        // Always load questions
+        questions = db.GetActiveAwardQuestions();
+        
+        // Get all eligible movies for the award event
+        var currentPhaseNumber = GetCurrentPhaseNumber();
+        allMovies = db.GetAllMovieEvents()
+            .Where(m => 
+                m.PhaseNumber == currentPhaseNumber &&
+                !string.IsNullOrEmpty(m.Movie))
+            .ToList();
+        
+        // Load past award events
+        try
+        {
+            pastAwardEvents = db.GetPastAwardEvents(awardEvent.Id).ToList();
+            Console.WriteLine($"Found {pastAwardEvents.Count} past award events");
+            foreach (var past in pastAwardEvents)
+            {
+                Console.WriteLine($"Past event: {past.Id} - {past.StartDate:MMM yyyy}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading past award events: {ex.Message}");
+            pastAwardEvents = new List<AwardEvent>();
+        }
+
         selectedUser = await GetStoredUser();
         await LoadUserData();
 
-        // Get all questions
-        questions = db.GetActiveAwardQuestions();
-        
         // Initialize password inputs
         foreach (var question in questions)
         {
@@ -511,7 +562,7 @@
         showResultsDict.ContainsKey($"show_{questionId}") && showResultsDict[$"show_{questionId}"];
 
     private bool IsVerified(Guid questionId) => 
-        verifiedQuestions.Contains(questionId);
+        verifiedQuestions.Contains(questionId) || !IsCurrentAwardEvent();
 
     private void ToggleCategoryResults(Guid questionId)
     {
@@ -519,5 +570,98 @@
         if (!showResultsDict.ContainsKey(key))
             showResultsDict[key] = false;
         showResultsDict[key] = !showResultsDict[key];
+    }
+
+    // Add a helper method to determine the current phase number
+    private int GetCurrentPhaseNumber()
+    {
+        // Get the current phase based on the award event date
+        var phases = db.GetAllPhases().OrderBy(p => p.Number).ToList();
+        
+        // The award event happens after a phase, so find the phase that ends right before
+        // the award event starts
+        var relevantPhase = phases
+            .LastOrDefault(p => p.EndDate < awardEvent.StartDate);
+        
+        if (relevantPhase != null)
+        {
+            // The next phase after this one would be the current phase for the award event
+            return relevantPhase.Number + 1;
+        }
+        
+        // If no relevant phase found, default to phase 1
+        return 1;
+    }
+
+    private bool IsCurrentAwardEvent()
+    {
+        // If the award event's end date is in the future, it's the current event
+        return awardEvent != null && awardEvent.EndDate >= DateTime.UtcNow;
+    }
+
+    // Add methods to handle past award events
+    private bool IsPastResultShowing(Guid eventId, Guid questionId)
+    {
+        var key = $"past_{eventId}_{questionId}";
+        return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
+    }
+
+    private void TogglePastResults(Guid eventId, Guid questionId)
+    {
+        var key = $"past_{eventId}_{questionId}";
+        if (!showPastResultsDict.ContainsKey(key))
+            showPastResultsDict[key] = false;
+        
+        showPastResultsDict[key] = !showPastResultsDict[key];
+    }
+
+    private bool IsEventResultShowing(Guid eventId, Guid questionId, bool isPastEvent)
+    {
+        if (isPastEvent)
+        {
+            var key = $"past_{eventId}_{questionId}";
+            return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
+        }
+        else
+        {
+            return IsShowingResults(questionId);
+        }
+    }
+
+    private void ToggleEventResults(Guid eventId, Guid questionId, bool isPastEvent)
+    {
+        if (isPastEvent)
+        {
+            var key = $"past_{eventId}_{questionId}";
+            if (!showPastResultsDict.ContainsKey(key))
+                showPastResultsDict[key] = false;
+            
+            showPastResultsDict[key] = !showPastResultsDict[key];
+        }
+        else
+        {
+            ToggleCategoryResults(questionId);
+        }
+    }
+
+    private bool IsAuthorizedToSeeResults(Guid eventId, Guid questionId)
+    {
+        // Past events don't need password
+        if (eventId != awardEvent.Id)
+            return true;
+        
+        // Current event needs password unless already verified
+        return verifiedQuestions.Contains(questionId) || !IsCurrentAwardEvent();
+    }
+
+    private List<AwardEvent> GetAllAwardEvents()
+    {
+        // Get all award events, with current one first, then past ones
+        var allEvents = new List<AwardEvent> { awardEvent };
+        
+        // Add all past events
+        allEvents.AddRange(pastAwardEvents);
+        
+        return allEvents;
     }
 }

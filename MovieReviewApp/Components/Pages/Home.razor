@@ -2,6 +2,7 @@
 @using MovieReviewApp.Components.Partials
 @using MovieReviewApp.Extensions
 @using MovieReviewApp.Services
+@attribute [StreamRendering]
 
 <PageTitle>Movie Review</PageTitle>
 
@@ -122,6 +123,26 @@
                             }
                         }
                     }
+                </div>
+            </div>
+        </div>
+    }
+
+    @{
+        var previousAwardEvent = GetPreviousAwardEvent();
+    }
+
+    @if (previousAwardEvent != null)
+    {
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Previous Awards (@previousAwardEvent.StartDate.ToString("MMMM yyyy"))</h5>
+                    </div>
+                    <div class="card-body">
+                        <AwardResultsDisplay AwardEventId="@previousAwardEvent.Id" />
+                    </div>
                 </div>
             </div>
         </div>

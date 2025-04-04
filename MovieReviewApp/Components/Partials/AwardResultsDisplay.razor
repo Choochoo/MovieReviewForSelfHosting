@@ -1,0 +1,108 @@
+@using MovieReviewApp.Database
+@using MovieReviewApp.Models
+@inject MongoDb db
+
+<div class="award-results">
+    @if (awardEvent != null)
+    {
+        @foreach (var question in questions)
+        {
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">@question.Question</h6>
+                    <button class="btn btn-sm btn-secondary" @onclick="() => ToggleResults(question.Id)">
+                        @(IsShowingResults(question.Id) ? "Hide" : "Show") Results
+                    </button>
+                </div>
+                
+                @if (IsShowingResults(question.Id))
+                {
+                    <div class="card-body">
+                        @{
+                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
+                            var totalVoters = db.GetAllPeople(true).Count;
+                            var totalPossiblePoints = totalVoters * 3;
+                        }
+                        @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
+                        {
+                            var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between">
+                                    <strong>@result.MovieTitle</strong>
+                                    <span>@result.TotalPoints points</span>
+                                </div>
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar" 
+                                         role="progressbar" 
+                                         style="width: @percentage%">
+                                        @percentage.ToString("F1")%
+                                    </div>
+                                </div>
+                                <small class="text-muted">
+                                    (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                </small>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid AwardEventId { get; set; }
+
+    private AwardEvent awardEvent;
+    private List<AwardQuestion> questions = new List<AwardQuestion>();
+    private Dictionary<string, bool> showResultsDict = new Dictionary<string, bool>();
+
+    protected override void OnInitialized()
+    {
+        LoadAwardEvent();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (awardEvent?.Id != AwardEventId)
+        {
+            LoadAwardEvent();
+        }
+    }
+
+    private void LoadAwardEvent()
+    {
+        // Get the award event by ID using the database method
+        awardEvent = db.GetAwardEventById(AwardEventId);
+
+        if (awardEvent != null)
+        {
+            // Get all questions from this award event
+            questions = db.GetActiveAwardQuestions()
+                .Where(q => awardEvent.Questions.Contains(q.Id))
+                .ToList();
+
+            // Initialize results dictionary
+            foreach (var question in questions)
+            {
+                if (!showResultsDict.ContainsKey($"show_{question.Id}"))
+                {
+                    showResultsDict[$"show_{question.Id}"] = false;
+                }
+            }
+        }
+    }
+
+    private bool IsShowingResults(Guid questionId) => 
+        showResultsDict.ContainsKey($"show_{questionId}") && showResultsDict[$"show_{questionId}"];
+
+    private void ToggleResults(Guid questionId)
+    {
+        var key = $"show_{questionId}";
+        if (!showResultsDict.ContainsKey(key))
+            showResultsDict[key] = false;
+        
+        showResultsDict[key] = !showResultsDict[key];
+    }
+} 

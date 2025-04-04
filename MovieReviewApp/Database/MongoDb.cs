@@ -557,6 +557,53 @@ namespace MovieReviewApp.Database
         public void AddPhase(Phase phase) => 
             Phases.InsertOne(phase);
 
+        public IEnumerable<AwardEvent> GetPastAwardEvents(Guid currentEventId)
+        {
+            try
+            {
+                // Return all award events except the current one, sorted by most recent first
+                var filter = Builders<AwardEvent>.Filter.Ne(e => e.Id, currentEventId);
+                var sort = Builders<AwardEvent>.Sort.Descending(e => e.EndDate);
+                
+                var results = AwardEvents.Find(filter).Sort(sort).ToList();
+                Console.WriteLine($"GetPastAwardEvents found {results.Count} past events");
+                return results;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetPastAwardEvents: {ex.Message}");
+                return new List<AwardEvent>();
+            }
+        }
+
+        public AwardEvent GetAwardEventByFilter(FilterDefinition<AwardEvent> filter)
+        {
+            try
+            {
+                var result = AwardEvents.Find(filter).FirstOrDefault();
+                if (result == null)
+                {
+                    Console.WriteLine("No award event found matching filter");
+                }
+                else
+                {
+                    Console.WriteLine($"Found award event: {result.Id}, {result.StartDate:yyyy-MM-dd}");
+                }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetAwardEventByFilter: {ex.Message}");
+                return null;
+            }
+        }
+
+        public AwardEvent GetAwardEventById(Guid awardEventId)
+        {
+            var filter = Builders<AwardEvent>.Filter.Eq(e => e.Id, awardEventId);
+            return AwardEvents.Find(filter).FirstOrDefault();
+        }
+
     }
 
     // Model for voter profiles
