@@ -1,0 +1,36 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  
+  // API Keys - These are now loaded from secure storage
+  // Run the app once to set up your configuration securely
+  "TMDB": {
+    "ApiKey": "CONFIGURED_VIA_SECURE_SETUP"
+  },
+  "Gladia": {
+    "ApiKey": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL"
+  },
+  
+  // Database - Connection strings configured via secure setup
+  "MongoDB": {
+    "ConnectionString": "CONFIGURED_VIA_SECURE_SETUP",
+    "KidConnectionString": "CONFIGURED_VIA_SECURE_SETUP"
+  },
+  
+  // Facebook Integration - Configured via secure setup
+  "Facebook": {
+    "AdultChatUrl": "CONFIGURED_VIA_SECURE_SETUP",
+    "KidChatUrl": "CONFIGURED_VIA_SECURE_SETUP"
+  },
+  
+  // App Settings
+  "App": {
+    "Name": "Movie Review App",
+    "DefaultEnvironment": "Adult"
+  }
+}

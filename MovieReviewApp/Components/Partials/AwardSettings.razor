@@ -1,7 +1,7 @@
 @using MovieReviewApp.Database
 @using MovieReviewApp.Models
 
-@inject MongoDb db
+@inject MovieReviewService movieReviewService
 @inject ILogger<AwardSettings> Logger
 
 <h3 class="section-title">Award Settings</h3>
@@ -22,12 +22,6 @@
                 <input type="number" class="form-control form-control-sm" @bind="settings.PhasesBeforeAward" min="1" />
             </div>
 
-            <div class="award-option">
-                <input class="form-check-input" type="checkbox" @bind="settings.ShowResultsDuringVoting" id="showResults">
-                <label class="form-check-label" for="showResults">
-                    Show Results During Voting
-                </label>
-            </div>
         </div>
 
         <div class="questions-section">
@@ -321,8 +315,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        settings = db.GetAwardSettings();
-        questions = db.GetActiveAwardQuestions()
+        settings = movieReviewService.GetAwardSettings();
+        questions = movieReviewService.GetActiveAwardQuestions()
             .Where(q => q.Question != DEFAULT_QUESTION)
             .ToList();
     }
@@ -360,7 +354,7 @@
 
             // First save the AwardSettings
             var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
-            db.AddOrUpdateSetting(new Setting
+            movieReviewService.AddOrUpdateSetting(new Setting
                 {
                     Id = Guid.NewGuid(),
                     Key = "AwardSettings",
@@ -368,12 +362,12 @@
                 });
 
             // Delete any existing default questions in the database
-            db.DeleteDefaultQuestions();
+            movieReviewService.DeleteDefaultQuestions();
 
             // Delete questions that were removed
             foreach (var questionId in questionsToDelete)
             {
-                db.DeleteAwardQuestion(questionId);
+                movieReviewService.DeleteAwardQuestion(questionId);
             }
 
             // Then save each valid question
@@ -386,7 +380,7 @@
                     {
                         question.Id = Guid.NewGuid();
                     }
-                    db.AddOrUpdateAwardQuestion(question);
+                    movieReviewService.AddOrUpdateAwardQuestion(question);
                 }
             }
 

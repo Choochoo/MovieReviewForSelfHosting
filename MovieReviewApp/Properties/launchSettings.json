@@ -9,25 +9,15 @@
       }
     },
   "profiles": {
-    "http Adult": {
+    "Default Instance": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:5212",
+      "applicationUrl": "http://localhost:5000",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "AUDIENCE": "Adult"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
-    },
-    "http Kid": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "applicationUrl": "http://localhost:5212",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "AUDIENCE": "Kid"
-      }
+    }
     }
   }
   }

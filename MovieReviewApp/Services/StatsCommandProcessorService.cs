@@ -8,13 +8,13 @@ namespace MovieReviewApp.Services
 {
     public class StatsCommandProcessorService
     {
-        [Inject]
-        private MongoDb db { get; set; } = default!;
-        private readonly StatsCommandHandler statsCommandHandler;
+        private readonly MovieReviewService _movieReviewService;
+        private readonly StatsCommandHandler _statsCommandHandler;
 
-        public StatsCommandProcessorService(string webRootPath)
+        public StatsCommandProcessorService(string webRootPath, MovieReviewService movieReviewService)
         {
-            statsCommandHandler = new StatsCommandHandler(webRootPath);
+            _movieReviewService = movieReviewService;
+            _statsCommandHandler = new StatsCommandHandler(webRootPath, movieReviewService);
         }
 
         public async Task<List<StatsCommand>> ProcessCommands(string folderName, List<string> commands)
@@ -29,7 +29,7 @@ namespace MovieReviewApp.Services
                 if (commandType.HasValue)
                 {
                     // Execute the command using the command type
-                    var result = await statsCommandHandler.ExecuteCommand(folderName, commandType.Value);
+                    var result = await _statsCommandHandler.ExecuteCommand(folderName, commandType.Value);
                     var commandResult = new StatsCommand
                     {
                         Command = command,
@@ -37,7 +37,7 @@ namespace MovieReviewApp.Services
                         ProcessedDate = DateProvider.Now,
                         FolderName = folderName
                     };
-                    db.AddStatsCommand(commandResult);
+                    _movieReviewService.AddStatsCommand(commandResult);
                     results.Add(commandResult);
                 }
                 else
@@ -84,7 +84,7 @@ namespace MovieReviewApp.Services
             };
 
             // Save the result (this could be a database operation)
-            db.AddStatsCommand(statsCommand);
+            _movieReviewService.AddStatsCommand(statsCommand);
 
             await Task.CompletedTask;
         }

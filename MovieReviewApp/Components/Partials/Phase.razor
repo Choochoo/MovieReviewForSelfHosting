@@ -1,11 +1,12 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
-@inject MongoDb db
+@inject MovieReviewService movieReviewService
 @inject HttpClient Http
 @using MovieReviewApp.Services
 @using Newtonsoft.Json.Linq
 @inject IConfiguration Configuration
 @inject MessengerService MessengerService
+@inject SecretsManager SecretsManager
 
 @if (MovieEvent != null)
 {
@@ -199,10 +200,10 @@ else
     {
         try
         {
-            _apiKey = "18016340cc15db531536fa0eb3d77712";
+            _apiKey = SecretsManager.GetSecret("TMDB:ApiKey") ?? Configuration["TMDB:ApiKey"] ?? "";
             if (string.IsNullOrEmpty(_apiKey))
             {
-                throw new Exception("API key not found in configuration");
+                throw new Exception("TMDB API key not found in configuration");
             }
         }
         catch (Exception ex)
@@ -315,7 +316,7 @@ else
                     try
                     {
                         MovieEvent.Synopsis = Synopsis;
-                        await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                        await Task.Run(() => movieReviewService.AddOrUpdateMovieEvent(MovieEvent));
                     }
                     catch (Exception ex)
                     {
@@ -389,7 +390,7 @@ else
                 {
                     MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
                 }
-                await Task.Run(() => db.AddOrUpdateMovieEvent(MovieEvent));
+                await Task.Run(() => movieReviewService.AddOrUpdateMovieEvent(MovieEvent));
 
                 if (!string.IsNullOrEmpty(MovieEvent.Movie))
                 {

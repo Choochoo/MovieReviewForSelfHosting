@@ -2,6 +2,6 @@
 {
     public class FacebookSettings
     {
-        public string ChatUrl { get; set; }
+        public string? ChatUrl { get; set; }
     }
 }

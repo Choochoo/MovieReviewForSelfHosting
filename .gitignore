@@ -363,3 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 /MovieReviewApp/wwwroot/uploads/August-2024
 /MovieReviewApp/wwwroot/uploads
+/MovieReviewApp/.claude/.commands/simple-init.parallel.md

@@ -1,6 +1,6 @@
 @using MovieReviewApp.Database
 @using MovieReviewApp.Models
-@inject MongoDb db
+@inject MovieReviewService movieReviewService
 
 <div class="award-results">
     @if (awardEvent != null)
@@ -19,8 +19,8 @@
                 {
                     <div class="card-body">
                         @{
-                            var results = db.GetQuestionResults(awardEvent.Id, question.Id);
-                            var totalVoters = db.GetAllPeople(true).Count;
+                            var results = movieReviewService.GetQuestionResults(awardEvent.Id, question.Id);
+                            var totalVoters = movieReviewService.GetAllPeople(true).Count;
                             var totalPossiblePoints = totalVoters * 3;
                         }
                         @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
@@ -74,12 +74,12 @@
     private void LoadAwardEvent()
     {
         // Get the award event by ID using the database method
-        awardEvent = db.GetAwardEventById(AwardEventId);
+        awardEvent = movieReviewService.GetAwardEventById(AwardEventId);
 
         if (awardEvent != null)
         {
             // Get all questions from this award event
-            questions = db.GetActiveAwardQuestions()
+            questions = movieReviewService.GetActiveAwardQuestions()
                 .Where(q => awardEvent.Questions.Contains(q.Id))
                 .ToList();
 

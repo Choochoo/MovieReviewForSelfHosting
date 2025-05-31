@@ -1,0 +1,99 @@
+# Sensitive Configuration Files - NEVER COMMIT THESE
+appsettings.json
+appsettings.Development.json
+appsettings.Production.json
+
+# Claude AI Assistant Files
+.claude/
+CLAUDE.md
+claude.md
+
+# Secrets and API Keys
+secrets.json
+*.secrets
+*.key
+*.env
+
+# User Uploads and Personal Data
+wwwroot/uploads/
+*.txt
+*.m4a
+*.mp3
+*.wav
+*.mp4
+*.avi
+*.mov
+
+# Database Files
+*.db
+*.sqlite
+*.mdf
+*.ldf
+
+# Build Outputs
+bin/
+obj/
+out/
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Temporary folders
+tmp/
+temp/
+
+# Local History for Visual Studio Code
+.history/
+.claude/*

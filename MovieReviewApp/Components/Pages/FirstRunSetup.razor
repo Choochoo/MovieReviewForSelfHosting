@@ -1,0 +1,478 @@
+@page "/setup"
+@using MovieReviewApp.Services
+@inject SecretsManager SecretsManager
+@inject InstanceManager InstanceManager
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>First Run Setup - Movie Review App</PageTitle>
+
+<div class="setup-container">
+    <div class="setup-card">
+        <div class="setup-header">
+            <h1>🎬 Welcome to Movie Review App</h1>
+            <p>Setting up instance: <strong>@InstanceManager.InstanceName</strong></p>
+            <p>Let's get you set up! This is a one-time configuration to secure your API keys and settings.</p>
+        </div>
+
+        @if (!isComplete)
+        {
+            <div class="setup-form">
+                <div class="setup-section">
+                    <h3>🎬 Movie Database Configuration</h3>
+                    <p class="section-description">Required for movie information and posters.</p>
+                    
+                    <div class="form-group">
+                        <label for="tmdbKey">TMDB API Key *</label>
+                        <input type="password" id="tmdbKey" @bind="tmdbKey" class="form-control" 
+                               placeholder="Enter your TMDB API key" />
+                        <small class="help-text">Used for movie information and posters. <a href="https://www.themoviedb.org/settings/api" target="_blank">Get your free key here</a></small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🗄️ Database Configuration</h3>
+                    <p class="section-description">MongoDB connection string for storing your movie data.</p>
+                    
+                    <div class="form-group">
+                        <label for="mongoConnection">MongoDB Connection String *</label>
+                        <input type="text" id="mongoConnection" @bind="mongoConnection" class="form-control" 
+                               placeholder="mongodb://localhost:27017/moviereview" />
+                        <small class="help-text">Database for this instance's movie reviews and data</small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🎤 Audio Processing (Optional)</h3>
+                    <p class="section-description">Enable audio transcription features. Leave blank to disable audio processing.</p>
+                    
+                    <div class="form-group">
+                        <label for="gladiaKey">Gladia API Key</label>
+                        <input type="password" id="gladiaKey" @bind="gladiaKey" class="form-control" 
+                               placeholder="Enter your Gladia API key (optional)" />
+                        <small class="help-text">Used for audio transcription features. <a href="https://gladia.io/" target="_blank">Get your key here</a></small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>📱 Facebook Integration (Optional)</h3>
+                    <p class="section-description">Facebook Messenger URL for notifications. Leave blank to disable.</p>
+                    
+                    <div class="form-group">
+                        <label for="facebookChatUrl">Facebook Chat URL</label>
+                        <input type="url" id="facebookChatUrl" @bind="facebookChatUrl" class="form-control" 
+                               placeholder="https://www.facebook.com/messages/t/..." />
+                        <small class="help-text">Facebook Messenger chat URL for this instance's movie discussions</small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🎭 Instance Configuration</h3>
+                    
+                    <div class="form-group">
+                        <label for="displayName">Instance Display Name</label>
+                        <input type="text" id="displayName" @bind="displayName" class="form-control" 
+                               placeholder="@InstanceManager.InstanceName" />
+                        <small class="help-text">Friendly name for this instance (e.g., "Family Movie Night", "Work Film Club")</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="contentType">Content Type</label>
+                        <select id="contentType" @bind="contentType" class="form-control">
+                            <option value="General">General Content</option>
+                            <option value="Family">Family Friendly</option>
+                        </select>
+                        <small class="help-text">Determines default settings and content filtering preferences</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="port">Port Number</label>
+                        <input type="number" id="port" @bind="port" class="form-control" 
+                               placeholder="@currentConfig.Port" min="1000" max="65535" />
+                        <small class="help-text">Port this instance will run on (must be unique per instance)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <input type="text" id="description" @bind="description" class="form-control" 
+                               placeholder="Brief description of this instance..." />
+                        <small class="help-text">Optional description to help identify this instance</small>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> @errorMessage
+                    </div>
+                }
+                
+                @if (isSaving)
+                {
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Saving configuration...
+                    </div>
+                }
+
+                <div class="setup-actions">
+                    <button type="button" class="btn btn-primary btn-lg" @onclick="SaveSetup" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Setting up...</span>
+                        }
+                        else
+                        {
+                            <span>Complete Setup</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="setup-complete">
+                <div class="success-icon">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <h2>🎉 Setup Complete!</h2>
+                <p>Your Movie Review App instance "<strong>@InstanceManager.InstanceName</strong>" is ready to use!</p>
+                <p>Settings saved to:</p>
+                <code class="file-path">@InstanceManager.InstancePath</code>
+                
+                <div class="instance-summary">
+                    <h4>Instance Details:</h4>
+                    <ul>
+                        <li><strong>Instance:</strong> @InstanceManager.InstanceName</li>
+                        <li><strong>Display Name:</strong> @(string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName)</li>
+                        <li><strong>Content Type:</strong> @contentType</li>
+                        <li><strong>Port:</strong> @port</li>
+                        @if (!string.IsNullOrEmpty(description))
+                        {
+                            <li><strong>Description:</strong> @description</li>
+                        }
+                    </ul>
+                </div>
+                
+                <div class="setup-actions">
+                    <button class="btn btn-primary btn-lg" @onclick="GoToApp">
+                        Start Using the App
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .setup-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--background-primary);
+        padding: 2rem;
+    }
+
+    .setup-card {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 1rem;
+        padding: 3rem;
+        max-width: 600px;
+        width: 100%;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .setup-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .setup-header h1 {
+        margin-bottom: 1rem;
+        background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .setup-header p {
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+    }
+
+    .setup-section {
+        margin-bottom: 2rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .setup-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    .setup-section h3 {
+        color: var(--accent-primary);
+        margin-bottom: 0.5rem;
+        font-size: 1.25rem;
+    }
+
+    .section-description {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        color: var(--text-primary);
+        background-color: var(--background-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+    }
+
+    .help-text {
+        display: block;
+        margin-top: 0.25rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .help-text a {
+        color: var(--accent-primary);
+        text-decoration: none;
+    }
+
+    .help-text a:hover {
+        text-decoration: underline;
+    }
+
+    .setup-actions {
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    .btn-lg {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+        min-width: 200px;
+    }
+
+    .setup-complete {
+        text-align: center;
+    }
+
+    .success-icon {
+        font-size: 4rem;
+        color: var(--success-color);
+        margin-bottom: 1rem;
+    }
+
+    .file-path {
+        display: block;
+        background: var(--background-primary);
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+        margin: 1rem 0;
+        font-family: 'Courier New', monospace;
+        word-break: break-all;
+        color: var(--accent-primary);
+    }
+
+    .instance-summary {
+        background: var(--surface-hover);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+        margin: 1.5rem 0;
+    }
+
+    .instance-summary h4 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        color: var(--accent-primary);
+    }
+
+    .instance-summary ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .instance-summary li {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    .instance-summary li:last-child {
+        border-bottom: none;
+    }
+
+    .instance-summary strong {
+        color: var(--text-primary);
+        min-width: 120px;
+        display: inline-block;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .alert-danger {
+        background: rgba(255, 0, 128, 0.1);
+        border: 1px solid var(--error-color);
+        color: var(--error-color);
+    }
+
+    @@media (max-width: 768px) {
+        .setup-card {
+            padding: 2rem;
+            margin: 1rem;
+        }
+
+        .setup-container {
+            padding: 1rem;
+        }
+    }
+</style>
+
+@code {
+    private string tmdbKey = "";
+    private string mongoConnection = "";
+    private string gladiaKey = "";
+    private string facebookChatUrl = "";
+    private string displayName = "";
+    private string contentType = "General";
+    private int port = 5000;
+    private string description = "";
+    
+    private bool isSaving = false;
+    private bool isComplete = false;
+    private string errorMessage = "";
+    private InstanceConfig currentConfig = new();
+
+    protected override void OnInitialized()
+    {
+        // If setup is already complete, redirect to app
+        if (!SecretsManager.IsFirstRun)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        // Load current instance config for defaults
+        currentConfig = InstanceManager.GetInstanceConfig();
+        displayName = currentConfig.DisplayName;
+        contentType = currentConfig.Environment; // Map old Environment to new ContentType
+        port = currentConfig.Port;
+        description = currentConfig.Description;
+    }
+
+    private async Task SaveSetup()
+    {
+        Console.WriteLine("SaveSetup started");
+        isSaving = true;
+        errorMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"Validating: TMDB='{tmdbKey}', Mongo='{mongoConnection}'");
+            
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(tmdbKey) || 
+                string.IsNullOrWhiteSpace(mongoConnection))
+            {
+                errorMessage = "TMDB API key and MongoDB connection string are required.";
+                Console.WriteLine($"Validation failed: {errorMessage}");
+                return;
+            }
+
+            // Validate MongoDB connection string
+            if (!mongoConnection.StartsWith("mongodb://") && !mongoConnection.StartsWith("mongodb+srv://"))
+            {
+                errorMessage = "MongoDB connection string must start with 'mongodb://' or 'mongodb+srv://'";
+                return;
+            }
+
+            // Save all secrets
+            var secrets = new Dictionary<string, string>
+            {
+                ["TMDB:ApiKey"] = tmdbKey.Trim(),
+                ["MongoDB:ConnectionString"] = mongoConnection.Trim(),
+                ["Facebook:ChatUrl"] = facebookChatUrl.Trim()
+            };
+
+            // Add Gladia key only if provided
+            if (!string.IsNullOrWhiteSpace(gladiaKey))
+            {
+                secrets["Gladia:ApiKey"] = gladiaKey.Trim();
+            }
+
+            SecretsManager.SetSecrets(secrets);
+
+            // Save instance configuration
+            var instanceConfig = new InstanceConfig
+            {
+                InstanceName = InstanceManager.InstanceName,
+                DisplayName = string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName.Trim(),
+                Environment = contentType,
+                Port = port,
+                Description = description.Trim(),
+                CreatedDate = currentConfig.CreatedDate == default ? DateTime.UtcNow : currentConfig.CreatedDate,
+                LastUsed = DateTime.UtcNow
+            };
+
+            InstanceManager.SaveInstanceConfig(instanceConfig);
+            
+            Console.WriteLine("Setup completed successfully");
+            isComplete = true;
+            StateHasChanged();
+
+            // Small delay for better UX
+            await Task.Delay(500);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Setup failed with exception: {ex}");
+            errorMessage = $"Setup failed: {ex.Message}";
+        }
+        finally
+        {
+            Console.WriteLine("SaveSetup finished");
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToApp()
+    {
+        Navigation.NavigateTo("/");
+    }
+}

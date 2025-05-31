@@ -5,11 +5,20 @@
 @using MovieReviewApp.Enums
 @using MovieReviewApp.Handlers
 @using MovieReviewApp.Services
-@inject IConfiguration Configuration;
+@inject IConfiguration Configuration
+@inject IServiceProvider ServiceProvider
 
 <h4>Stats Commands</h4>
 
-<div class="form-group">
+@if (processorService == null)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        Stats command processing is not available. Please ensure your database is configured and the application is fully set up.
+    </div>
+}
+
+<div class="form-group" style="@(processorService == null ? "opacity: 0.5; pointer-events: none;" : "")">
     <div class="input-group mb-3">
         <!-- Checkboxes for selecting the commands -->
         @if (AllStatsCommands?.Any() ?? false)
@@ -108,7 +117,8 @@
 
         base.OnInitialized();
 
-        processorService = new StatsCommandProcessorService(WebHostEnvironment.WebRootPath);
+        // Try to get the stats processor service (may not be available during first-run setup)
+        processorService = ServiceProvider.GetService<StatsCommandProcessorService>();
 
         // Load all possible commands
         AllStatsCommands = Enum.GetValues(typeof(StatsCommandType))
@@ -141,6 +151,12 @@
         Processing = true;
         try
         {
+            if (processorService == null)
+            {
+                Error = "Stats command processor is not available. Please ensure the database is configured.";
+                return;
+            }
+
             // Loop through selected folders to process
             foreach (var folder in SelectedFolders)
             {

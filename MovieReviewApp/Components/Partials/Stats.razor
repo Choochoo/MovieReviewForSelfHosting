@@ -1,6 +1,7 @@
 ﻿@page "/discussions/stats"
 @using MovieReviewApp.Models
 @using MovieReviewApp.Database
+@using MovieReviewApp.Services
 
 <h3>Processed Stats Commands</h3>
 
@@ -39,7 +40,7 @@ else
 
 @code {
     [Inject]
-    private MongoDb db { get; set; } = default!;
+    private MovieReviewService movieReviewService { get; set; } = default!;
 
     private List<StatsCommand>? StatsCommands { get; set; }
 
@@ -51,6 +52,6 @@ else
     private void LoadAllStatsCommands()
     {
         // Load all processed stats commands from the database
-        StatsCommands = db.GetProcessedStatCommands();
+        StatsCommands = movieReviewService.GetProcessedStatCommands();
     }
 }

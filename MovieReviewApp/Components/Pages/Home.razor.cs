@@ -14,7 +14,7 @@ namespace MovieReviewApp.Components.Pages
         private IJSRuntime JS { get; set; } = default!;
 
         [Inject]
-        private MongoDb db { get; set; } = default!;
+        private MovieReviewService movieReviewService { get; set; } = default!;
 
         private List<SiteUpdate> RecentUpdates { get; set; } = new();
         private bool showUpdates = true;
@@ -25,7 +25,7 @@ namespace MovieReviewApp.Components.Pages
 
         // Cached properties
         private List<Setting> _settings;
-        private List<Setting> Settings => _settings ??= db.GetSettings();
+        private List<Setting> Settings => _settings ??= movieReviewService.GetSettings();
 
         private DateTime? _startDate;
         private DateTime StartDate
@@ -57,7 +57,7 @@ namespace MovieReviewApp.Components.Pages
         }
 
         private string[] _allNames;
-        private string[] AllNames => _allNames ??= db.GetAllPeople(RespectOrder)
+        private string[] AllNames => _allNames ??= movieReviewService.GetAllPeople(RespectOrder)
             .Select(x => x.Name)
             .Where(x => !string.IsNullOrEmpty(x))
             .ToArray();
@@ -69,14 +69,14 @@ namespace MovieReviewApp.Components.Pages
             {
                 if (_awardSettings == null)
                 {
-                    _awardSettings = db.GetAwardSettings();
+                    _awardSettings = movieReviewService.GetAwardSettings();
                 }
                 return _awardSettings;
             }
         }
 
         private List<MovieEvent> _existingEvents;
-        private List<MovieEvent> ExistingEvents => _existingEvents ??= db.GetAllMovieEvents().ToList();
+        private List<MovieEvent> ExistingEvents => _existingEvents ??= movieReviewService.GetAllMovieEvents().ToList();
 
         private bool? _isCurrentPhaseAwardPhase;
         public bool IsCurrentPhaseAwardPhase
@@ -85,7 +85,7 @@ namespace MovieReviewApp.Components.Pages
             {
                 if (!_isCurrentPhaseAwardPhase.HasValue)
                 {
-                    var currentAwardEvent = db.GetAwardEventForDate(DateProvider.Now);
+                    var currentAwardEvent = movieReviewService.GetAwardEventForDate(DateProvider.Now);
                     _isCurrentPhaseAwardPhase = currentAwardEvent != null;
                 }
                 return _isCurrentPhaseAwardPhase.Value;
@@ -94,7 +94,7 @@ namespace MovieReviewApp.Components.Pages
 
         // Add new cached property for phases
         private List<Phase> _dbPhases;
-        private List<Phase> DbPhases => _dbPhases ??= db.GetAllPhases().OrderBy(p => p.StartDate).ToList();
+        private List<Phase> DbPhases => _dbPhases ??= movieReviewService.GetAllPhases().OrderBy(p => p.StartDate).ToList();
 
         protected override void OnInitialized()
         {
@@ -249,7 +249,7 @@ namespace MovieReviewApp.Components.Pages
                     ? DateTime.UtcNow.AddDays(-1)
                     : DateTime.Parse(lastVisitStr);
 
-                RecentUpdates = db.GetRecentUpdates(lastVisit);
+                RecentUpdates = movieReviewService.GetRecentUpdates(lastVisit);
                 await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
 
                 if (RecentUpdates.Any())
@@ -323,7 +323,7 @@ namespace MovieReviewApp.Components.Pages
                     Builders<AwardEvent>.Filter.Lte(e => e.EndDate, awardMonthEnd)
                 );
                 
-                var previousAwardEvent = db.GetAwardEventByFilter(filter);
+                var previousAwardEvent = movieReviewService.GetAwardEventByFilter(filter);
                 if (previousAwardEvent == null)
                 {
                     Console.WriteLine("No award event found for previous phase");

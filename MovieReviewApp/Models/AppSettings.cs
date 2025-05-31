@@ -3,6 +3,7 @@
     public class AppSettings
     {
         public string Title { get; set; } = "";
-        public bool IsKid { get; set; } = false;
+        public string ContentType { get; set; } = "General"; // "General" or "Family"
+        public bool IsFamilyFriendly => ContentType.Equals("Family", StringComparison.OrdinalIgnoreCase);
     }
 }

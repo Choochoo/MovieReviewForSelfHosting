@@ -4,7 +4,7 @@
 @inject IOptions<AppSettings> AppSettings
 
 <div class="page">
-    <div class="sidebar @(AppSettings.Value.IsKid ? "sidebar-kid" : "sidebar-adult")">
+    <div class="sidebar @(AppSettings.Value.IsFamilyFriendly ? "sidebar-family" : "sidebar-general")">
         <NavMenu />
     </div>
     <main>
@@ -33,11 +33,11 @@
         z-index: 1000;
     }
 
-    .sidebar-kid {
+    .sidebar-family {
         background-image: linear-gradient(180deg, rgb(103, 5, 5) 0%, #473a06 70%);
     }
 
-    .sidebar-adult {
+    .sidebar-general {
         background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
     }
 

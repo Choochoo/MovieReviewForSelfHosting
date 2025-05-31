@@ -1,15 +1,15 @@
 // Settings.razor.cs
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using MovieReviewApp.Database;
 using MovieReviewApp.Models;
+using MovieReviewApp.Services;
 
 namespace MovieReviewApp.Components.Pages
 {
     public partial class Settings
     {
         [Inject]
-        private MongoDb db { get; set; } = default!;
+        private MovieReviewService movieReviewService { get; set; } = default!;
         public List<Person>? People { get; set; }
         public DateTime? StartDate { get; set; }
         public int? TimeCount;
@@ -26,7 +26,7 @@ namespace MovieReviewApp.Components.Pages
 
         protected override void OnInitialized()
         {
-            settings = db.GetSettings();
+            settings = movieReviewService.GetSettings();
             RespectOrder = false; // default value
             var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
             if (setting != null && !string.IsNullOrEmpty(setting.Value))
@@ -34,7 +34,7 @@ namespace MovieReviewApp.Components.Pages
             StartDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
             TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
             TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
-            People = db.GetAllPeople(RespectOrder);
+            People = movieReviewService.GetAllPeople(RespectOrder);
             EnsureValidOrder();
         }
 
@@ -53,19 +53,19 @@ namespace MovieReviewApp.Components.Pages
                 if (orderedPeople[i].Order != i + 1)
                 {
                     orderedPeople[i].Order = i + 1;
-                    db.AddOrUpdatePerson(orderedPeople[i]);
+                    movieReviewService.AddOrUpdatePerson(orderedPeople[i]);
                 }
             }
 
-            People = db.GetAllPeople(RespectOrder);
+            People = movieReviewService.GetAllPeople(RespectOrder);
         }
 
         private void AddPerson()
         {
             var newPersonOrder = (People?.Count ?? 0) + 1;
-            db.AddPerson(new Person { Name = NewPerson, Order = newPersonOrder });
+            movieReviewService.AddPerson(new Person { Name = NewPerson, Order = newPersonOrder });
             NewPerson = "New Person";
-            People = db.GetAllPeople(RespectOrder);
+            People = movieReviewService.GetAllPeople(RespectOrder);
         }
 
         private void Edit(Person person)
@@ -84,8 +84,8 @@ namespace MovieReviewApp.Components.Pages
         {
             if (person != null)
             {
-                db.DeletePerson(person);
-                People = db.GetAllPeople(RespectOrder);
+                movieReviewService.DeletePerson(person);
+                People = movieReviewService.GetAllPeople(RespectOrder);
                 EnsureValidOrder(); // Reorder after deletion
             }
         }
@@ -94,7 +94,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (person != null)
             {
-                db.AddOrUpdatePerson(person);
+                movieReviewService.AddOrUpdatePerson(person);
                 this.Cancel(person);
             }
         }
@@ -103,18 +103,18 @@ namespace MovieReviewApp.Components.Pages
         {
             var dateSetting = settings.First(x => x.Key == "StartDate");
             dateSetting.Value = StartDate.ToString();
-            db.AddOrUpdateSetting(dateSetting);
+            movieReviewService.AddOrUpdateSetting(dateSetting);
         }
 
         private void SaveOccurance(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
         {
             var timeCountSetting = settings.First(x => x.Key == "TimeCount");
             timeCountSetting.Value = TimeCount.ToString();
-            db.AddOrUpdateSetting(timeCountSetting);
+            movieReviewService.AddOrUpdateSetting(timeCountSetting);
 
             var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
             timePeriodSetting.Value = TimePeriod;
-            db.AddOrUpdateSetting(timePeriodSetting);
+            movieReviewService.AddOrUpdateSetting(timePeriodSetting);
         }
 
         private void SaveRespectOrder()
@@ -129,8 +129,8 @@ namespace MovieReviewApp.Components.Pages
             {
                 orderSetting.Value = RespectOrder.ToString();
             }
-            db.AddOrUpdateSetting(orderSetting);
-            People = db.GetAllPeople(RespectOrder);
+            movieReviewService.AddOrUpdateSetting(orderSetting);
+            People = movieReviewService.GetAllPeople(RespectOrder);
         }
 
         private void SaveGeneralSettings()
@@ -146,25 +146,25 @@ namespace MovieReviewApp.Components.Pages
             {
                 orderSetting.Value = RespectOrder.ToString();
             }
-            db.AddOrUpdateSetting(orderSetting);
+            movieReviewService.AddOrUpdateSetting(orderSetting);
 
             // Save Start Date
             var dateSetting = settings.First(x => x.Key == "StartDate");
             dateSetting.Value = StartDate.ToString();
-            db.AddOrUpdateSetting(dateSetting);
+            movieReviewService.AddOrUpdateSetting(dateSetting);
 
             // Save Time Count
             var timeCountSetting = settings.First(x => x.Key == "TimeCount");
             timeCountSetting.Value = TimeCount.ToString();
-            db.AddOrUpdateSetting(timeCountSetting);
+            movieReviewService.AddOrUpdateSetting(timeCountSetting);
 
             // Save Time Period
             var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
             timePeriodSetting.Value = TimePeriod;
-            db.AddOrUpdateSetting(timePeriodSetting);
+            movieReviewService.AddOrUpdateSetting(timePeriodSetting);
 
             // Refresh people list with updated respect order setting
-            People = db.GetAllPeople(RespectOrder);
+            People = movieReviewService.GetAllPeople(RespectOrder);
         }
 
         private async Task MoveUp(Person person)
@@ -178,10 +178,10 @@ namespace MovieReviewApp.Components.Pages
                     personAbove.Order = person.Order;
                     person.Order = tempOrder;
 
-                    db.AddOrUpdatePerson(person);
-                    db.AddOrUpdatePerson(personAbove);
+                    movieReviewService.AddOrUpdatePerson(person);
+                    movieReviewService.AddOrUpdatePerson(personAbove);
 
-                    People = db.GetAllPeople(RespectOrder);
+                    People = movieReviewService.GetAllPeople(RespectOrder);
                 }
             }
         }
@@ -197,10 +197,10 @@ namespace MovieReviewApp.Components.Pages
                     personBelow.Order = person.Order;
                     person.Order = tempOrder;
 
-                    db.AddOrUpdatePerson(person);
-                    db.AddOrUpdatePerson(personBelow);
+                    movieReviewService.AddOrUpdatePerson(person);
+                    movieReviewService.AddOrUpdatePerson(personBelow);
 
-                    People = db.GetAllPeople(RespectOrder);
+                    People = movieReviewService.GetAllPeople(RespectOrder);
                 }
             }
         }

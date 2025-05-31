@@ -1,7 +1,7 @@
 ﻿@using MovieReviewApp.Database
 @using MovieReviewApp.Models
 @using MovieReviewApp.Extensions
-@inject MongoDb db
+@inject MovieReviewService movieReviewService
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IJSRuntime JS
 
@@ -206,7 +206,7 @@
                             }
                         </h6>
                         
-                        @foreach (var question in db.GetActiveAwardQuestions())
+                        @foreach (var question in movieReviewService.GetActiveAwardQuestions())
                         {
                             var isPastEvent = currentEvent.Id != awardEvent.Id;
                             var questionKey = isPastEvent 
@@ -251,8 +251,8 @@
                                     {
                                         <div class="card-body">
                                             @{
-                                                var results = db.GetQuestionResults(currentEvent.Id, question.Id);
-                                                var totalVoters = db.GetAllPeople(true).Count;
+                                                var results = movieReviewService.GetQuestionResults(currentEvent.Id, question.Id);
+                                                var totalVoters = movieReviewService.GetAllPeople(true).Count;
                                                 var totalPossiblePoints = totalVoters * 3;
                                             }
                                             @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
@@ -333,12 +333,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        awardEvent = db.GetAwardEventForDate(CurrentDate);
+        awardEvent = movieReviewService.GetAwardEventForDate(CurrentDate);
         if (awardEvent == null) return;
 
         // Get all voters and votes
-        allVoters = db.GetAllPeople(true);
-        var allVotesForEvent = await db.GetVotesForAwardEvent(awardEvent.Id);
+        allVoters = movieReviewService.GetAllPeople(true);
+        var allVotesForEvent = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
         
         // Group votes by voter and count them
         voterVoteCounts = allVotesForEvent
@@ -352,11 +352,11 @@
             .ToList();
 
         // Always load questions
-        questions = db.GetActiveAwardQuestions();
+        questions = movieReviewService.GetActiveAwardQuestions();
         
         // Get all eligible movies for the award event
         var currentPhaseNumber = GetCurrentPhaseNumber();
-        allMovies = db.GetAllMovieEvents()
+        allMovies = movieReviewService.GetAllMovieEvents()
             .Where(m => 
                 m.PhaseNumber == currentPhaseNumber &&
                 !string.IsNullOrEmpty(m.Movie))
@@ -365,7 +365,7 @@
         // Load past award events
         try
         {
-            pastAwardEvents = db.GetPastAwardEvents(awardEvent.Id).ToList();
+            pastAwardEvents = movieReviewService.GetPastAwardEvents(awardEvent.Id).ToList();
             Console.WriteLine($"Found {pastAwardEvents.Count} past award events");
             foreach (var past in pastAwardEvents)
             {
@@ -390,18 +390,18 @@
 
     private async Task LoadUserData()
     {
-        existingUsers = await db.GetAvailableVoters(awardEvent.Id);
+        existingUsers = await movieReviewService.GetAvailableVoters(awardEvent.Id);
 
         if (!string.IsNullOrEmpty(selectedUser))
         {
-            remainingVotes = await db.GetRemainingVotesForUser(selectedUser, awardEvent.Id);
-            var availableQuestions = await db.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
+            remainingVotes = await movieReviewService.GetRemainingVotesForUser(selectedUser, awardEvent.Id);
+            var availableQuestions = await movieReviewService.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
             questions = availableQuestions.Select(x => x.Question).ToList();
-            allMovies = db.GetAllMovieEvents()
+            allMovies = movieReviewService.GetAllMovieEvents()
                 .Where(m => m.EndDate < awardEvent.EndDate && !string.IsNullOrEmpty(m.Movie))
                 .ToList();
-            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
-            awardSettings = db.GetAwardSettings();
+            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
+            awardSettings = movieReviewService.GetAwardSettings();
             selectedMovies = questions.ToDictionary(q => q.Id, _ => Guid.Empty);
         }
     }
@@ -511,9 +511,9 @@
                 Points = points
             };
 
-        if (await db.AddVote(vote))
+        if (await movieReviewService.AddVote(vote))
         {
-            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
+            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
             selectedMovies[questionId] = Guid.Empty;
             await LoadUserData();
             StateHasChanged();
@@ -525,10 +525,10 @@
         var confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
         if (!confirmDelete) return;
 
-        if (await db.RemoveVote(voteId))
+        if (await movieReviewService.RemoveVote(voteId))
         {
             // Refresh votes and remaining votes
-            votes = await db.GetVotesForAwardEvent(awardEvent.Id);
+            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
             await LoadUserData();
             StateHasChanged();
         }
@@ -576,7 +576,7 @@
     private int GetCurrentPhaseNumber()
     {
         // Get the current phase based on the award event date
-        var phases = db.GetAllPhases().OrderBy(p => p.Number).ToList();
+        var phases = movieReviewService.GetAllPhases().OrderBy(p => p.Number).ToList();
         
         // The award event happens after a phase, so find the phase that ends right before
         // the award event starts
