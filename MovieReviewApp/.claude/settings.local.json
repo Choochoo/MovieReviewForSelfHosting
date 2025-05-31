@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(git worktree add:*)",
+      "Bash(cp:*)",
+      "Bash(dotnet restore)",
+      "Bash(git worktree:*)",
+      "WebFetch(domain:plex.tv)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git branch:*)",
+      "Bash(rm:*)",
+      "Bash(dotnet build)"
+    ],
+    "deny": []
+  }
+}

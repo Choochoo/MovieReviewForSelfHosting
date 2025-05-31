@@ -3,40 +3,541 @@
 
 <PageTitle>History</PageTitle>
 
-<h1>History</h1>
+<div class="history-header">
+    <h1>Movie History</h1>
+    <div class="view-toggle">
+        <button class="btn btn-sm @(isGridView ? "btn-primary" : "btn-secondary")" 
+                @onclick="() => ToggleView(true)">
+            <i class="bi bi-grid-3x3-gap"></i> Theater View
+        </button>
+        <button class="btn btn-sm @(!isGridView ? "btn-primary" : "btn-secondary")" 
+                @onclick="() => ToggleView(false)">
+            <i class="bi bi-list-ul"></i> List View
+        </button>
+    </div>
+</div>
 
 @if (Pastevents == null)
 {
-    <p><em>Loading...</em></p>
+    <div class="loading-state">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Loading movie history...</p>
+    </div>
+}
+else if (isGridView)
+{
+    <!-- Theater Grid View -->
+    <div class="theater-grid">
+        @foreach (var movieEvent in SortedMovieEvents)
+        {
+            @if (movieEvent != null && !string.IsNullOrEmpty(movieEvent.Movie))
+            {
+                <div class="movie-card" @onclick="() => ShowMovieDetails(movieEvent)">
+                    <div class="movie-poster-container">
+                        @if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
+                        {
+                            <img src="@movieEvent.PosterUrl" 
+                                 alt="@movieEvent.Movie poster" 
+                                 class="movie-poster"
+                                 onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                        }
+                        else
+                        {
+                            <div class="no-poster">
+                                <i class="bi bi-film"></i>
+                                <span>No Poster</span>
+                            </div>
+                        }
+                        <div class="movie-overlay">
+                            <div class="movie-info">
+                                <h6>@movieEvent.Movie</h6>
+                                <p class="movie-date">@movieEvent.StartDate.ToString("MMMM yyyy")</p>
+                                <p class="movie-person">@movieEvent.Person</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th style="width:80px">Cycle #</th>
-                <th style="width:120px;">Date</th>
-                <th>Person</th>
-                <th>Movie</th>
-                <th>IMBd</th>
-                <th>Reason</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var pastevent in Pastevents)
-            {
-                @if (pastevent != null)
+    <!-- Original List View -->
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th style="width:80px">Cycle #</th>
+                    <th style="width:120px;">Date</th>
+                    <th>Person</th>
+                    <th>Movie</th>
+                    <th>IMDb</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var pastevent in Pastevents)
                 {
-                    <tr>
-                        <td style="text-align:center">@pastevent.PhaseNumber</td>
-                        <td>@pastevent.StartDate.ToString("MMMM yyyy") </td>
-                        <td>@pastevent.Person</td>
-                        <td>@pastevent.Movie</td>
-                        <td><a href="@pastevent.IMDb" target="_blank">link</a></td>
-                        <td>@pastevent.Reasoning</td>
-                    </tr>
+                    @if (pastevent != null)
+                    {
+                        <tr>
+                            <td style="text-align:center">@pastevent.PhaseNumber</td>
+                            <td>@pastevent.StartDate.ToString("MMMM yyyy")</td>
+                            <td>@pastevent.Person</td>
+                            <td>@pastevent.Movie</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(pastevent.IMDb))
+                                {
+                                    <a href="@pastevent.IMDb" target="_blank">link</a>
+                                }
+                            </td>
+                            <td>@pastevent.Reasoning</td>
+                        </tr>
+                    }
                 }
-            }
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    </div>
 }
+
+<!-- Movie Details Modal -->
+@if (selectedMovie != null)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="movie-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>@selectedMovie.Movie</h3>
+                <button class="btn-close" @onclick="CloseModal">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-content-grid">
+                    <div class="modal-poster">
+                        @if (!string.IsNullOrEmpty(selectedMovie.PosterUrl))
+                        {
+                            <img src="@selectedMovie.PosterUrl" 
+                                 alt="@selectedMovie.Movie poster" 
+                                 class="full-poster"
+                                 onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                        }
+                        else
+                        {
+                            <div class="no-poster-large">
+                                <i class="bi bi-film"></i>
+                                <span>No Poster Available</span>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-details">
+                        <div class="detail-row">
+                            <strong>Date:</strong> @selectedMovie.StartDate.ToString("MMMM yyyy")
+                        </div>
+                        <div class="detail-row">
+                            <strong>Chosen by:</strong> @selectedMovie.Person
+                        </div>
+                        @if (selectedMovie.PhaseNumber.HasValue)
+                        {
+                            <div class="detail-row">
+                                <strong>Cycle #:</strong> @selectedMovie.PhaseNumber
+                            </div>
+                        }
+                        @if (selectedMovie.MeetupTime.HasValue)
+                        {
+                            <div class="detail-row">
+                                <strong>Meetup:</strong> @selectedMovie.MeetupTime?.ToString("dddd M/d/yyyy h:mm tt")
+                            </div>
+                        }
+                        @if (selectedMovie.AlreadySeen && selectedMovie.SeenDate.HasValue)
+                        {
+                            <div class="detail-row">
+                                <strong>Previously seen:</strong> @selectedMovie.SeenDate.Value.Year
+                            </div>
+                        }
+                        else if (selectedMovie.AlreadySeen)
+                        {
+                            <div class="detail-row">
+                                <strong>Status:</strong> Previously seen
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="detail-row">
+                                <strong>Status:</strong> First time viewing
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedMovie.IMDb))
+                        {
+                            <div class="detail-row">
+                                <strong>IMDb:</strong> 
+                                <a href="@selectedMovie.IMDb" target="_blank" rel="noopener noreferrer" class="imdb-link">
+                                    View on IMDb <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedMovie.Reasoning))
+                        {
+                            <div class="detail-section">
+                                <strong>Reason for choosing:</strong>
+                                <p class="reasoning-text">@selectedMovie.Reasoning</p>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(selectedMovie.Synopsis))
+                        {
+                            <div class="detail-section">
+                                <strong>Synopsis:</strong>
+                                <p class="synopsis-text">@selectedMovie.Synopsis</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--accent-primary);
+    }
+
+    .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .loading-state {
+        text-align: center;
+        padding: 4rem 0;
+        color: var(--text-secondary);
+    }
+
+    .loading-state .spinner-border {
+        margin-bottom: 1rem;
+    }
+
+    /* Theater Grid Styles */
+    .theater-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 2rem;
+        padding: 1rem 0;
+    }
+
+    .movie-card {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+    }
+
+    .movie-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        box-shadow: 0 20px 40px rgba(0, 217, 255, 0.3);
+        border-color: var(--accent-primary);
+    }
+
+    .movie-poster-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+
+    .movie-poster {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: all 0.3s ease;
+    }
+
+    .no-poster {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--surface-color), var(--surface-hover));
+        color: var(--text-secondary);
+    }
+
+    .no-poster i {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        color: var(--accent-primary);
+    }
+
+    .movie-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 1rem;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+    }
+
+    .movie-card:hover .movie-overlay {
+        transform: translateY(0);
+    }
+
+    .movie-info h6 {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.875rem;
+        font-weight: 400;
+        color: #ffffff !important;
+        background: none !important;
+        background-image: none !important;
+        -webkit-background-clip: initial !important;
+        -webkit-text-fill-color: #ffffff !important;
+        background-clip: initial !important;
+        text-shadow: 
+            2px 2px 4px rgba(0, 0, 0, 1),
+            -1px -1px 2px rgba(0, 0, 0, 1),
+            1px -1px 2px rgba(0, 0, 0, 1),
+            -1px 1px 2px rgba(0, 0, 0, 1);
+    }
+
+    .movie-date,
+    .movie-person {
+        margin: 0.25rem 0;
+        font-size: 0.875rem;
+        color: #ffffff;
+        font-weight: 400;
+        text-shadow: 
+            2px 2px 4px rgba(0, 0, 0, 1),
+            -1px -1px 2px rgba(0, 0, 0, 1),
+            1px -1px 2px rgba(0, 0, 0, 1),
+            -1px 1px 2px rgba(0, 0, 0, 1);
+    }
+
+    /* Modal Styles */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(5px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .movie-modal {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 1rem;
+        max-width: 900px;
+        max-height: 90vh;
+        width: 100%;
+        overflow-y: auto;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7);
+        animation: slideUp 0.3s ease;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--surface-hover);
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 1.5rem;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        transition: all 0.3s ease;
+    }
+
+    .btn-close:hover {
+        color: var(--accent-primary);
+        background: var(--surface-color);
+    }
+
+    .modal-body {
+        padding: 2rem;
+    }
+
+    .modal-content-grid {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 2rem;
+    }
+
+    .modal-poster {
+        position: sticky;
+        top: 0;
+    }
+
+    .full-poster {
+        width: 100%;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .no-poster-large {
+        width: 100%;
+        aspect-ratio: 2/3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--surface-hover), var(--background-secondary));
+        border-radius: 0.5rem;
+        color: var(--text-secondary);
+    }
+
+    .no-poster-large i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        color: var(--accent-primary);
+    }
+
+    .modal-details {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .detail-row {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-row strong {
+        min-width: 140px;
+        color: var(--accent-primary);
+        font-weight: 600;
+    }
+
+    .detail-section {
+        padding: 1rem 0;
+    }
+
+    .detail-section strong {
+        display: block;
+        color: var(--accent-primary);
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+    }
+
+    .reasoning-text,
+    .synopsis-text {
+        color: var(--text-secondary);
+        line-height: 1.6;
+        margin: 0;
+        text-align: justify;
+    }
+
+    .imdb-link {
+        color: var(--accent-primary);
+        text-decoration: none;
+        transition: all 0.3s ease;
+    }
+
+    .imdb-link:hover {
+        color: var(--text-primary);
+        text-shadow: 0 0 10px var(--accent-primary);
+    }
+
+    /* Responsive */
+    @@media (max-width: 1200px) {
+        .theater-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .history-header {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .theater-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .modal-content-grid {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        .modal-poster {
+            max-width: 250px;
+            margin: 0 auto;
+        }
+
+        .movie-modal {
+            margin: 1rem;
+            max-height: calc(100vh - 2rem);
+        }
+
+        .detail-row {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .detail-row strong {
+            min-width: auto;
+        }
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes slideUp {
+        from { 
+            opacity: 0; 
+            transform: translateY(30px) scale(0.95); 
+        }
+        to { 
+            opacity: 1; 
+            transform: translateY(0) scale(1); 
+        }
+    }
+
+    /* Table responsive improvements */
+    .table-responsive {
+        border-radius: 0.75rem;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+    }
+</style>
