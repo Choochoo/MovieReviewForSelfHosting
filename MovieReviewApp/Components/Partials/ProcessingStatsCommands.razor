@@ -1,7 +1,6 @@
 ﻿@page "/discussions/statscommands"
 @using System.IO
 @inject IWebHostEnvironment WebHostEnvironment
-@using AssemblyAI
 @using MovieReviewApp.Enums
 @using MovieReviewApp.Handlers
 @using MovieReviewApp.Services
@@ -106,15 +105,11 @@
     private List<string> AvailableFolders { get; set; } = new(); // Available folders (month-year format)
     private List<string> SelectedFolders { get; set; } = new();  // Selected folders (month-year)
     public string Error = string.Empty;
-    private AssemblyAIClient? client;
     private StatsCommandProcessorService processorService { get; set; }
 
 
     protected override void OnInitialized()
     {
-        var apiKey = Configuration["AssemblyAI:ApiKey"];
-        client = new AssemblyAIClient(apiKey);
-
         base.OnInitialized();
 
         // Try to get the stats processor service (may not be available during first-run setup)

@@ -4,6 +4,9 @@ using MovieReviewApp.Database;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 
 // Parse command line arguments
 CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
@@ -84,6 +87,8 @@ builder.Services.Configure<AppSettings>(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddControllers();
+
 builder.Services.AddHttpClient(); // Register HttpClient
 builder.Services.AddHttpContextAccessor();
 
@@ -103,6 +108,7 @@ builder.Services.AddScoped<MovieReviewService>();
 
 // MongoDb service replaced with generic system
 builder.Services.AddScoped<MessengerService>();
+builder.Services.AddScoped<ImageService>();
 
 // Only register stats processor if not in first-run setup (it requires database)
 if (!instanceManager.IsFirstRun)
@@ -155,6 +161,8 @@ app.UseAntiforgery();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.MapControllers();
+
 // Display instance information
 Console.WriteLine();
 Console.WriteLine("🎬 Movie Review App Instance Started!");
@@ -166,5 +174,7 @@ Console.WriteLine($"   URL: http://localhost:{instanceConfig.Port}");
 Console.WriteLine();
 Console.WriteLine("Press Ctrl+C to stop the application");
 Console.WriteLine();
+
+BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresentation.CSharpLegacy));
 
 app.Run();

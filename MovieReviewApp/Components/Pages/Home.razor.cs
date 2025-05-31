@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using MovieReviewApp.Database;
+using MongoDB.Driver;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
-using MongoDB.Driver;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -127,7 +126,7 @@ namespace MovieReviewApp.Components.Pages
                 {
                     UpdateCurrentAndNextEvents(generatedPhase);
                 }
-                
+
                 // If we're in an award month after this phase
                 if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
                 {
@@ -156,33 +155,33 @@ namespace MovieReviewApp.Components.Pages
                 }
             }
 
-                // Generate additional future phases for display purposes without saving to DB
-    // This ensures the timeline always shows future phases even if they're not yet in the database
-    if (Phases.Any())
-    {
-        var lastPhase = Phases.OrderByDescending(p => p.Number).First();
-        var additionalPhasesToGenerate = 2; // Generate next 2 phases beyond what's in the database
-        
-        for (int i = 1; i <= additionalPhasesToGenerate; i++)
-        {
-            var newPhaseNumber = lastPhase.Number + i;
-            DateTime newPhaseStart;
-            
-            // If the last phase ends with an award month
-            if (lastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
+            // Generate additional future phases for display purposes without saving to DB
+            // This ensures the timeline always shows future phases even if they're not yet in the database
+            if (Phases.Any())
             {
-                var awardMonthEnd = lastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
-                newPhaseStart = awardMonthEnd.AddDays(1);
+                var lastPhase = Phases.OrderByDescending(p => p.Number).First();
+                var additionalPhasesToGenerate = 2; // Generate next 2 phases beyond what's in the database
+
+                for (int i = 1; i <= additionalPhasesToGenerate; i++)
+                {
+                    var newPhaseNumber = lastPhase.Number + i;
+                    DateTime newPhaseStart;
+
+                    // If the last phase ends with an award month
+                    if (lastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
+                    {
+                        var awardMonthEnd = lastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
+                        newPhaseStart = awardMonthEnd.AddDays(1);
+                    }
+                    else
+                    {
+                        newPhaseStart = lastPhase.EndDate.AddDays(1);
+                    }
+
+                    var futurePhase = GeneratePhase(newPhaseNumber, newPhaseStart, allNames.ToList());
+                    Phases.Add(futurePhase);
+                }
             }
-            else
-            {
-                newPhaseStart = lastPhase.EndDate.AddDays(1);
-            }
-            
-            var futurePhase = GeneratePhase(newPhaseNumber, newPhaseStart, allNames.ToList());
-            Phases.Add(futurePhase);
-        }
-    }
         }
 
         private Phase GeneratePhase(int phaseNumber, DateTime startDate, List<string> peopleNames)
@@ -283,27 +282,27 @@ namespace MovieReviewApp.Components.Pages
                 Console.WriteLine("No phases or before start date");
                 return null;
             }
-            
+
             // Find the current phase we're in
-            var currentPhase = DbPhases.FirstOrDefault(p => 
+            var currentPhase = DbPhases.FirstOrDefault(p =>
                 DateProvider.Now.IsWithinRange(p.StartDate, p.EndDate));
-            
+
             if (currentPhase == null)
             {
                 Console.WriteLine("Current phase not found");
                 return null;
             }
-            
+
             Console.WriteLine($"Current phase: {currentPhase.Number}, Start: {currentPhase.StartDate:yyyy-MM-dd}, End: {currentPhase.EndDate:yyyy-MM-dd}");
-            
+
             // If the previous phase was an award phase
             var previousPhaseNumber = currentPhase.Number - 1;
             Console.WriteLine($"Previous phase number: {previousPhaseNumber}");
-            
+
             if (previousPhaseNumber > 0 && previousPhaseNumber % AwardSettings.PhasesBeforeAward == 0)
             {
                 Console.WriteLine("Previous phase was an award phase");
-                
+
                 // Calculate when the award month would have been
                 var previousPhase = DbPhases.FirstOrDefault(p => p.Number == previousPhaseNumber);
                 if (previousPhase == null)
@@ -311,18 +310,18 @@ namespace MovieReviewApp.Components.Pages
                     Console.WriteLine("Previous phase not found in database");
                     return null;
                 }
-                
+
                 var awardMonthStart = previousPhase.EndDate.AddDays(1);
                 var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
-                
+
                 Console.WriteLine($"Award month period: {awardMonthStart:yyyy-MM-dd} to {awardMonthEnd:yyyy-MM-dd}");
-                
+
                 // Get award event for that month
                 var filter = Builders<AwardEvent>.Filter.And(
                     Builders<AwardEvent>.Filter.Gte(e => e.StartDate, awardMonthStart),
                     Builders<AwardEvent>.Filter.Lte(e => e.EndDate, awardMonthEnd)
                 );
-                
+
                 var previousAwardEvent = movieReviewService.GetAwardEventByFilter(filter);
                 if (previousAwardEvent == null)
                 {
@@ -332,10 +331,10 @@ namespace MovieReviewApp.Components.Pages
                 {
                     Console.WriteLine($"Found previous award event: {previousAwardEvent.Id}, {previousAwardEvent.StartDate:yyyy-MM-dd}");
                 }
-                
+
                 return previousAwardEvent;
             }
-            
+
             Console.WriteLine("Previous phase was not an award phase");
             return null;
         }

@@ -1,6 +1,4 @@
 ﻿@page "/discussions/upload/process"
-@using AssemblyAI;
-@using AssemblyAI.Transcripts;
 @using MovieReviewApp.Enums
 @using MovieReviewApp.Services
 @using NAudio.Wave
@@ -42,21 +40,11 @@
     private string PIN { get; set; } = "";
     public string Error = string.Empty;
     public string SuccessMessage = string.Empty;
-    private AssemblyAIClient? client;
     public string CurrentException = "";
 
     protected override void OnInitialized()
     {
         base.OnInitialized();
-        try
-        {
-            var apiKey = Configuration["AssemblyAI:ApiKey"];
-            client = new AssemblyAIClient(apiKey);
-        }
-        catch (Exception ex)
-        {
-            CurrentException = $"Error initializing: {ex.Message}";
-        }
     }
 
 
@@ -146,67 +134,23 @@
 
         if (IsAudioFile(file))
         {
-            var transcript = await TranscribeAudioAsync(file);
-            if (!string.IsNullOrEmpty(transcript))
-            {
-                var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
-                var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
-                await File.WriteAllTextAsync(transcriptPath, transcript);
-                File.Move(fileInfo.FullName, destFileName);
-            }
-            else
-            {
-                throw new Exception($"Failed to transcribe: {fileInfo.Name}");
-            }
+            //var transcript = await TranscribeAudioAsync(file);
+            //if (!string.IsNullOrEmpty(transcript))
+            //{
+            //    var transcriptFileName = Path.ChangeExtension(newFileName, ".txt");
+            //    var transcriptPath = Path.Combine(targetFolder, transcriptFileName);
+            //    await File.WriteAllTextAsync(transcriptPath, transcript);
+            //    File.Move(fileInfo.FullName, destFileName);
+            //}
+            //else
+            //{
+            //    throw new Exception($"Failed to transcribe: {fileInfo.Name}");
+            //}
         }
         else
         {
             File.Move(fileInfo.FullName, destFileName);
         }
-    }
-
-    private async Task<string> TranscribeAudioAsync(string filePath)
-    {
-        try
-        {
-            var uploadedFile = await client.Files.UploadAsync(new FileInfo(filePath));
-            var transcriptParams = new AssemblyAI.Transcripts.TranscriptParams
-                {
-                    AudioUrl = uploadedFile.UploadUrl,
-                    SpeakerLabels = true
-                };
-
-            var transcript = await client.Transcripts.TranscribeAsync(transcriptParams);
-            transcript.EnsureStatusCompleted();
-
-            if (transcript.Status == AssemblyAI.Transcripts.TranscriptStatus.Completed)
-            {
-                return FormatTranscriptWithSpeakers(transcript);
-            }
-            else
-            {
-                throw new Exception($"Transcription failed: {transcript.Status}");
-            }
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Transcription error for {Path.GetFileName(filePath)}: {ex.Message}", ex);
-        }
-    }
-
-    private string FormatTranscriptWithSpeakers(AssemblyAI.Transcripts.Transcript transcript)
-    {
-        if (transcript.Utterances == null || !transcript.Utterances.Any())
-        {
-            return transcript.Text;
-        }
-
-        var formattedTranscript = new StringBuilder();
-        foreach (var utterance in transcript.Utterances)
-        {
-            formattedTranscript.AppendLine($"Speaker {utterance.Speaker}: {utterance.Text}");
-        }
-        return formattedTranscript.ToString();
     }
 
     private bool IsAudioFile(string filePath)

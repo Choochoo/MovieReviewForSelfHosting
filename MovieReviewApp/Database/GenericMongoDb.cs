@@ -2,6 +2,7 @@ using MongoDB.Driver;
 using MovieReviewApp.Enums;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+using System.Linq.Expressions;
 
 namespace MovieReviewApp.Database
 {
@@ -218,6 +219,13 @@ namespace MovieReviewApp.Database
             if (collection == null) return 0;
             
             return collection.CountDocuments(filter);
+        }
+
+        public async Task ReplaceOneAsync<T>(CollectionType collectionType, Expression<Func<T, bool>> filterExpression, T replacement)
+        {
+            var collection = GetCollection<T>(collectionType);
+            if (collection == null) return;
+            await collection.ReplaceOneAsync(filterExpression, replacement);
         }
     }
 }

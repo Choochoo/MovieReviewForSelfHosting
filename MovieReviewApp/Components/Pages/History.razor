@@ -36,12 +36,15 @@ else if (isGridView)
             {
                 <div class="movie-card" @onclick="() => ShowMovieDetails(movieEvent)">
                     <div class="movie-poster-container">
-                        @if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
+                        @{
+                            var imageUrl = movieEvent.ImageId.HasValue ? $"/api/image/{movieEvent.ImageId}" : null;
+                        }
+                        @if (!string.IsNullOrEmpty(imageUrl))
                         {
-                            <img src="@movieEvent.PosterUrl" 
+                            <img src="@imageUrl" 
                                  alt="@movieEvent.Movie poster" 
                                  class="movie-poster"
-                                 onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                                 onerror="this.style.display='none';this.parentElement.classList.add('no-poster-fallback');" />
                         }
                         else
                         {
@@ -117,12 +120,15 @@ else
             <div class="modal-body">
                 <div class="modal-content-grid">
                     <div class="modal-poster">
-                        @if (!string.IsNullOrEmpty(selectedMovie.PosterUrl))
+                        @{
+                            var modalImageUrl = selectedMovie.ImageId.HasValue ? $"/api/image/{selectedMovie.ImageId}" : null;
+                        }
+                        @if (!string.IsNullOrEmpty(modalImageUrl))
                         {
-                            <img src="@selectedMovie.PosterUrl" 
+                            <img src="@modalImageUrl" 
                                  alt="@selectedMovie.Movie poster" 
                                  class="full-poster"
-                                 onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                                 onerror="this.style.display='none';this.parentElement.classList.add('no-poster-fallback');" />
                         }
                         else
                         {

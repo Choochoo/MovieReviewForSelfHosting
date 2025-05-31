@@ -7,6 +7,7 @@
 @inject IConfiguration Configuration
 @inject MessengerService MessengerService
 @inject SecretsManager SecretsManager
+@inject ImageService ImageService
 
 @if (MovieEvent != null)
 {
@@ -39,8 +40,8 @@
                             <input type="text" @bind="@MovieEvent.IMDb" class="form-control" />
                         </div>
                         <div class="form-group">
-                            <label><b>Poster URL:</b></label>
-                            <input type="text" @bind="@MovieEvent.PosterUrl" class="form-control" />
+                            <ImageUpload @bind-ImageId="@MovieEvent.ImageId" 
+                                       @bind-PosterUrl="@MovieEvent.PosterUrl" />
                         </div>
                         <div class="form-group">
                             <label><b>Reason:</b></label>
@@ -124,10 +125,16 @@
                         </div>
                         <br />
 
-                        @if (!string.IsNullOrEmpty(MovieEvent.PosterUrl))
+                        @if (!string.IsNullOrEmpty(imageUrl))
                         {
                             <div>
-                                <img style="width:100%" src="@MovieEvent.PosterUrl" onerror="this.onerror=null;this.src='images/no-poster.jpg';" />
+                                <img style="width:100%" src="@imageUrl" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                <div style="display:none;width:100%;height:300px;background:#f8f9fa;border:2px dashed #ccc;align-items:center;justify-content:center;color:#6c757d;">
+                                    <div style="text-align:center;">
+                                        <i class="bi bi-film" style="font-size:3rem;margin-bottom:1rem;"></i>
+                                        <br>No Poster Available
+                                    </div>
+                                </div>
                                 <br />
                                 <br />
                             </div>
@@ -195,6 +202,7 @@ else
     private string? Synopsis = "Loading...";
     private string _apiKey = string.Empty;
     private bool isLoading = false;
+    private string? imageUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -229,6 +237,9 @@ else
             {
                 await GetMovieSynopsisAsync(MovieEvent.Movie);
             }
+
+            // Set imageUrl here - ONLY use ImageId, never use PosterUrl
+            imageUrl = MovieEvent != null && MovieEvent.ImageId.HasValue ? $"/api/image/{MovieEvent.ImageId}" : null;
         }
         catch (Exception ex)
         {
@@ -386,6 +397,17 @@ else
             isLoading = true;
             if (MovieEvent != null)
             {
+                // Automatically convert any PosterUrl to blob storage before saving
+                if (!string.IsNullOrEmpty(MovieEvent.PosterUrl) && !MovieEvent.ImageId.HasValue)
+                {
+                    var imageId = await ImageService.SaveImageFromUrlAsync(MovieEvent.PosterUrl);
+                    if (imageId.HasValue)
+                    {
+                        MovieEvent.ImageId = imageId;
+                        MovieEvent.PosterUrl = null; // Clear the URL since we now have a blob
+                    }
+                }
+                
                 if (MovieEvent.AlreadySeen)
                 {
                     MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);

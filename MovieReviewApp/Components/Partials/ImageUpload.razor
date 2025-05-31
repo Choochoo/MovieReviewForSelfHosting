@@ -1,0 +1,374 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using MovieReviewApp.Services
+@inject ImageService ImageService
+@inject IJSRuntime JSRuntime
+
+<div class="image-upload-container">
+    <label><b>Movie Poster:</b></label>
+    <div class="image-upload-area @(isDragOver ? "drag-over" : "")" 
+         @ondrop="HandleDrop" 
+         @ondragover="HandleDragOver" 
+         @ondragleave="HandleDragLeave"
+         @onclick="OpenFileDialog">
+        
+        @if (IsUploading)
+        {
+            <div class="upload-progress">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Uploading...</span>
+                </div>
+                <p>Processing image...</p>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(PreviewImageUrl))
+        {
+            <div class="image-preview">
+                <img src="@PreviewImageUrl" alt="Movie poster preview" class="preview-img" />
+                <button type="button" class="btn btn-sm btn-outline-danger remove-btn" @onclick="RemoveImage" @onclick:stopPropagation="true">
+                    Remove
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="upload-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21,15 16,10 5,21"/>
+                </svg>
+                <p class="upload-text">Drag and drop, Ctrl+paste, or provide link</p>
+                <p class="upload-subtext">Supports JPG, PNG, GIF, WebP</p>
+            </div>
+        }
+    </div>
+    
+    <div class="mt-2">
+        <input type="text" @bind="urlInput" @bind:event="oninput" @onblur="HandleUrlBlur" @onkeypress="HandleUrlKeyPress" 
+               class="form-control" placeholder="Or paste image URL here (auto-loads when you leave this field)" />
+    </div>
+    
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger mt-2">@ErrorMessage</div>
+    }
+</div>
+
+<InputFile @ref="fileInput" OnChange="HandleFileSelected" accept="image/*" style="display: none;" />
+
+@code {
+    [Parameter] public Guid? ImageId { get; set; }
+    [Parameter] public EventCallback<Guid?> ImageIdChanged { get; set; }
+    [Parameter] public string? PosterUrl { get; set; }
+    [Parameter] public EventCallback<string?> PosterUrlChanged { get; set; }
+
+    private InputFile? fileInput;
+    private bool isDragOver = false;
+    private bool IsUploading = false;
+    private string? ErrorMessage;
+    private string urlInput = string.Empty;
+    private string? PreviewImageUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UpdatePreviewImage();
+        await JSRuntime.InvokeVoidAsync("initializePasteHandler", DotNetObjectReference.Create(this));
+    }
+
+    private async Task UpdatePreviewImage()
+    {
+        if (ImageId.HasValue)
+        {
+            PreviewImageUrl = $"/api/image/{ImageId}";
+        }
+        else
+        {
+            PreviewImageUrl = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        await ProcessFile(e.File);
+    }
+
+    private async Task ProcessFile(IBrowserFile file)
+    {
+        if (file == null) return;
+
+        IsUploading = true;
+        ErrorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            const long maxFileSize = 10 * 1024 * 1024; // 10MB
+            using var stream = file.OpenReadStream(maxFileSize);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var imageId = await ImageService.SaveImageAsync(memoryStream.ToArray(), file.Name);
+            if (imageId.HasValue)
+            {
+                ImageId = imageId;
+                await ImageIdChanged.InvokeAsync(ImageId);
+                
+                // Clear the old PosterUrl
+                PosterUrl = null;
+                await PosterUrlChanged.InvokeAsync(PosterUrl);
+                
+                await UpdatePreviewImage();
+            }
+            else
+            {
+                ErrorMessage = "Failed to save image. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error uploading image: {ex.Message}";
+        }
+        finally
+        {
+            IsUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFromUrl()
+    {
+        if (string.IsNullOrWhiteSpace(urlInput)) return;
+
+        IsUploading = true;
+        ErrorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var imageId = await ImageService.SaveImageFromUrlAsync(urlInput);
+            if (imageId.HasValue)
+            {
+                ImageId = imageId;
+                await ImageIdChanged.InvokeAsync(ImageId);
+                
+                // Clear the old PosterUrl
+                PosterUrl = null;
+                await PosterUrlChanged.InvokeAsync(PosterUrl);
+                
+                urlInput = string.Empty;
+                await UpdatePreviewImage();
+            }
+            else
+            {
+                ErrorMessage = "Failed to download image from URL. Please check the URL and try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading image from URL: {ex.Message}";
+        }
+        finally
+        {
+            IsUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveImage()
+    {
+        ImageId = null;
+        await ImageIdChanged.InvokeAsync(ImageId);
+        PosterUrl = null;
+        await PosterUrlChanged.InvokeAsync(PosterUrl);
+        urlInput = string.Empty;
+        await UpdatePreviewImage();
+    }
+
+    private async Task OpenFileDialog()
+    {
+        if (IsUploading) return;
+        await JSRuntime.InvokeVoidAsync("triggerFileInput", fileInput?.Element);
+    }
+
+    private void HandleDragOver()
+    {
+        isDragOver = true;
+    }
+
+    private void HandleDragLeave()
+    {
+        isDragOver = false;
+    }
+
+    private async Task HandleDrop()
+    {
+        isDragOver = false;
+        // File drop is handled by JavaScript
+    }
+
+    private async Task HandleUrlKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadFromUrl();
+        }
+    }
+
+    private async Task HandleUrlBlur()
+    {
+        if (!string.IsNullOrWhiteSpace(urlInput))
+        {
+            await LoadFromUrl();
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandlePastedImage(string base64Data, string fileName)
+    {
+        try
+        {
+            var imageData = Convert.FromBase64String(base64Data);
+            await ProcessImageData(imageData, fileName);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error processing pasted image: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleDroppedFiles(string base64Data, string fileName)
+    {
+        try
+        {
+            var imageData = Convert.FromBase64String(base64Data);
+            await ProcessImageData(imageData, fileName);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error processing dropped image: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ProcessImageData(byte[] imageData, string fileName)
+    {
+        IsUploading = true;
+        ErrorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var imageId = await ImageService.SaveImageAsync(imageData, fileName);
+            if (imageId.HasValue)
+            {
+                ImageId = imageId;
+                await ImageIdChanged.InvokeAsync(ImageId);
+                
+                // Clear the old PosterUrl
+                PosterUrl = null;
+                await PosterUrlChanged.InvokeAsync(PosterUrl);
+                
+                await UpdatePreviewImage();
+            }
+            else
+            {
+                ErrorMessage = "Failed to save image. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error saving image: {ex.Message}";
+        }
+        finally
+        {
+            IsUploading = false;
+            StateHasChanged();
+        }
+    }
+}
+
+<style>
+    .image-upload-container {
+        margin-bottom: 1rem;
+    }
+
+    .image-upload-area {
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .image-upload-area:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+
+    .image-upload-area.drag-over {
+        border-color: #007bff;
+        background-color: #e3f2fd;
+    }
+
+    .upload-placeholder {
+        color: #6c757d;
+    }
+
+    .upload-placeholder svg {
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .upload-text {
+        margin: 0.5rem 0;
+        font-weight: 500;
+    }
+
+    .upload-subtext {
+        margin: 0;
+        font-size: 0.875rem;
+        opacity: 0.7;
+    }
+
+    .image-preview {
+        position: relative;
+        max-width: 100%;
+    }
+
+    .preview-img {
+        max-width: 200px;
+        max-height: 300px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .remove-btn {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .upload-progress {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+    }
+</style>

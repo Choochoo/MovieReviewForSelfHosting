@@ -15,6 +15,7 @@ namespace MovieReviewApp.Models
         public string? Movie { get; set; }
         public string? DownloadLink { get; set; }
         public string? PosterUrl { get; set; }
+        public Guid? ImageId { get; set; }
         public string? IMDb { get; set; }
         public string? Reasoning { get; set; }
         public bool AlreadySeen { get; set; }

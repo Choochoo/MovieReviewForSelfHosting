@@ -10,6 +10,7 @@ namespace MovieReviewApp.Enums
         SiteUpdates,
         AwardQuestions,
         AwardEvents,
-        AwardVotes
+        AwardVotes,
+        ImageStorage
     }
 }

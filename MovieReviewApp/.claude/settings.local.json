@@ -30,7 +30,8 @@
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i \"\\\"ShowResults\" .)",
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i 'ShowResults' .)",
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i \"ShowResultsDuringVoting\" ./Components/Partials/AwardVoting.razor ./Components/Partials/AwardResultsDisplay.razor)",
-      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i \"ShowResultsDuringVoting\" --type json)"
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i \"ShowResultsDuringVoting\" --type json)",
+      "Bash(/usr/bin/dotnet build:*)"
     ],
     "deny": []
   }

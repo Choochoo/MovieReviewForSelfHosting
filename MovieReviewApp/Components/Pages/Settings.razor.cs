@@ -24,6 +24,7 @@ namespace MovieReviewApp.Components.Pages
             new SelectListItem { Value = "Day", Text = "Day" }
         };
 
+
         protected override void OnInitialized()
         {
             settings = movieReviewService.GetSettings();
@@ -204,5 +205,8 @@ namespace MovieReviewApp.Components.Pages
                 }
             }
         }
+
+
+
     }
 }
