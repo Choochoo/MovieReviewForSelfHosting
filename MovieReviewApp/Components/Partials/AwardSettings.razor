@@ -1,111 +1,315 @@
-﻿@using MovieReviewApp.Database
+@using MovieReviewApp.Database
 @using MovieReviewApp.Models
 
 @inject MongoDb db
 @inject ILogger<AwardSettings> Logger
 
-<div class="card mb-3">
-    <div class="card-header">
-        <h5 class="mb-0">Award Settings</h5>
+<h3 class="section-title">Award Settings</h3>
+
+<div class="award-settings-content">
+    <div class="award-toggle">
+        <input class="form-check-input" type="checkbox" @bind="settings.AwardsEnabled" id="awardsEnabled">
+        <label class="form-check-label" for="awardsEnabled">
+            Enable Awards
+        </label>
     </div>
-    <div class="card-body">
-        <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" @bind="settings.AwardsEnabled" id="awardsEnabled">
-            <label class="form-check-label" for="awardsEnabled">
-                Enable Awards
-            </label>
+
+    @if (settings.AwardsEnabled)
+    {
+        <div class="award-options">
+            <div class="award-option">
+                <label class="option-label">Phases Before Award:</label>
+                <input type="number" class="form-control form-control-sm" @bind="settings.PhasesBeforeAward" min="1" />
+            </div>
+
+            <div class="award-option">
+                <input class="form-check-input" type="checkbox" @bind="settings.ShowResultsDuringVoting" id="showResults">
+                <label class="form-check-label" for="showResults">
+                    Show Results During Voting
+                </label>
+            </div>
         </div>
 
-        @if (settings.AwardsEnabled)
-        {
-            <div class="mb-3">
-                <label class="form-label">Phases Before Award</label>
-                <input type="number" class="form-control" @bind="settings.PhasesBeforeAward" min="1" />
+        <div class="questions-section">
+            <div class="questions-header">
+                <h6 class="questions-title">Award Questions</h6>
+                <button class="btn btn-sm btn-secondary" @onclick="AddQuestion">
+                    <i class="bi bi-plus-circle"></i> Add Question
+                </button>
             </div>
 
-            <div class="mb-3">
-                <label class="form-label">Show Results During Voting</label>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" @bind="settings.ShowResultsDuringVoting" id="showResults">
-                    <label class="form-check-label" for="showResults">
-                        Allow voters to see current results while voting is in progress
-                    </label>
+            @if (!questions.Any())
+            {
+                <div class="empty-state">
+                    <i class="bi bi-trophy"></i>
+                    <p>No questions added yet. Click "Add Question" to create your first award question.</p>
                 </div>
-            </div>
-
-            <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0">Award Questions</h6>
-                    <button class="btn btn-secondary btn-sm" @onclick="AddQuestion">Add Question</button>
-                </div>
-                @if (!questions.Any())
-                {
-                    <div class="alert alert-info">
-                        No questions added yet. Click "Add Question" to create your first award question.
-                    </div>
-                }
-                else
-                {
+            }
+            else
+            {
+                <div class="questions-list">
                     @foreach (var question in questions)
                     {
-                        <div class="card mb-2">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="flex-grow-1">
-                                        <input type="text" class="form-control" @bind="question.Question"
-                                               placeholder="Enter award question..." />
-                                    </div>
-                                    <div style="width: 150px">
-                                        <div class="input-group">
-                                            <span class="input-group-text">Max Votes</span>
-                                            <input type="number" class="form-control"
-                                                   @bind="question.MaxVotes" min="1" max="10" />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox"
-                                                   @bind="question.IsActive"
-                                                   id="@($"active_{question.Id}")">
-                                            <label class="form-check-label" for="@($"active_{question.Id}")">
-                                                Active
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <button class="btn btn-danger btn-sm"
-                                            @onclick="() => DeleteQuestion(question)">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                        <div class="question-item">
+                            <div class="question-main">
+                                <input type="text" class="form-control form-control-sm question-input" 
+                                       @bind="question.Question"
+                                       placeholder="Enter award question..." />
+                            </div>
+                            
+                            <div class="question-controls">
+                                <div class="votes-control">
+                                    <label>Max Votes:</label>
+                                    <input type="number" class="form-control form-control-sm votes-input"
+                                           @bind="question.MaxVotes" min="1" max="10" />
                                 </div>
+                                
+                                <div class="active-control">
+                                    <input class="form-check-input" type="checkbox"
+                                           @bind="question.IsActive"
+                                           id="@($"active_{question.Id}")">
+                                    <label class="form-check-label" for="@($"active_{question.Id}")">
+                                        Active
+                                    </label>
+                                </div>
+                                
+                                <button class="btn btn-sm btn-danger delete-btn"
+                                        @onclick="() => DeleteQuestion(question)"
+                                        title="Delete Question">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </div>
                     }
-                }
-            </div>
-        }
-
-        <div class="d-flex justify-content-between align-items-center">
-            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
-                @if (isSaving)
-                {
-                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                    <span>Saving...</span>
-                }
-                else
-                {
-                    <span>Save Settings</span>
-                }
-            </button>
-            @if (showSaveSuccess)
-            {
-                <div class="text-success">
-                    <i class="fas fa-check-circle me-1"></i>
-                    Settings saved successfully!
                 </div>
             }
         </div>
+    }
+
+    <div class="award-actions">
+        <button class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
+            @if (isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <span>Save Award Settings</span>
+            }
+        </button>
+        @if (showSaveSuccess)
+        {
+            <div class="save-success">
+                <i class="bi bi-check-circle"></i>
+                Settings saved successfully!
+            </div>
+        }
     </div>
 </div>
+
+<style>
+    .award-settings-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .award-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .award-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        padding: 1rem;
+        background: rgba(0, 217, 255, 0.05);
+        border-radius: 0.5rem;
+    }
+
+    .award-option {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .option-label {
+        font-weight: 600;
+        color: var(--text-secondary);
+        min-width: 150px;
+    }
+
+    .award-option .form-control {
+        max-width: 100px;
+        margin-bottom: 0;
+    }
+
+    .questions-section {
+        margin-top: 1rem;
+    }
+
+    .questions-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .questions-title {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--accent-primary);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        color: var(--accent-primary);
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .questions-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .question-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .question-item:hover {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 10px rgba(0, 217, 255, 0.1);
+    }
+
+    .question-main {
+        display: flex;
+        align-items: center;
+    }
+
+    .question-input {
+        width: 100%;
+        margin-bottom: 0;
+        background: var(--background-primary);
+        border-color: var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .question-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .votes-control {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .votes-control label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+
+    .votes-input {
+        width: 60px;
+        margin-bottom: 0;
+        text-align: center;
+    }
+
+    .active-control {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .delete-btn {
+        padding: 0.25rem 0.5rem;
+    }
+
+    .award-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .save-success {
+        color: var(--success-color);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .award-options {
+            grid-template-columns: 1fr;
+        }
+
+        .question-item {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+
+        .question-controls {
+            flex-wrap: wrap;
+        }
+
+        .votes-control {
+            width: 100%;
+        }
+
+        .option-label {
+            min-width: auto;
+        }
+    }
+
+    /* Dark theme overrides */
+    .form-check-input {
+        margin-bottom: 0;
+    }
+
+    .btn-sm {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .spinner-border-sm {
+        width: 0.875rem;
+        height: 0.875rem;
+    }
+</style>
 
 @code {
     private AwardSetting settings = new();

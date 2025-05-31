@@ -1,38 +1,88 @@
+/* Cyberpunk Dark Mode Layout Styles */
+
 .page {
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    min-height: 100vh;
 }
 
 main {
     flex: 1;
+    margin-left: 260px;
+    padding: 0;
+    margin-top: 100px;
+}
+
+.sidebar {
+    width: 260px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: #000000 !important;
+    background-image: none !important;
+    background: #000000 !important;
+    border-right: 1px solid #333333;
+    z-index: 100;
+    overflow-y: hidden;
+    overflow-x: hidden;
 }
 
 .top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
+    background-color: rgba(20, 20, 20, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid #333333;
     justify-content: flex-end;
-    height: 3.5rem;
+    height: 4rem;
     display: flex;
     align-items: center;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-    }
+.top-row ::deep a, .top-row ::deep .btn-link {
+    white-space: nowrap;
+    margin-left: 1.5rem;
+    text-decoration: none;
+    color: #B3B3B3;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+}
 
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
-    }
+.top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+    color: #00D9FF;
+    text-decoration: none;
+    text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
 
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+.top-row ::deep a:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-@media (max-width: 640.98px) {
+@media (max-width: 768px) {
+    .page {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .sidebar.active {
+        transform: translateX(0);
+    }
+    
+    main {
+        margin-left: 0;
+        margin-top: 0;
+    }
+    
     .top-row {
         justify-content: space-between;
     }
@@ -42,73 +92,37 @@ main {
     }
 }
 
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
-    }
-
-    .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-    }
-
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-    }
-
-    .top-row.auth ::deep a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
-    }
-
-    .top-row, article {
+@media (min-width: 769px) {
+    article {
         padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+        padding-right: 2rem !important;
     }
 }
 
 #blazor-error-ui {
-    background: lightyellow;
+    background: #1a1a1a;
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
     display: none;
     left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    padding: 1.5rem 2rem;
     position: fixed;
     width: 100%;
     z-index: 1000;
+    border-top: 2px solid #FF0080;
 }
 
-    #blazor-error-ui .dismiss {
-        cursor: pointer;
-        position: absolute;
-        right: 0.75rem;
-        top: 0.5rem;
-    }
-
-::deep .timeline {
-    position: relative;
-    padding: 20px 0;
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    color: #B3B3B3;
+    transition: color 0.3s ease;
 }
 
-::deep .timeline-item {
-    padding: 20px 0;
+#blazor-error-ui .dismiss:hover {
+    color: #00D9FF;
 }
 
-::deep .timeline-content {
-    padding: 10px 20px;
-    margin-left: 20px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    margin-bottom: 10px;
-}
-
-    ::deep .timeline-content .date {
-        font-weight: bold;
-        margin-right: 10px;
-    }
+/* Timeline styles are in app.css for consistency */

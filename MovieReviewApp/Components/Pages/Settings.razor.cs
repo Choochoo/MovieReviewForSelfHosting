@@ -133,6 +133,40 @@ namespace MovieReviewApp.Components.Pages
             People = db.GetAllPeople(RespectOrder);
         }
 
+        private void SaveGeneralSettings()
+        {
+            // Save Respect Order
+            var orderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            if (orderSetting == null)
+            {
+                orderSetting = new Setting { Key = "RespectOrder", Value = RespectOrder.ToString() };
+                settings.Add(orderSetting);
+            }
+            else
+            {
+                orderSetting.Value = RespectOrder.ToString();
+            }
+            db.AddOrUpdateSetting(orderSetting);
+
+            // Save Start Date
+            var dateSetting = settings.First(x => x.Key == "StartDate");
+            dateSetting.Value = StartDate.ToString();
+            db.AddOrUpdateSetting(dateSetting);
+
+            // Save Time Count
+            var timeCountSetting = settings.First(x => x.Key == "TimeCount");
+            timeCountSetting.Value = TimeCount.ToString();
+            db.AddOrUpdateSetting(timeCountSetting);
+
+            // Save Time Period
+            var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
+            timePeriodSetting.Value = TimePeriod;
+            db.AddOrUpdateSetting(timePeriodSetting);
+
+            // Refresh people list with updated respect order setting
+            People = db.GetAllPeople(RespectOrder);
+        }
+
         private async Task MoveUp(Person person)
         {
             if (person?.Order > 1)

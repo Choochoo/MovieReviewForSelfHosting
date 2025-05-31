@@ -1,4 +1,4 @@
-﻿@* Settings.razor *@
+@* Settings.razor *@
 @page "/settings"
 @using MovieReviewApp.Components.Partials
 @attribute [StreamRendering]
@@ -6,130 +6,332 @@
 <PageTitle>Settings</PageTitle>
 <h1>Settings</h1>
 
-<div class="container">
-    <div class="row mb-3">
-        <div class="col-sm-12">
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" @bind="RespectOrder" id="respectOrder">
-                <label class="form-check-label" for="respectOrder">
-                    Respect Order
-                </label>
-                <button type="button" class="btn btn-primary ms-3" @onclick="SaveRespectOrder">Save</button>
+<div class="settings-container">
+    <div class="settings-section">
+        <h3 class="section-title">General Settings</h3>
+        
+        <div class="general-settings-grid">
+            <div class="settings-fields">
+                <div class="setting-field">
+                    <label class="setting-label">Respect Order:</label>
+                    <input class="form-check-input" type="checkbox" @bind="RespectOrder" id="respectOrder">
+                </div>
+                
+                <div class="setting-field">
+                    <label class="setting-label">Start Date:</label>
+                    <InputDate @bind-Value="StartDate" class="form-control form-control-sm" />
+                </div>
+                
+                <div class="setting-field">
+                    <label class="setting-label">Occurrence:</label>
+                    <div class="occurrence-controls">
+                        <span class="text-muted">Every</span>
+                        <InputNumber @bind-Value="TimeCount" class="form-control form-control-sm number-input" />
+                        <InputSelect @bind-Value="TimePeriod" class="form-control form-control-sm">
+                            <option value="">Period</option>
+                            @foreach (var period in TimePeriods)
+                            {
+                                <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-save">
+                <button type="button" class="btn btn-primary" @onclick="SaveGeneralSettings">
+                    Save General Settings
+                </button>
             </div>
         </div>
     </div>
 
-    <div class="row mb-3">
-        <div class="col-sm-12">
-            <label>Start Date:</label>
-            <div class="d-flex flex-wrap align-items-center">
-                <InputDate @bind-Value="StartDate" class="form-control d-inline-block w-auto me-2 mb-2" />
-                <button type="button" class="btn btn-primary mb-2" @onclick="SaveDate">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="row mb-3">
-        <div class="col-sm-12">
-            <label>Occurrence:</label>
-            <div class="d-flex flex-wrap align-items-center">
-                <span class="me-2 mb-2">Every</span>
-                <InputNumber @bind-Value="TimeCount" class="form-control d-inline-block w-auto me-2 mb-2" />
-                <InputSelect @bind-Value="TimePeriod" class="form-control d-inline-block w-auto me-2 mb-2">
-                    <option value="">Time Period</option>
-                    @foreach (var period in TimePeriods)
-                    {
-                        <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
-                    }
-                </InputSelect>
-                <button type="button" class="btn btn-primary mb-2" @onclick="SaveOccurance">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <hr />
-
-    @if (People == null)
-    {
-        <p><em>Loading...</em></p>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th style="width: 100px">Order</th>
-                        <th>Name</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var person in People.OrderBy(p => p?.Order))
-                    {
-                        @if (person != null)
+    <div class="settings-section">
+        <h3 class="section-title">People Management</h3>
+        
+        @if (People == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            <div class="people-table">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>
+                            <th class="col-order">Order</th>
+                            <th class="col-name">Name</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var person in People.OrderBy(p => p?.Order))
                         {
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <span class="me-2">@person.Order</span>
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="async () => await MoveUp(person)"
-                                                    disabled="@(person.Order <= 1)">
-                                                ↑
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="async () => await MoveDown(person)"
-                                                    disabled="@(person.Order >= People.Count)">
-                                                ↓
-                                            </button>
+                            @if (person != null)
+                            {
+                                <tr>
+                                    <td class="col-order">
+                                        <div class="order-controls">
+                                            <span class="order-number">@person.Order</span>
+                                            <div class="order-buttons">
+                                                <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                        @onclick="async () => await MoveUp(person)"
+                                                        disabled="@(person.Order <= 1)">
+                                                    ↑
+                                                </button>
+                                                <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                        @onclick="async () => await MoveDown(person)"
+                                                        disabled="@(person.Order >= People.Count)">
+                                                    ↓
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    @if (person.IsEditing)
-                                    {
-                                        <input type="text" @bind="person.Name" class="form-control" />
-                                    }
-                                    else
-                                    {
-                                        @person.Name
-                                    }
-                                </td>
-                                <td>
-                                    @if (person.IsEditing)
-                                    {
-                                        <button type="button" class="btn btn-primary me-2 mb-2" @onclick="() => Save(person)">Save</button>
-                                        <button type="button" class="btn btn-secondary mb-2" @onclick="() => Cancel(person)">Cancel</button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn btn-secondary me-2 mb-2" @onclick="() => Edit(person)">Edit</button>
-                                        <button type="button" class="btn btn-danger mb-2" @onclick="() => Delete(person)">Delete</button>
-                                    }
-                                </td>
-                            </tr>
+                                    </td>
+                                    <td class="col-name">
+                                        @if (person.IsEditing)
+                                        {
+                                            <input type="text" @bind="person.Name" class="form-control form-control-sm" />
+                                        }
+                                        else
+                                        {
+                                            <span class="person-name">@person.Name</span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        @if (person.IsEditing)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => Save(person)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Cancel(person)">Cancel</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Edit(person)">Edit</button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => Delete(person)">Delete</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
                         }
-                    }
-                    <tr>
-                        <td></td>
-                        <td>
-                            <input style="width:70%" type="text" @bind="@NewPerson" class="form-control mb-2" />
-                        </td>
-                        <td>
-                            <button type="button" class="btn btn-primary mb-2" @onclick="AddPerson">Add</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    }
-    <AwardSettings />
+                        <tr class="add-row">
+                            <td class="col-order"></td>
+                            <td class="col-name">
+                                <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
+                            </td>
+                            <td class="col-actions">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="AddPerson">Add</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+    
+    <div class="settings-section">
+        <AwardSettings />
+    </div>
 </div>
 
 <style>
-    .mb-2 {
-        margin-bottom: 0.5rem !important;
+    .settings-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .settings-section {
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid var(--accent-primary);
+    }
+
+    .general-settings-grid {
+        display: flex;
+        gap: 2rem;
+        align-items: flex-start;
+    }
+
+    .settings-fields {
+        flex: 1;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .setting-field {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .setting-label {
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        text-align: right;
+    }
+
+    .occurrence-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .settings-save {
+        display: flex;
+        align-items: center;
+        padding-top: 0.25rem;
+    }
+
+    .setting-field .form-control {
+        max-width: 200px;
+        margin-bottom: 0;
+    }
+
+    .number-input {
+        max-width: 80px !important;
+    }
+
+    .form-check-input {
+        margin-top: 0;
+        margin-bottom: 0;
+        width: 1.2rem;
+        height: 1.2rem;
+        cursor: pointer;
+    }
+
+    .occurrence-controls .form-control {
+        margin-bottom: 0;
+    }
+
+    /* Compact table styles */
+    .people-table {
+        overflow-x: auto;
+    }
+
+    .table-compact {
+        font-size: 0.9rem;
+    }
+
+    .table-compact th {
+        padding: 0.5rem;
+        font-weight: 600;
+    }
+
+    .table-compact td {
+        padding: 0.4rem 0.5rem;
+        vertical-align: middle;
+    }
+
+    .col-order {
+        width: 120px;
+    }
+
+    .col-name {
+        width: auto;
+    }
+
+    .col-actions {
+        width: 200px;
+        text-align: right;
+    }
+
+    .order-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .order-number {
+        font-weight: 600;
+        min-width: 30px;
+    }
+
+    .order-buttons {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .btn-xs {
+        padding: 0.1rem 0.4rem;
+        font-size: 0.75rem;
+        line-height: 1.2;
+    }
+
+    .person-name {
+        font-weight: 500;
+    }
+
+    .add-row {
+        background-color: rgba(0, 217, 255, 0.05);
+    }
+
+    .add-row td {
+        padding: 0.75rem 0.5rem;
+    }
+
+    /* Button spacing */
+    .btn + .btn {
+        margin-left: 0.25rem;
+    }
+
+    /* Form control sizes */
+    .form-control-sm {
+        height: calc(1.5em + 0.5rem + 2px);
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .btn-sm {
+        padding: 0.25rem 0.75rem;
+        font-size: 0.875rem;
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 768px) {
+        .general-settings-grid {
+            flex-direction: column;
+        }
+
+        .settings-fields {
+            grid-template-columns: 1fr;
+        }
+
+        .setting-field {
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+        }
+
+        .setting-label {
+            text-align: left;
+        }
+
+        .settings-save {
+            justify-content: center;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        .settings-save .btn {
+            width: 100%;
+        }
+
+        .col-actions {
+            width: auto;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+        }
     }
 </style>
