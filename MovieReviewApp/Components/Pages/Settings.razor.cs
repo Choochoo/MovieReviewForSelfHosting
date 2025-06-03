@@ -10,12 +10,19 @@ namespace MovieReviewApp.Components.Pages
     {
         [Inject]
         private MovieReviewService movieReviewService { get; set; } = default!;
+        
+        [Inject]
+        private InstanceManager instanceManager { get; set; } = default!;
+        
+        [Inject]
+        private NavigationManager navigationManager { get; set; } = default!;
         public List<Person>? People { get; set; }
         public DateTime? StartDate { get; set; }
         public int? TimeCount;
         public string? TimePeriod;
         public string NewPerson = "New Person";
         public bool RespectOrder = false;
+        public string GroupName = "";
         public List<Setting> settings = new List<Setting>();
         public readonly List<SelectListItem> TimePeriods = new List<SelectListItem>
         {
@@ -35,6 +42,11 @@ namespace MovieReviewApp.Components.Pages
             StartDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
             TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
             TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
+            
+            // Load group name from instance config
+            var instanceConfig = instanceManager.GetInstanceConfig();
+            GroupName = instanceConfig.DisplayName;
+            
             People = movieReviewService.GetAllPeople(RespectOrder);
             EnsureValidOrder();
         }
@@ -136,6 +148,11 @@ namespace MovieReviewApp.Components.Pages
 
         private void SaveGeneralSettings()
         {
+            // Save Group Name to instance config
+            var instanceConfig = instanceManager.GetInstanceConfig();
+            instanceConfig.DisplayName = GroupName;
+            instanceManager.SaveInstanceConfig(instanceConfig);
+
             // Save Respect Order
             var orderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
             if (orderSetting == null)
@@ -166,6 +183,9 @@ namespace MovieReviewApp.Components.Pages
 
             // Refresh people list with updated respect order setting
             People = movieReviewService.GetAllPeople(RespectOrder);
+            
+            // Force navigation refresh to update the title in NavMenu
+            navigationManager.NavigateTo(navigationManager.Uri, forceLoad: true);
         }
 
         private async Task MoveUp(Person person)

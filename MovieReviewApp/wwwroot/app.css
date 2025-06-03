@@ -502,6 +502,53 @@ main {
     vertical-align: middle !important;
 }
 
+/* Force all icons to be white/visible in dark theme */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+/* Ensure all icon elements are visible */
+i, .icon, [class*="bi-"], [class*="fa-"], [class*="fas-"], [class*="far-"], [class*="fab-"] {
+    color: var(--text-primary) !important;
+}
+
+/* Input group icons */
+.input-group-text i,
+.input-group-text .bi {
+    color: var(--text-primary) !important;
+}
+
+/* Button icons should inherit button colors */
+.btn i,
+.btn .bi {
+    color: inherit !important;
+}
+
+/* Navigation icons */
+.nav-link i,
+.nav-link .bi {
+    color: var(--text-secondary);
+    transition: color 0.3s ease;
+}
+
+.nav-link:hover i,
+.nav-link:hover .bi,
+.nav-link.active i,
+.nav-link.active .bi {
+    color: var(--accent-primary);
+}
+
 /* Utilities */
 .text-muted { color: var(--text-muted); }
 .mb-2 { margin-bottom: 1rem; }

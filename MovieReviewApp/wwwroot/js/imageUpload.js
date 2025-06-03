@@ -9,24 +9,20 @@ window.initializePasteHandler = (dotNetHelper, componentId) => {
     if (activeImageUploadComponents.size === 1) {
         // Handle paste events
         document.addEventListener('paste', async (e) => {
-            console.log('Paste event detected, clipboard items:', e.clipboardData.items.length);
             const clipboardItems = e.clipboardData.items;
             
             for (let i = 0; i < clipboardItems.length; i++) {
                 const item = clipboardItems[i];
-                console.log('Clipboard item type:', item.type);
                 
                 if (item.type.indexOf('image') !== -1) {
-                    console.log('Image found in clipboard!');
                     e.preventDefault();
                     const file = item.getAsFile();
                     
                     if (file) {
-                        console.log('File size:', file.size, 'bytes');
                         
-                        // Check file size before processing (10MB limit)
-                        if (file.size > 10 * 1024 * 1024) {
-                            alert('Image is too large (max 10MB). Please use a smaller image.');
+                        // Check file size before processing (20MB limit)
+                        if (file.size > 20 * 1024 * 1024) {
+                            alert('Image is too large (max 20MB). Please use a smaller image.');
                             return;
                         }
                         

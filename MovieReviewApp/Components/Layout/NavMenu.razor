@@ -1,9 +1,11 @@
 ﻿@using Microsoft.Extensions.Options
 @using MovieReviewApp.Models
+@using MovieReviewApp.Services
 @inject IOptions<AppSettings> AppSettings
+@inject InstanceManager InstanceManager
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">@AppSettings.Value.Title</a>
+        <a class="navbar-brand" href="">@GetTitle()</a>
         <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -37,6 +39,33 @@
 @code {
     private bool collapseNavMenu = true;
     private string NavMenuCssClass => collapseNavMenu ? "menu-collapsed" : "menu-expanded";
+    private string? currentTitle;
+    
+    protected override void OnInitialized()
+    {
+        RefreshTitle();
+    }
+    
+    protected override void OnParametersSet()
+    {
+        RefreshTitle();
+    }
+    
+    private void RefreshTitle()
+    {
+        var config = InstanceManager.GetInstanceConfig();
+        currentTitle = config.DisplayName;
+    }
+    
+    private string GetTitle()
+    {
+        if (string.IsNullOrEmpty(currentTitle))
+        {
+            RefreshTitle();
+        }
+        return currentTitle ?? AppSettings.Value.Title;
+    }
+    
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;

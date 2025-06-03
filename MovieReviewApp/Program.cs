@@ -25,11 +25,11 @@ if (cmdArgs.ListInstances)
 }
 
 
-// Initialize instance manager with command line instance name or interactive selection
+// Initialize instance manager with command line instance name or default to "Default"
 var instanceName = cmdArgs.InstanceName;
 if (string.IsNullOrEmpty(instanceName))
 {
-    instanceName = CommandLineParser.SelectInstanceInteractively();
+    instanceName = "Default";
 }
 
 var instanceManager = new InstanceManager(instanceName);

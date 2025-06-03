@@ -220,7 +220,7 @@ namespace MovieReviewApp.Components.Pages
                     PhaseNumber = phaseNumber,
                     FromDatabase = false,
                     IsEditing = false,
-                    MeetupTime = currentDate.EndOfMonth().Date.AddDays(-10).AddHours(18) // Default to 6pm on last day of month
+                    MeetupTime = currentDate.LastFridayOfMonth().AddHours(18) // Default to 6pm on last Friday of month
                 });
 
                 availablePeople.Remove(person);
