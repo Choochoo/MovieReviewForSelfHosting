@@ -205,8 +205,5 @@ namespace MovieReviewApp.Components.Pages
                 }
             }
         }
-
-
-
     }
 }

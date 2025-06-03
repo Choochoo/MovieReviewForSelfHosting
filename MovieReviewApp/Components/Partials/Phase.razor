@@ -125,10 +125,10 @@
                         </div>
                         <br />
 
-                        @if (!string.IsNullOrEmpty(imageUrl))
+                        @if (MovieEvent.ImageId.HasValue)
                         {
                             <div>
-                                <img style="width:100%" src="@imageUrl" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+                                <img style="width:100%" src="/api/image/@MovieEvent.ImageId" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
                                 <div style="display:none;width:100%;height:300px;background:#f8f9fa;border:2px dashed #ccc;align-items:center;justify-content:center;color:#6c757d;">
                                     <div style="text-align:center;">
                                         <i class="bi bi-film" style="font-size:3rem;margin-bottom:1rem;"></i>
@@ -195,6 +195,7 @@ else
 }
 
 @code {
+
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
 
@@ -202,7 +203,6 @@ else
     private string? Synopsis = "Loading...";
     private string _apiKey = string.Empty;
     private bool isLoading = false;
-    private string? imageUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -238,8 +238,6 @@ else
                 await GetMovieSynopsisAsync(MovieEvent.Movie);
             }
 
-            // Set imageUrl here - ONLY use ImageId, never use PosterUrl
-            imageUrl = MovieEvent != null && MovieEvent.ImageId.HasValue ? $"/api/image/{MovieEvent.ImageId}" : null;
         }
         catch (Exception ex)
         {
@@ -369,7 +367,7 @@ else
             if (MovieEvent != null)
             {
                 MovieEvent.IsEditing = true;
-                
+
                 // Set default MeetupTime if not already set
                 if (!MovieEvent.MeetupTime.HasValue)
                 {
@@ -416,12 +414,23 @@ else
                         MovieEvent.PosterUrl = null; // Clear the URL since we now have a blob
                     }
                 }
-                
+
                 if (MovieEvent.AlreadySeen)
                 {
                     MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
                 }
                 await Task.Run(() => movieReviewService.AddOrUpdateMovieEvent(MovieEvent));
+
+                // Reload the MovieEvent from database to get the latest saved state
+                var updatedMovieEvent = movieReviewService.GetMovieEventById(MovieEvent.Id);
+                if (updatedMovieEvent != null)
+                {
+                    // Update the current MovieEvent with saved values
+                    MovieEvent = updatedMovieEvent;
+
+                    // Force UI refresh to show updated image state
+                    StateHasChanged();
+                }
 
                 if (!string.IsNullOrEmpty(MovieEvent.Movie))
                 {

@@ -1,6 +1,4 @@
-using MongoDB.Driver;
 using MovieReviewApp.Database;
-using MovieReviewApp.Enums;
 using MovieReviewApp.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -31,7 +29,7 @@ namespace MovieReviewApp.Services
                 var optimizedImageData = await OptimizeImageAsync(image);
                 var hash = ComputeHash(optimizedImageData);
 
-                var existingImages = await _database.FindAsync<ImageStorage>(CollectionType.ImageStorages, Builders<ImageStorage>.Filter.Eq(img => img.Hash, hash));
+                var existingImages = await _database.FindAsync<ImageStorage>(img => img.Hash == hash);
                 var existingImage = existingImages.FirstOrDefault();
 
                 if (existingImage != null)
@@ -51,7 +49,7 @@ namespace MovieReviewApp.Services
                     Hash = hash
                 };
 
-                await _database.InsertOneAsync(CollectionType.ImageStorages, imageStorage);
+                await _database.InsertAsync(imageStorage);
                 return imageStorage.Id;
             }
             catch (Exception ex)
@@ -85,7 +83,7 @@ namespace MovieReviewApp.Services
 
         public async Task<ImageStorage?> GetImageAsync(Guid imageId)
         {
-            return await _database.GetByIdAsync<ImageStorage>(CollectionType.ImageStorages, imageId);
+            return await _database.GetByIdAsync<ImageStorage>(imageId);
         }
 
         public async Task<byte[]?> GetImageDataAsync(Guid imageId)
@@ -122,8 +120,7 @@ namespace MovieReviewApp.Services
         {
             try
             {
-                await _database.DeleteOneAsync<ImageStorage>(CollectionType.ImageStorages, Builders<ImageStorage>.Filter.Where(img => img.Id == imageId));
-                return true;
+                return await _database.DeleteByIdAsync<ImageStorage>(imageId);
             }
             catch
             {

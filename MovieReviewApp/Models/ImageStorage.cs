@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
 {
+    [MongoCollection("ImageStorage")]
     public class ImageStorage : BaseModel
     {
         public string FileName { get; set; } = string.Empty;

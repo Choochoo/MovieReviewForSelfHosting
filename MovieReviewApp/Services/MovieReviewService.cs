@@ -26,7 +26,7 @@ namespace MovieReviewApp.Services
                     .OrderBy(me => me.StartDate)
                     .ToList();
             }
-            
+
             return _db.GetAll<MovieEvent>(CollectionType.MovieEvents)
                 .OrderBy(me => me.StartDate)
                 .ToList();
@@ -38,6 +38,12 @@ namespace MovieReviewApp.Services
             return _db.Find(CollectionType.MovieEvents, filter)
                 .OrderBy(x => x.StartDate)
                 .ToList();
+        }
+
+        public MovieEvent? GetMovieEventById(Guid id)
+        {
+            var filter = Builders<MovieEvent>.Filter.Eq(x => x.Id, id);
+            return _db.Find(CollectionType.MovieEvents, filter).FirstOrDefault();
         }
 
         public void AddOrUpdateMovieEvent(MovieEvent movieEvent)
@@ -53,6 +59,7 @@ namespace MovieReviewApp.Services
                 .Set(m => m.Movie, movieEvent.Movie)
                 .Set(m => m.DownloadLink, movieEvent.DownloadLink)
                 .Set(m => m.PosterUrl, movieEvent.PosterUrl)
+                .Set(m => m.ImageId, movieEvent.ImageId)
                 .Set(m => m.IMDb, movieEvent.IMDb)
                 .Set(m => m.Reasoning, movieEvent.Reasoning)
                 .Set(m => m.AlreadySeen, movieEvent.AlreadySeen)
@@ -72,7 +79,7 @@ namespace MovieReviewApp.Services
         public List<Person> GetAllPeople(bool respectOrder)
         {
             var people = _db.GetAll<Person>(CollectionType.People);
-            return respectOrder 
+            return respectOrder
                 ? people.OrderBy(x => x.Order).ToList()
                 : people.OrderBy(x => x.Name).ToList();
         }
@@ -92,7 +99,7 @@ namespace MovieReviewApp.Services
             var update = Builders<Person>.Update
                 .Set(p => p.Name, person.Name)
                 .Set(p => p.Order, person.Order);
-            
+
             _db.UpsertOne(CollectionType.People, filter, update);
         }
         #endregion
@@ -182,7 +189,7 @@ namespace MovieReviewApp.Services
             var updates = _db.GetAll<SiteUpdate>(CollectionType.SiteUpdates)
                 .OrderByDescending(x => x.LastUpdateTime)
                 .ToList();
-            
+
             return updates.FirstOrDefault()?.LastUpdateTime;
         }
 
@@ -209,7 +216,7 @@ namespace MovieReviewApp.Services
                 .Set(q => q.Question, question.Question)
                 .Set(q => q.IsActive, question.IsActive)
                 .Set(q => q.MaxVotes, question.MaxVotes);
-            
+
             _db.UpsertOne(CollectionType.AwardQuestions, filter, update);
         }
 
@@ -241,7 +248,7 @@ namespace MovieReviewApp.Services
                 var results = _db.Find(CollectionType.AwardEvents, filter)
                     .OrderByDescending(e => e.EndDate)
                     .ToList();
-                
+
                 Console.WriteLine($"GetPastAwardEvents found {results.Count} past events");
                 return results;
             }

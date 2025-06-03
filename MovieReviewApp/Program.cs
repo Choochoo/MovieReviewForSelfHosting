@@ -24,6 +24,7 @@ if (cmdArgs.ListInstances)
     return;
 }
 
+
 // Initialize instance manager with command line instance name or interactive selection
 var instanceName = cmdArgs.InstanceName;
 if (string.IsNullOrEmpty(instanceName))
@@ -86,6 +87,12 @@ builder.Services.Configure<AppSettings>(options =>
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Configure SignalR for larger messages (for image uploads)
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50MB
+});
 
 builder.Services.AddControllers();
 

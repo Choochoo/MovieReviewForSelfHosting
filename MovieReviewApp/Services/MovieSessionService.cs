@@ -16,6 +16,17 @@ public class MovieSessionService
     private readonly IWebHostEnvironment _environment;
     private readonly IConfiguration _configuration;
 
+    // Participant mapping for consistent MIC assignments
+    private static readonly Dictionary<int, string> MicParticipantMap = new()
+    {
+        { 1, "Participant 1" }, // TODO: Update with actual names from configuration
+        { 2, "Participant 2" },
+        { 3, "Participant 3" },
+        { 4, "Participant 4" },
+        { 5, "Participant 5" },
+        { 6, "Participant 6" }
+    };
+
     public MovieSessionService(
         MongoDbService database,
         GladiaService gladiaService,
@@ -37,23 +48,40 @@ public class MovieSessionService
     public async Task<MovieSession> CreateSessionFromFolder(string folderPath)
     {
         var folderName = Path.GetFileName(folderPath);
-        var match = Regex.Match(folderName, @"^(\d{4})-(\d{2})-(\d{2})_(.+)$");
         
-        if (!match.Success)
+        // Try to extract date from folder name (not required since dates in folder names aren't reliable)
+        var dateMatch = Regex.Match(folderName, @"(\d{4})[-_](\d{2})[-_](\d{2})");
+        DateTime sessionDate;
+        
+        if (dateMatch.Success)
         {
-            throw new ArgumentException($"Invalid folder name format: {folderName}. Expected YYYY-MM-DD_MovieTitle");
+            try
+            {
+                sessionDate = new DateTime(
+                    int.Parse(dateMatch.Groups[1].Value),
+                    int.Parse(dateMatch.Groups[2].Value),
+                    int.Parse(dateMatch.Groups[3].Value)
+                );
+                _logger.LogInformation("Extracted date {Date} from folder name", sessionDate.ToShortDateString());
+            }
+            catch
+            {
+                sessionDate = DateTime.Now;
+                _logger.LogWarning("Invalid date in folder name, using current date");
+            }
+        }
+        else
+        {
+            sessionDate = DateTime.Now;
+            _logger.LogDebug("No date found in folder name, using current date");
         }
 
-        var date = new DateTime(
-            int.Parse(match.Groups[1].Value),
-            int.Parse(match.Groups[2].Value),
-            int.Parse(match.Groups[3].Value)
-        );
-        var movieTitle = match.Groups[4].Value.Replace("_", " ");
+        // Extract movie title from folder name
+        var movieTitle = SuggestMovieTitle(folderName);
 
         var session = new MovieSession
         {
-            Date = date,
+            Date = sessionDate,
             MovieTitle = movieTitle,
             FolderPath = folderPath,
             Status = ProcessingStatus.Pending
@@ -74,6 +102,27 @@ public class MovieSessionService
         return session;
     }
 
+    private string SuggestMovieTitle(string folderName)
+    {
+        // Remove common separators and clean up
+        var title = folderName
+            .Replace("_", " ")
+            .Replace("-", " ")
+            .Replace(".", " ");
+
+        // Remove date patterns (they're not reliable per requirements)
+        title = Regex.Replace(title, @"\b\d{4}[-_]\d{2}[-_]\d{2}\b", "").Trim();
+        title = Regex.Replace(title, @"\b\d{2}[-_]\d{2}[-_]\d{4}\b", "").Trim();
+
+        // Normalize multiple spaces
+        title = Regex.Replace(title, @"\s+", " ");
+
+        // Title case
+        title = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(title.ToLower());
+
+        return !string.IsNullOrWhiteSpace(title) ? title : folderName;
+    }
+
     private async Task ScanAudioFiles(MovieSession session)
     {
         var audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -86,9 +135,12 @@ public class MovieSessionService
             .Where(f => audioExtensions.Contains(Path.GetExtension(f)))
             .ToList();
 
+        var identifiedFiles = new HashSet<string>();
+
         foreach (var filePath in files)
         {
             var fileName = Path.GetFileName(filePath);
+            var fileNameUpper = fileName.ToUpper();
             var fileInfo = new FileInfo(filePath);
             
             var audioFile = new AudioFile
@@ -99,21 +151,66 @@ public class MovieSessionService
                 Duration = await GetMediaDuration(filePath)
             };
 
-            // Determine if it's a speaker file or master recording
-            var speakerMatch = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
-            if (speakerMatch.Success)
+            // Check for MIC1-6 pattern
+            var micMatch = Regex.Match(fileNameUpper, @"^MIC(\d)\.WAV$");
+            if (micMatch.Success)
             {
-                audioFile.SpeakerNumber = int.Parse(speakerMatch.Groups[1].Value);
+                audioFile.SpeakerNumber = int.Parse(micMatch.Groups[1].Value);
+                identifiedFiles.Add(fileName);
             }
+            // Check for existing speaker pattern
+            else if (Regex.IsMatch(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase))
+            {
+                var match = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
+                audioFile.SpeakerNumber = int.Parse(match.Groups[1].Value);
+                identifiedFiles.Add(fileName);
+            }
+            // Skip PHONE.WAV and SOUND_PAD.WAV files (they're not speakers)
+            else if (fileNameUpper == "PHONE.WAV" || fileNameUpper == "SOUND_PAD.WAV" || fileNameUpper == "SOUNDPAD.WAV")
+            {
+                identifiedFiles.Add(fileName);
+                _logger.LogDebug("Identified {FileType} file: {FileName}", 
+                    fileNameUpper.Contains("PHONE") ? "phone" : "sound pad", fileName);
+            }
+            // Check for master recording with timestamp pattern (e.g., 2024_1122_1839.wav)
+            else if (Regex.IsMatch(fileName, @"^\d{4}_\d{4}_\d{4}\.(wav|mp3|m4a|aac|ogg|flac)$", RegexOptions.IgnoreCase))
+            {
+                audioFile.IsMasterRecording = true;
+                identifiedFiles.Add(fileName);
+                _logger.LogInformation("Identified timestamped master mix file: {FileName}", fileName);
+            }
+            // Check for master recording patterns
             else if (fileName.ToLower().Contains("master") || 
                      fileName.ToLower().Contains("combined") ||
                      fileName.ToLower().Contains("full") ||
                      fileName.ToLower().Contains("group"))
             {
                 audioFile.IsMasterRecording = true;
+                identifiedFiles.Add(fileName);
             }
 
             session.AudioFiles.Add(audioFile);
+        }
+
+        // Any unidentified file is likely the master mix (critical file)
+        var unidentifiedFiles = session.AudioFiles.Where(f => !identifiedFiles.Contains(f.FileName)).ToList();
+        if (unidentifiedFiles.Count == 1)
+        {
+            unidentifiedFiles[0].IsMasterRecording = true;
+            _logger.LogInformation("Identified master mix file by elimination: {FileName}", unidentifiedFiles[0].FileName);
+        }
+        else if (unidentifiedFiles.Count > 1)
+        {
+            // If multiple unidentified files, pick the largest as master mix
+            var largestFile = unidentifiedFiles.OrderByDescending(f => f.FileSize).First();
+            largestFile.IsMasterRecording = true;
+            _logger.LogWarning("Multiple unidentified files. Selected {FileName} as master mix based on size", largestFile.FileName);
+        }
+
+        // Log warning if no master recording found
+        if (!session.AudioFiles.Any(f => f.IsMasterRecording))
+        {
+            _logger.LogError("CRITICAL: No master mix file identified in session {SessionId}", session.Id);
         }
     }
 
@@ -131,8 +228,13 @@ public class MovieSessionService
         var allSpeakers = Enumerable.Range(1, 6).ToList();
         var absentSpeakers = allSpeakers.Except(presentSpeakers).ToList();
 
-        session.ParticipantsPresent = presentSpeakers.Select(s => $"Speaker{s}").ToList();
-        session.ParticipantsAbsent = absentSpeakers.Select(s => $"Speaker{s}").ToList();
+        session.ParticipantsPresent = presentSpeakers.Select(GetParticipantName).ToList();
+        session.ParticipantsAbsent = absentSpeakers.Select(GetParticipantName).ToList();
+    }
+
+    public static string GetParticipantName(int micNumber)
+    {
+        return MicParticipantMap.TryGetValue(micNumber, out var name) ? name : $"Speaker{micNumber}";
     }
 
     private async Task<TimeSpan?> GetMediaDuration(string filePath)

@@ -86,7 +86,7 @@ This is a Blazor Server application (.NET 8.0) for tracking movie reviews across
   - Movie services (`MovieReviewService.cs`, `MovieSessionService.cs`)
   - External APIs (`GladiaService.cs`, `MessengerService.cs`)
   - Configuration (`SecureConfigurationProvider.cs`)
-- **Database/GenericMongoDb.cs** - Generic MongoDB repository
+- **Database/MongoDbService.cs** - Unified MongoDB service with type-based and enum-based collection access
 - **Handlers/** - Command processing handlers
 - **Middleware/** - Request pipeline components
 
@@ -129,3 +129,7 @@ Files per instance:
 - **TMDB**: Movie data and posters (required)
 - **Gladia**: Audio transcription with speaker diarization (optional)
 - **Facebook**: Messenger integration for notifications (optional)
+
+### Important Instructions
+
+- **Git Commits**: Never include Claude references (🤖 Generated with Claude Code, Co-Authored-By: Claude) in git commit messages

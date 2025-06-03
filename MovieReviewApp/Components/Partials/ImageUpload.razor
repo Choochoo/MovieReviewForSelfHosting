@@ -1,10 +1,11 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @using MovieReviewApp.Services
+@implements IAsyncDisposable
 @inject ImageService ImageService
 @inject IJSRuntime JSRuntime
 
-<div class="image-upload-container">
+<div class="image-upload-container" data-component-id="@componentId">
     <label><b>Movie Poster:</b></label>
     <div class="image-upload-area @(isDragOver ? "drag-over" : "")" 
          @ondrop="HandleDrop" 
@@ -69,23 +70,42 @@
     private string? ErrorMessage;
     private string urlInput = string.Empty;
     private string? PreviewImageUrl;
+    private string componentId = Guid.NewGuid().ToString();
+    private DotNetObjectReference<ImageUpload>? dotNetRef;
 
     protected override async Task OnInitializedAsync()
     {
         await UpdatePreviewImage();
-        await JSRuntime.InvokeVoidAsync("initializePasteHandler", DotNetObjectReference.Create(this));
+        dotNetRef = DotNetObjectReference.Create(this);
+        
+        // Try to initialize paste handler, ignore if function doesn't exist (cache issue)
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("initializePasteHandler", dotNetRef, componentId);
+        }
+        catch (JSException)
+        {
+            // Function doesn't exist due to cache, will work after refresh
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await UpdatePreviewImage();
     }
 
     private async Task UpdatePreviewImage()
     {
         if (ImageId.HasValue)
         {
-            PreviewImageUrl = $"/api/image/{ImageId}";
+            // Add cache-busting parameter to force browser refresh
+            PreviewImageUrl = $"/api/image/{ImageId}?v={DateTime.Now.Ticks}";
         }
         else
         {
             PreviewImageUrl = null;
         }
+        
         StateHasChanged();
     }
 
@@ -229,6 +249,15 @@
     {
         try
         {
+            // Check size before processing (base64 is ~33% larger than actual data)
+            var estimatedSize = (base64Data.Length * 3) / 4;
+            if (estimatedSize > 10 * 1024 * 1024) // 10MB limit
+            {
+                ErrorMessage = "Pasted image is too large (max 10MB). Please use a smaller image.";
+                StateHasChanged();
+                return;
+            }
+            
             var imageData = Convert.FromBase64String(base64Data);
             await ProcessImageData(imageData, fileName);
         }
@@ -288,6 +317,11 @@
             IsUploading = false;
             StateHasChanged();
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        dotNetRef?.Dispose();
     }
 }
 

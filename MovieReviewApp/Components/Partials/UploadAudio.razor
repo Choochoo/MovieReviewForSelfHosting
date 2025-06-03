@@ -1,8 +1,12 @@
 ﻿@page "/upload-audio"
 @inject IWebHostEnvironment WebHostEnvironment
+@inject MovieReviewService MovieReviewService
+@inject MovieSessionService MovieSessionService
 @using System.IO
 @using System.Globalization
 @using System.Text.RegularExpressions
+@using MovieReviewApp.Models
+@using MovieReviewApp.Services
 
 <div class="container-fluid">
     <div class="row">
@@ -20,13 +24,25 @@
                 </div>
                 <div class="card-body">
                     <div class="mb-3">
-                        <label class="form-label">Movie Title</label>
-                        <input type="text" class="form-control" @bind="movieTitle" placeholder="e.g., Dune Part Two" />
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Session Date</label>
-                        <input type="date" class="form-control" @bind="sessionDate" />
+                        <label class="form-label">Select Movie</label>
+                        <select class="form-select" @onchange="OnMovieSelected">
+                            <option value="">-- Select a movie we discussed --</option>
+                            @if (availableMovies != null)
+                            {
+                                @foreach (var movie in availableMovies)
+                                {
+                                    <option value="@movie.Id">
+                                        @movie.Movie @if(movie.MeetupTime.HasValue) { <text>(@movie.MeetupTime.Value.ToString("MMM dd, yyyy"))</text> }
+                                    </option>
+                                }
+                            }
+                        </select>
+                        @if (!string.IsNullOrEmpty(movieTitle))
+                        {
+                            <div class="mt-2 text-success">
+                                <small>✅ Selected: <strong>@movieTitle</strong> - @sessionDate.ToString("MMM dd, yyyy")</small>
+                            </div>
+                        }
                     </div>
                     
                     <div class="mb-3">
@@ -38,13 +54,22 @@
                                 <div class="col-4">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="speaker@(speakerNum)" 
+                                               checked="@presentSpeakers.Contains(speakerNum)"
                                                @onchange="@(e => ToggleSpeaker(speakerNum, (bool)e.Value!))" />
                                         <label class="form-check-label" for="speaker@(speakerNum)">
-                                            🎤 Speaker @speakerNum
+                                            🎤 @MovieSessionService.GetParticipantName(speakerNum)
                                         </label>
                                     </div>
                                 </div>
                             }
+                        </div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="SelectAllSpeakers">
+                                Select All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @onclick="ClearAllSpeakers">
+                                Clear All
+                            </button>
                         </div>
                     </div>
 
@@ -131,22 +156,28 @@
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <h6>Individual Speaker Files:</h6>
+                            <h6>Individual Microphone Files:</h6>
                             <ul>
-                                <li><code>1_Speaker1.wav</code> - Mic #1 recording</li>
-                                <li><code>2_Speaker2.mp3</code> - Mic #2 recording</li>
-                                <li><code>3_Speaker3.m4a</code> - Mic #3 recording</li>
-                                <li>... up to <code>6_Speaker6.wav</code></li>
+                                <li><code>MIC1.WAV</code> - @MovieSessionService.GetParticipantName(1)</li>
+                                <li><code>MIC2.WAV</code> - @MovieSessionService.GetParticipantName(2)</li>
+                                <li><code>MIC3.WAV</code> - @MovieSessionService.GetParticipantName(3)</li>
+                                <li><code>MIC4.WAV</code> - @MovieSessionService.GetParticipantName(4)</li>
+                                <li><code>MIC5.WAV</code> - @MovieSessionService.GetParticipantName(5)</li>
+                                <li><code>MIC6.WAV</code> - @MovieSessionService.GetParticipantName(6)</li>
+                                <li><code>PHONE.WAV</code> - Phone audio input</li>
+                                <li><code>SOUND_PAD.WAV</code> - Sound effects/clips</li>
                             </ul>
                         </div>
                         <div class="col-md-6">
-                            <h6>Master Recording (optional):</h6>
+                            <h6>Master Recording (CRITICAL):</h6>
                             <ul>
+                                <li><code>2020_0102_0036.WAV</code> - Random filename (master mix)</li>
                                 <li><code>master_recording.wav</code></li>
                                 <li><code>group_audio.mp3</code></li>
                                 <li><code>combined_session.m4a</code></li>
-                                <li>Any file with "master", "combined", "full", or "group"</li>
+                                <li>Any unidentified file (usually largest)</li>
                             </ul>
+                            <p class="text-warning mb-0"><small>⚠️ Master mix contains all speakers merged - essential for speaker identification!</small></p>
                         </div>
                     </div>
                     <div class="alert alert-warning mt-3">
@@ -167,11 +198,59 @@
     private bool uploadComplete = false;
     private string finalFolderPath = string.Empty;
     private const int ChunkSize = 1024 * 1024; // 1 MB chunks
+    private List<MovieEvent>? availableMovies;
+    private MovieEvent? selectedMovie;
 
     private static readonly string[] AllowedExtensions = { 
         ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
         ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp"
     };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load available movies and default all speakers to checked
+        availableMovies = MovieReviewService.GetAllMovieEvents();
+        
+        // Default all speakers checked
+        for (int i = 1; i <= 6; i++)
+        {
+            presentSpeakers.Add(i);
+        }
+    }
+
+    private async Task OnMovieSelected(ChangeEventArgs e)
+    {
+        var movieIdStr = e.Value?.ToString();
+        if (string.IsNullOrEmpty(movieIdStr) || !Guid.TryParse(movieIdStr, out var movieId))
+        {
+            selectedMovie = null;
+            movieTitle = string.Empty;
+            sessionDate = DateTime.Today;
+            return;
+        }
+
+        selectedMovie = availableMovies?.FirstOrDefault(m => m.Id == movieId);
+        if (selectedMovie != null)
+        {
+            movieTitle = selectedMovie.Movie ?? string.Empty;
+            // Use meetup time if available, otherwise use seen date, otherwise today
+            sessionDate = selectedMovie.MeetupTime?.Date ?? selectedMovie.SeenDate?.Date ?? DateTime.Today;
+        }
+    }
+
+    private void SelectAllSpeakers()
+    {
+        presentSpeakers.Clear();
+        for (int i = 1; i <= 6; i++)
+        {
+            presentSpeakers.Add(i);
+        }
+    }
+
+    private void ClearAllSpeakers()
+    {
+        presentSpeakers.Clear();
+    }
 
     private void ToggleSpeaker(int speakerNum, bool isChecked)
     {
@@ -250,22 +329,52 @@
 
     private string DetermineFileType(string fileName)
     {
-        var lowerName = fileName.ToLower();
+        var upperName = fileName.ToUpper();
         
-        // Check for speaker files
+        // Check for MIC1-6 pattern
+        var micMatch = Regex.Match(upperName, @"^MIC(\d)\.WAV$");
+        if (micMatch.Success)
+        {
+            var micNum = int.Parse(micMatch.Groups[1].Value);
+            return $"🎤 {MovieSessionService.GetParticipantName(micNum)}";
+        }
+        
+        // Check for PHONE
+        if (upperName == "PHONE.WAV")
+        {
+            return "📞 Phone Input";
+        }
+        
+        // Check for SOUND_PAD
+        if (upperName == "SOUND_PAD.WAV" || upperName == "SOUNDPAD.WAV")
+        {
+            return "🔊 Sound Pad";
+        }
+        
+        // Check for legacy speaker files
         var speakerMatch = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
         if (speakerMatch.Success)
         {
-            return $"🎤 Speaker {speakerMatch.Groups[1].Value}";
+            var speakerNum = int.Parse(speakerMatch.Groups[1].Value);
+            return $"🎤 {MovieSessionService.GetParticipantName(speakerNum)}";
         }
         
-        // Check for master recording
+        // Check for master recording with date pattern (e.g., 2024_1122_1839.wav)
+        var datePattern = Regex.Match(fileName, @"^\d{4}_\d{4}_\d{4}\.(wav|mp3|m4a|aac|ogg|flac)$", RegexOptions.IgnoreCase);
+        if (datePattern.Success)
+        {
+            return "🎬 Master Mix (timestamped)";
+        }
+        
+        // Check for master recording with keywords
+        var lowerName = fileName.ToLower();
         if (lowerName.Contains("master") || lowerName.Contains("combined") || 
             lowerName.Contains("full") || lowerName.Contains("group"))
         {
             return "🎬 Master Recording";
         }
         
+        // If unidentified, just show the filename
         return fileName;
     }
 
@@ -301,11 +410,18 @@
     {
         movieTitle = string.Empty;
         sessionDate = DateTime.Today;
-        presentSpeakers.Clear();
+        selectedMovie = null;
         uploadedFiles.Clear();
         errorMessage = string.Empty;
         uploadComplete = false;
         finalFolderPath = string.Empty;
+        
+        // Keep all speakers selected by default
+        presentSpeakers.Clear();
+        for (int i = 1; i <= 6; i++)
+        {
+            presentSpeakers.Add(i);
+        }
     }
 
     private bool IsAudioFile(string fileName)

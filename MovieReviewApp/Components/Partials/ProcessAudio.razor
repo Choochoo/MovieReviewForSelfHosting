@@ -1,5 +1,4 @@
-﻿@page "/discussions/upload/process"
-@using MovieReviewApp.Models
+﻿@using MovieReviewApp.Models
 @using MovieReviewApp.Services
 @using System.Globalization
 @using System.Text.RegularExpressions
@@ -44,9 +43,14 @@
                                         <h6 class="mb-1">@folder.MovieTitle</h6>
                                         <small class="text-muted">@folder.Date.ToString("MMM dd, yyyy") • @folder.FileCount files</small>
                                     </div>
-                                    <button class="btn btn-sm btn-success" @onclick="() => ProcessFolder(folder)" disabled="@IsProcessing">
-                                        <i class="bi bi-play-fill"></i> Process
-                                    </button>
+                                    <div class="btn-group">
+                                        <button class="btn btn-sm btn-success" @onclick="() => ProcessFolder(folder)" disabled="@IsProcessing">
+                                            <i class="bi bi-play-fill"></i> Process
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeletePendingFolder(folder)" disabled="@IsProcessing">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             }
                         </div>
@@ -345,6 +349,23 @@
     private void ViewSession(string sessionId)
     {
         Navigation.NavigateTo($"/discussions/session/{sessionId}");
+    }
+
+    private async Task DeletePendingFolder(PendingFolder folder)
+    {
+        try
+        {
+            if (Directory.Exists(folder.Path))
+            {
+                Directory.Delete(folder.Path, recursive: true);
+                await RefreshDirectories();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Could add a toast or error message here
+            Console.WriteLine($"Error deleting folder: {ex.Message}");
+        }
     }
 
     private bool IsAudioFile(string filePath)
