@@ -98,12 +98,21 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 10L * 1024 * 1024 * 1024; // 10 GB
 });
 
-// Add generic MongoDB service and domain service
+// Add MongoDB services
 builder.Services.AddSingleton<GenericMongoDb>(provider => 
     new GenericMongoDb(
         provider.GetRequiredService<IConfiguration>(),
         provider.GetRequiredService<SecretsManager>(),
         provider.GetRequiredService<InstanceManager>()));
+
+// Add the new clean MongoDB service
+builder.Services.AddSingleton<MongoDbService>(provider => 
+    new MongoDbService(
+        provider.GetRequiredService<IConfiguration>(),
+        provider.GetRequiredService<SecretsManager>(),
+        provider.GetRequiredService<InstanceManager>(),
+        provider.GetRequiredService<ILogger<MongoDbService>>()));
+
 builder.Services.AddScoped<MovieReviewService>();
 
 // MongoDb service replaced with generic system
@@ -118,6 +127,12 @@ if (!instanceManager.IsFirstRun)
             provider.GetRequiredService<IWebHostEnvironment>().WebRootPath,
             provider.GetRequiredService<MovieReviewService>()));
 }
+
+// Register new audio processing services
+builder.Services.AddScoped<GladiaService>();
+builder.Services.AddScoped<MovieSessionAnalysisService>();
+builder.Services.AddScoped<MovieSessionService>();
+builder.Services.AddScoped<AudioClipService>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 

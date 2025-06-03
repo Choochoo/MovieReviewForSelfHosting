@@ -16,16 +16,16 @@ namespace MovieReviewApp.Database
             {
                 // Get MongoDB connection string from instance secrets
                 string mongoConnection = secretsManager.GetSecret("MongoDB:ConnectionString");
-                
+
                 if (!string.IsNullOrEmpty(mongoConnection))
                 {
                     // Generate instance-specific database name to ensure complete isolation
                     var connectionBuilder = new MongoDB.Driver.MongoUrlBuilder(mongoConnection);
                     var instanceDbName = $"{connectionBuilder.DatabaseName ?? "moviereview"}_{instanceManager.InstanceName.ToLower().Replace("-", "_")}";
                     connectionBuilder.DatabaseName = instanceDbName;
-                    
+
                     var finalConnectionString = connectionBuilder.ToMongoUrl().ToString();
-                    
+
                     var client = new MongoClient(finalConnectionString);
                     database = client.GetDatabase(instanceDbName);
                     Console.WriteLine($"MongoDB connected successfully to instance database: {instanceDbName}");
@@ -52,20 +52,8 @@ namespace MovieReviewApp.Database
         public IMongoCollection<T>? GetCollection<T>(CollectionType collectionType)
         {
             if (database == null) return null;
-            
-            string collectionName = GetCollectionName(collectionType);
-            return database.GetCollection<T>(collectionName);
-        }
 
-        // Map enum to actual collection names
-        private string GetCollectionName(CollectionType collectionType)
-        {
-            // Special case for backward compatibility
-            if (collectionType == CollectionType.MovieEvents)
-                return "MovieEvents";
-            
-            // For all others, just use the enum name
-            return collectionType.ToString();
+            return database.GetCollection<T>(collectionType.ToString());
         }
 
         // Generic CRUD operations
@@ -73,7 +61,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return new List<T>();
-            
+
             return await collection.Find(_ => true).ToListAsync();
         }
 
@@ -81,7 +69,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return new List<T>();
-            
+
             return collection.Find(_ => true).ToList();
         }
 
@@ -89,7 +77,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return null;
-            
+
             return await collection.Find(x => x.Id == id).FirstOrDefaultAsync();
         }
 
@@ -97,7 +85,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return null;
-            
+
             return collection.Find(x => x.Id == id).FirstOrDefault();
         }
 
@@ -105,7 +93,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return new List<T>();
-            
+
             return await collection.Find(filter).ToListAsync();
         }
 
@@ -113,7 +101,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return new List<T>();
-            
+
             return collection.Find(filter).ToList();
         }
 
@@ -121,7 +109,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return;
-            
+
             await collection.InsertOneAsync(document);
         }
 
@@ -129,7 +117,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return;
-            
+
             collection.InsertOne(document);
         }
 
@@ -137,7 +125,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = await collection.UpdateOneAsync(filter, update);
             return result.ModifiedCount > 0;
         }
@@ -146,7 +134,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = collection.UpdateOne(filter, update);
             return result.ModifiedCount > 0;
         }
@@ -155,7 +143,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = await collection.UpdateOneAsync(filter, update, new UpdateOptions { IsUpsert = true });
             return result.ModifiedCount > 0 || result.UpsertedId != null;
         }
@@ -164,7 +152,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = collection.UpdateOne(filter, update, new UpdateOptions { IsUpsert = true });
             return result.ModifiedCount > 0 || result.UpsertedId != null;
         }
@@ -173,7 +161,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = await collection.DeleteOneAsync(filter);
             return result.DeletedCount > 0;
         }
@@ -182,7 +170,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return false;
-            
+
             var result = collection.DeleteOne(filter);
             return result.DeletedCount > 0;
         }
@@ -191,7 +179,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return 0;
-            
+
             var result = await collection.DeleteManyAsync(filter);
             return result.DeletedCount;
         }
@@ -200,7 +188,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return 0;
-            
+
             var result = collection.DeleteMany(filter);
             return result.DeletedCount;
         }
@@ -209,7 +197,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return 0;
-            
+
             return await collection.CountDocumentsAsync(filter);
         }
 
@@ -217,7 +205,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionType);
             if (collection == null) return 0;
-            
+
             return collection.CountDocuments(filter);
         }
 
@@ -227,5 +215,74 @@ namespace MovieReviewApp.Database
             if (collection == null) return;
             await collection.ReplaceOneAsync(filterExpression, replacement);
         }
+
+        #region String Overloads for Backward Compatibility
+
+        // These overloads accept string collection names for backward compatibility
+        // Consider migrating to CollectionType enum for type safety
+
+        private IMongoCollection<T>? GetCollection<T>(string collectionName)
+        {
+            if (database == null) return null;
+            return database.GetCollection<T>(collectionName);
+        }
+
+        public async Task<List<T>> GetAllAsync<T>(string collectionName)
+        {
+            var collection = GetCollection<T>(collectionName);
+            if (collection == null) return new List<T>();
+            return await collection.Find(_ => true).ToListAsync();
+        }
+
+        public async Task<T?> GetByIdAsync<T>(string collectionName, string id)
+        {
+            var collection = GetCollection<T>(collectionName);
+            if (collection == null) return default(T);
+            
+            var filter = Builders<T>.Filter.Eq("_id", id);
+            return await collection.Find(filter).FirstOrDefaultAsync();
+        }
+
+        public async Task UpsertAsync<T>(string collectionName, T document)
+        {
+            var collection = GetCollection<T>(collectionName);
+            if (collection == null) return;
+
+            var idProperty = typeof(T).GetProperty("Id");
+            if (idProperty != null)
+            {
+                var idValue = idProperty.GetValue(document);
+                if (idValue != null)
+                {
+                    var filter = Builders<T>.Filter.Eq("_id", idValue.ToString());
+                    await collection.ReplaceOneAsync(filter, document, new ReplaceOptions { IsUpsert = true });
+                    return;
+                }
+            }
+
+            // If no Id property or value, just insert
+            await collection.InsertOneAsync(document);
+        }
+
+        public async Task<bool> DeleteAsync<T>(string collectionName, string id)
+        {
+            var collection = GetCollection<T>(collectionName);
+            if (collection == null) return false;
+
+            var filter = Builders<T>.Filter.Eq("_id", id);
+            var result = await collection.DeleteOneAsync(filter);
+            return result.DeletedCount > 0;
+        }
+
+        public async Task<List<T>> SearchAsync<T>(string collectionName, string searchField, string searchTerm)
+        {
+            var collection = GetCollection<T>(collectionName);
+            if (collection == null) return new List<T>();
+
+            var filter = Builders<T>.Filter.Regex(searchField, new MongoDB.Bson.BsonRegularExpression(searchTerm, "i"));
+            return await collection.Find(filter).ToListAsync();
+        }
+
+        #endregion
     }
 }

@@ -11,6 +11,7 @@ namespace MovieReviewApp.Enums
         AwardQuestions,
         AwardEvents,
         AwardVotes,
-        ImageStorage
+        ImageStorage,
+        MovieSessions
     }
 }

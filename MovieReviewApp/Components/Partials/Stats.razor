@@ -1,57 +1,268 @@
 ﻿@page "/discussions/stats"
+@page "/discussions/session/{SessionId}"
 @using MovieReviewApp.Models
-@using MovieReviewApp.Database
 @using MovieReviewApp.Services
+@inject MovieSessionService MovieSessionService
+@inject NavigationManager Navigation
 
-<h3>Processed Stats Commands</h3>
-
-@if (StatsCommands == null)
-{
-    <p><em>Loading...</em></p>
-}
-else if (!StatsCommands.Any())
-{
-    <p>No data found.</p>
-}
-else
-{
-    <!-- Loop through each StatsCommand for all data -->
-    @foreach (var command in StatsCommands)
+<div class="container-fluid">
+    @if (string.IsNullOrEmpty(SessionId))
     {
-        <div class="card mb-3">
-            <div class="card-header">
-                @command.FolderName.Replace("-", " ")
-            </div>
-            <div class="card-body">
-                <h5 class="card-title">@command.Command</h5>
-                <p class="card-text">
-                    <ul>
-                        @foreach (var result in command.Results)
-                        {
-                            <li>@result</li>
-                        }
-                    </ul>
-                </p>
-                <p class="card-text"><small class="text-muted">Processed on: @command.ProcessedDate.ToString("MMMM dd, yyyy")</small></p>
+        <!-- Movie Sessions Grid View -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">🎬 Movie Session Analytics</h3>
             </div>
         </div>
+
+        <!-- Filter Bar -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" placeholder="Search movies or participants..." @bind="searchTerm" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control" @bind="sortBy">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="alphabetical">Alphabetical</option>
+                    <option value="participants">Most Participants</option>
+                    <option value="entertainment">Highest Entertainment</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-control" @bind="filterStatus">
+                    <option value="all">All Sessions</option>
+                    <option value="complete">Complete</option>
+                    <option value="processing">Processing</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Sessions Grid -->
+        @if (sessions == null)
+        {
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else if (!sessions.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No movie sessions found. Upload audio files to get started!
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                @foreach (var session in GetFilteredSessions())
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id)">
+                            <div class="card-header">
+                                <h5 class="mb-1">@session.MovieTitle</h5>
+                                <small class="text-muted">@session.Date.ToString("MMMM dd, yyyy")</small>
+                            </div>
+                            <div class="card-body">
+                                <!-- Participant Avatars -->
+                                <div class="mb-3">
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        @foreach (var participant in session.ParticipantsPresent)
+                                        {
+                                            <span class="badge bg-primary">🎤 @participant</span>
+                                        }
+                                        @foreach (var absent in session.ParticipantsAbsent)
+                                        {
+                                            <span class="badge bg-secondary" style="opacity: 0.5;">😶 @absent</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (session.Status == ProcessingStatus.Complete && session.SessionStats != null)
+                                {
+                                    <div class="session-stats">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span><i class="bi bi-clock"></i> Duration:</span>
+                                            <strong>@session.SessionStats.TotalDuration</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span><i class="bi bi-lightning"></i> Energy:</span>
+                                            <strong>@GetEnergyEmoji(session.SessionStats.EnergyLevel) @session.SessionStats.EnergyLevel</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span><i class="bi bi-star"></i> Highlights:</span>
+                                            <strong>@session.SessionStats.HighlightMoments moments</strong>
+                                        </div>
+                                    </div>
+                                }
+                                else if (session.Status == ProcessingStatus.Validating || session.Status == ProcessingStatus.Transcribing || session.Status == ProcessingStatus.Analyzing)
+                                {
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Processing...</span>
+                                        </div>
+                                        <p class="mb-0 mt-2">Processing...</p>
+                                    </div>
+                                }
+                                else if (session.Status == ProcessingStatus.Failed)
+                                {
+                                    <div class="alert alert-danger mb-0 py-1 px-2">
+                                        <small><i class="bi bi-x-circle"></i> @session.ErrorMessage</small>
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <button class="btn btn-sm @(session.Status == ProcessingStatus.Complete ? "btn-primary" : "btn-secondary") w-100">
+                                    @if (session.Status == ProcessingStatus.Complete)
+                                    {
+                                        <i class="bi bi-bar-chart"></i> <span>View Analysis</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-info-circle"></i> <span>View Details</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     }
-}
+    else
+    {
+        <!-- Individual Session View -->
+        @if (selectedSession == null)
+        {
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <SessionDetailsView Session="selectedSession" />
+        }
+    }
+</div>
+
+<style>
+    .movie-session-card {
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .movie-session-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .session-stats {
+        font-size: 0.9rem;
+    }
+</style>
 
 @code {
-    [Inject]
-    private MovieReviewService movieReviewService { get; set; } = default!;
+    [Parameter] public string? SessionId { get; set; }
+    
+    private List<MovieSession>? sessions;
+    private MovieSession? selectedSession;
+    private string searchTerm = string.Empty;
+    private string sortBy = "newest";
+    private string filterStatus = "all";
 
-    private List<StatsCommand>? StatsCommands { get; set; }
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadAllStatsCommands();
+        if (string.IsNullOrEmpty(SessionId))
+        {
+            await LoadAllSessions();
+        }
+        else
+        {
+            await LoadSession(SessionId);
+        }
     }
 
-    private void LoadAllStatsCommands()
+    protected override async Task OnParametersSetAsync()
     {
-        // Load all processed stats commands from the database
-        StatsCommands = movieReviewService.GetProcessedStatCommands();
+        if (!string.IsNullOrEmpty(SessionId) && (selectedSession == null || selectedSession.Id != SessionId))
+        {
+            await LoadSession(SessionId);
+        }
+        else if (string.IsNullOrEmpty(SessionId) && selectedSession != null)
+        {
+            selectedSession = null;
+            await LoadAllSessions();
+        }
     }
+
+    private async Task LoadAllSessions()
+    {
+        sessions = await MovieSessionService.GetAllSessions();
+    }
+
+    private async Task LoadSession(string sessionId)
+    {
+        selectedSession = await MovieSessionService.GetSession(sessionId);
+    }
+
+    private List<MovieSession> GetFilteredSessions()
+    {
+        if (sessions == null) return new List<MovieSession>();
+
+        var filtered = sessions.AsEnumerable();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filtered = filtered.Where(s => 
+                s.MovieTitle.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                s.ParticipantsPresent.Any(p => p.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            );
+        }
+
+        // Apply status filter
+        if (filterStatus != "all")
+        {
+            filtered = filterStatus switch
+            {
+                "complete" => filtered.Where(s => s.Status == ProcessingStatus.Complete),
+                "processing" => filtered.Where(s => s.Status == ProcessingStatus.Validating || s.Status == ProcessingStatus.Transcribing || s.Status == ProcessingStatus.Analyzing),
+                "failed" => filtered.Where(s => s.Status == ProcessingStatus.Failed),
+                _ => filtered
+            };
+        }
+
+        // Apply sorting
+        filtered = sortBy switch
+        {
+            "newest" => filtered.OrderByDescending(s => s.Date),
+            "oldest" => filtered.OrderBy(s => s.Date),
+            "alphabetical" => filtered.OrderBy(s => s.MovieTitle),
+            "participants" => filtered.OrderByDescending(s => s.ParticipantsPresent.Count),
+            "entertainment" => filtered.OrderByDescending(s => s.SessionStats?.HighlightMoments ?? 0),
+            _ => filtered
+        };
+
+        return filtered.ToList();
+    }
+
+    private void ViewSession(string sessionId)
+    {
+        Navigation.NavigateTo($"/discussions/session/{sessionId}");
+    }
+
+    private string GetEnergyEmoji(EnergyLevel level) => level switch
+    {
+        EnergyLevel.High => "🔥",
+        EnergyLevel.Medium => "⚡",
+        EnergyLevel.Low => "😴",
+        _ => "❓"
+    };
 }

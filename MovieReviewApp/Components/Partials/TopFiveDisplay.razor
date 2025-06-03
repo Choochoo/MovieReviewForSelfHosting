@@ -1,0 +1,147 @@
+@using MovieReviewApp.Models
+@inject IJSRuntime JSRuntime
+
+<div class="top-five-section">
+    @if (TopFiveList != null && TopFiveList.Entries.Any())
+    {
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="@IconClass me-2"></i>
+                    @Title
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    @foreach (var entry in TopFiveList.Entries.OrderBy(e => e.Rank))
+                    {
+                        <div class="list-group-item px-0">
+                            <div class="d-flex align-items-start">
+                                <div class="rank-badge me-3">
+                                    <span class="badge bg-primary fs-6">#@entry.Rank</span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <strong>@entry.Speaker</strong>
+                                            <small class="text-muted ms-2">@entry.Timestamp</small>
+                                            @if (entry.AudioQuality != AudioQuality.Clear)
+                                            {
+                                                <span class="badge bg-warning ms-2">@entry.AudioQuality</span>
+                                            }
+                                        </div>
+                                        <div>
+                                            @if (!string.IsNullOrEmpty(entry.AudioClipUrl))
+                                            {
+                                                <button class="btn btn-sm btn-outline-primary me-2" 
+                                                        @onclick="() => PlayAudioClip(entry.AudioClipUrl)">
+                                                    <i class="bi bi-play-circle"></i> Play
+                                                </button>
+                                            }
+                                            <span class="badge bg-secondary">@entry.Score.ToString("F1")/10</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <blockquote class="blockquote mb-2">
+                                        <p class="mb-1">"@entry.Quote"</p>
+                                    </blockquote>
+                                    
+                                    @if (!string.IsNullOrEmpty(entry.Context))
+                                    {
+                                        <p class="text-muted small mb-2">
+                                            <strong>Context:</strong> @entry.Context
+                                        </p>
+                                    }
+                                    
+                                    @if (!string.IsNullOrEmpty(entry.Reasoning))
+                                    {
+                                        <p class="text-muted small mb-0">
+                                            <strong>Why it's @(IsFunny ? "funny" : "bland"):</strong> @entry.Reasoning
+                                        </p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-info mt-4">
+            <i class="@IconClass me-2"></i>
+            No @Title.ToLower() found in this session.
+        </div>
+    }
+</div>
+
+<!-- Audio Player Modal -->
+<div class="modal fade" id="audioPlayerModal" tabindex="-1" aria-labelledby="audioPlayerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="audioPlayerModalLabel">Audio Clip</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <audio id="audioPlayer" controls class="w-100" preload="none">
+                    Your browser does not support the audio element.
+                </audio>
+                <p class="mt-3 text-muted small">
+                    Clip includes a few seconds of context before and after the highlighted moment.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TopFiveList? TopFiveList { get; set; }
+    [Parameter] public string Title { get; set; } = "Top 5";
+    [Parameter] public string IconClass { get; set; } = "bi bi-trophy";
+    [Parameter] public bool IsFunny { get; set; } = true;
+
+    private async Task PlayAudioClip(string audioUrl)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("playAudioClip", audioUrl);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error playing audio clip: {ex.Message}");
+        }
+    }
+}
+
+<style>
+    .rank-badge {
+        min-width: 40px;
+    }
+    
+    .rank-badge .badge {
+        width: 35px;
+        height: 35px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+    }
+    
+    .top-five-section .blockquote {
+        font-size: 1rem;
+        border-left: 3px solid var(--bs-primary);
+        padding-left: 1rem;
+        margin-left: 0;
+    }
+    
+    .list-group-item:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+    }
+    
+    .btn-outline-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+</style>

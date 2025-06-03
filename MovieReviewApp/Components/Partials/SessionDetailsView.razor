@@ -1,0 +1,361 @@
+﻿@using MovieReviewApp.Models
+@using MovieReviewApp.Services
+@using MovieReviewApp.Components.Partials
+@inject NavigationManager Navigation
+
+@if (Session != null)
+{
+    <div class="row mb-4">
+        <div class="col-12">
+            <button class="btn btn-secondary" @onclick="GoToStats">
+                <i class="bi bi-arrow-left"></i> Back to Sessions
+            </button>
+        </div>
+    </div>
+
+    <!-- Session Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h2 class="mb-2">@Session.MovieTitle</h2>
+                            <p class="text-muted mb-2">@Session.Date.ToString("MMMM dd, yyyy")</p>
+                            <div class="d-flex gap-1 flex-wrap">
+                                @foreach (var participant in Session.ParticipantsPresent)
+                                {
+                                    <span class="badge bg-primary">🎤 @participant</span>
+                                }
+                                @if (Session.ParticipantsAbsent.Any())
+                                {
+                                    <span class="text-muted ms-2">Absent:</span>
+                                    @foreach (var absent in Session.ParticipantsAbsent)
+                                    {
+                                        <span class="badge bg-secondary">😶 @absent</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            @if (Session.SessionStats != null)
+                            {
+                                <div class="text-end">
+                                    <div class="mb-2">
+                                        <span class="text-muted">Duration:</span> <strong>@Session.SessionStats.TotalDuration</strong>
+                                    </div>
+                                    <div class="mb-2">
+                                        <span class="text-muted">Energy Level:</span> <strong>@GetEnergyEmoji(Session.SessionStats.EnergyLevel) @Session.SessionStats.EnergyLevel</strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-muted">Highlights:</span> <strong>@Session.SessionStats.HighlightMoments moments</strong>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Session.SessionStats?.BestMomentsSummary))
+                    {
+                        <div class="mt-3 p-3 bg-light rounded">
+                            <p class="mb-0"><i class="bi bi-chat-quote"></i> @Session.SessionStats.BestMomentsSummary</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Session.Status == ProcessingStatus.Complete && Session.CategoryResults != null)
+    {
+        <!-- Category Results Grid -->
+        <div class="row g-4">
+            @RenderCategory("🏆 Best Joke", Session.CategoryResults.BestJoke)
+            @RenderCategory("🔥 Hottest Take", Session.CategoryResults.HottestTake)
+            @RenderCategory("😴 Most Boring Statement", Session.CategoryResults.MostBoringStatement)
+            @RenderCategory("🎭 Best Roast", Session.CategoryResults.BestRoast)
+            @RenderCategory("💥 Biggest Argument Starter", Session.CategoryResults.BiggestArgumentStarter)
+            @RenderCategory("🎯 Movie Snob Moment", Session.CategoryResults.MovieSnobMoment)
+            @RenderCategory("🚀 Funniest Random Tangent", Session.CategoryResults.FunniestRandomTangent)
+            @RenderCategory("💪 Most Passionate Defense", Session.CategoryResults.MostPassionateDefense)
+            @RenderCategory("🤝 Biggest Unanimous Reaction", Session.CategoryResults.BiggestUnanimousReaction)
+            @RenderCategory("😱 Best Plot Twist Revelation", Session.CategoryResults.BestPlotTwistRevelation)
+            @RenderCategory("🤔 Most Offensive Take", Session.CategoryResults.MostOffensiveTake)
+            @RenderCategory("🙈 Guilty Pleasure Admission", Session.CategoryResults.GuiltyPleasureAdmission)
+            @RenderCategory("🤐 Quietest Person's Best Moment", Session.CategoryResults.QuietestPersonBestMoment)
+        </div>
+
+        <!-- Top 5 Lists -->
+        @if (Session.CategoryResults.FunniestSentences != null || Session.CategoryResults.MostBlandComments != null)
+        {
+            <div class="row mt-5">
+                <div class="col-12">
+                    <h3 class="mb-4">📊 Top 5 Lists</h3>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                @if (Session.CategoryResults.FunniestSentences != null)
+                {
+                    <div class="col-lg-6">
+                        <TopFiveDisplay TopFiveList="Session.CategoryResults.FunniestSentences" 
+                                      Title="Top 5 Funniest Sentences" 
+                                      IconClass="bi bi-emoji-laughing"
+                                      IsFunny="true" />
+                    </div>
+                }
+                
+                @if (Session.CategoryResults.MostBlandComments != null)
+                {
+                    <div class="col-lg-6">
+                        <TopFiveDisplay TopFiveList="Session.CategoryResults.MostBlandComments" 
+                                      Title="Top 5 Most Bland Comments" 
+                                      IconClass="bi bi-emoji-neutral"
+                                      IsFunny="false" />
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Highlight Reel Recommendations -->
+        @if (GetHighlightReel().Any())
+        {
+            <div class="row mt-5">
+                <div class="col-12">
+                    <div class="card bg-warning bg-opacity-10">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">🎬 Highlight Reel Recommendations</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted">Top moments that would make the best compilation:</p>
+                            <ol class="mb-0">
+                                @foreach (var highlight in GetHighlightReel())
+                                {
+                                    <li>@highlight</li>
+                                }
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else if (Session.Status == ProcessingStatus.Failed)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-x-circle"></i> Processing failed: @Session.ErrorMessage
+        </div>
+    }
+    else
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <p class="mt-3">Session is being processed...</p>
+        </div>
+    }
+}
+
+<style>
+    .category-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+    }
+    
+    .category-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .winner-quote {
+        font-style: italic;
+        font-size: 1.1rem;
+        line-height: 1.5;
+        color: #333;
+    }
+    
+    .audio-controls {
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    
+    .category-card:hover .audio-controls {
+        opacity: 1;
+    }
+</style>
+
+@code {
+    [Parameter] public MovieSession? Session { get; set; }
+    
+    private bool showingContext = false;
+    private string? playingAudioId;
+
+    private RenderFragment RenderCategory(string title, CategoryWinner? winner) => __builder =>
+    {
+        if (winner == null) return;
+        
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "col-md-6 col-lg-4");
+        __builder.OpenElement(2, "div");
+        __builder.AddAttribute(3, "class", "card h-100 category-card");
+        __builder.OpenElement(4, "div");
+        __builder.AddAttribute(5, "class", "card-header bg-gradient");
+        __builder.OpenElement(6, "h5");
+        __builder.AddAttribute(7, "class", "mb-0");
+        __builder.AddContent(8, title);
+        __builder.CloseElement();
+        __builder.CloseElement();
+        __builder.OpenElement(9, "div");
+        __builder.AddAttribute(10, "class", "card-body");
+        __builder.OpenElement(11, "div");
+        __builder.AddAttribute(12, "class", "mb-3");
+        __builder.OpenElement(13, "div");
+        __builder.AddAttribute(14, "class", "d-flex justify-content-between align-items-start mb-2");
+        __builder.OpenElement(15, "h6");
+        __builder.AddAttribute(16, "class", "mb-0");
+        __builder.AddContent(17, winner.Speaker);
+        __builder.CloseElement();
+        __builder.OpenElement(18, "span");
+        __builder.AddAttribute(19, "class", "badge bg-secondary");
+        __builder.AddContent(20, winner.Timestamp);
+        __builder.CloseElement();
+        __builder.CloseElement();
+        __builder.OpenElement(21, "p");
+        __builder.AddAttribute(22, "class", "winner-quote");
+        __builder.AddContent(23, $"\"{winner.Quote}\"");
+        __builder.CloseElement();
+        __builder.CloseElement();
+        if (!string.IsNullOrEmpty(winner.Setup))
+        {
+            __builder.OpenElement(24, "div");
+            __builder.AddAttribute(25, "class", "mb-2");
+            __builder.OpenElement(26, "small");
+            __builder.AddAttribute(27, "class", "text-muted");
+            __builder.OpenElement(28, "strong");
+            __builder.AddContent(29, "Context:");
+            __builder.CloseElement();
+            __builder.AddContent(30, $" {winner.Setup}");
+            __builder.CloseElement();
+        }
+        __builder.OpenElement(31, "div");
+        __builder.AddAttribute(32, "class", "mb-2");
+        __builder.OpenElement(33, "small");
+        __builder.AddAttribute(34, "class", "text-muted");
+        __builder.OpenElement(35, "strong");
+        __builder.AddContent(36, "Reaction:");
+        __builder.CloseElement();
+        __builder.AddContent(37, $" {winner.GroupReaction}");
+        __builder.CloseElement();
+        __builder.CloseElement();
+        __builder.OpenElement(38, "div");
+        __builder.AddAttribute(39, "class", "mb-3");
+        __builder.OpenElement(40, "small");
+        __builder.AddAttribute(41, "class", "text-success");
+        __builder.OpenElement(42, "strong");
+        __builder.AddContent(43, "Why it's great:");
+        __builder.CloseElement();
+        __builder.AddContent(44, $" {winner.WhyItsGreat}");
+        __builder.CloseElement();
+        __builder.CloseElement();
+        __builder.OpenElement(45, "div");
+        __builder.AddAttribute(46, "class", "d-flex justify-content-between align-items-center mb-2");
+        __builder.OpenElement(47, "span");
+        __builder.AddAttribute(48, "class", "badge bg-info");
+        __builder.AddContent(49, $"{winner.AudioQuality} quality");
+        __builder.CloseElement();
+        __builder.OpenElement(50, "div");
+        __builder.AddAttribute(51, "class", "entertainment-score");
+        for (int i = 0; i < winner.EntertainmentScore; i++)
+        {
+            __builder.OpenElement(52, "i");
+            __builder.AddAttribute(53, "class", "bi bi-star-fill text-warning");
+            __builder.CloseElement();
+        }
+        for (int i = winner.EntertainmentScore; i < 10; i++)
+        {
+            __builder.OpenElement(54, "i");
+            __builder.AddAttribute(55, "class", "bi bi-star text-warning");
+            __builder.CloseElement();
+        }
+        __builder.CloseElement();
+        __builder.CloseElement();
+        if (!string.IsNullOrEmpty(winner.AudioClipUrl))
+        {
+            __builder.OpenElement(56, "div");
+            __builder.AddAttribute(57, "class", "audio-controls");
+            __builder.OpenElement(58, "button");
+            __builder.AddAttribute(59, "class", "btn btn-sm btn-primary w-100");
+            __builder.OpenElement(60, "i");
+            __builder.AddAttribute(61, "class", "bi bi-play-circle");
+            __builder.CloseElement();
+            __builder.AddContent(62, " Play Clip");
+            __builder.CloseElement();
+        }
+        if (winner.RunnersUp.Any())
+        {
+            __builder.OpenElement(63, "div");
+            __builder.AddAttribute(64, "class", "mt-3 pt-3 border-top");
+            __builder.OpenElement(65, "h6");
+            __builder.AddAttribute(66, "class", "text-muted small");
+            __builder.AddContent(67, "Runners Up:");
+            __builder.CloseElement();
+            foreach (var runnerUp in winner.RunnersUp.OrderBy(r => r.Place))
+            {
+                __builder.OpenElement(68, "div");
+                __builder.AddAttribute(69, "class", "small mb-1");
+                __builder.AddContent(70, GetPlaceEmoji(runnerUp.Place));
+                __builder.OpenElement(71, "strong");
+                __builder.AddContent(72, runnerUp.Speaker);
+                __builder.CloseElement();
+                __builder.AddContent(73, $" ({runnerUp.Timestamp}) - {runnerUp.BriefDescription}");
+                __builder.CloseElement();
+            }
+            __builder.CloseElement();
+        }
+        __builder.CloseElement();
+        __builder.CloseElement();
+        __builder.CloseElement();
+    };
+
+    private string GetEnergyEmoji(EnergyLevel level) => level switch
+    {
+        EnergyLevel.High => "🔥",
+        EnergyLevel.Medium => "⚡",
+        EnergyLevel.Low => "😴",
+        _ => "❓"
+    };
+
+    private string GetPlaceEmoji(int place) => place switch
+    {
+        2 => "🥈",
+        3 => "🥉",
+        _ => $"{place}."
+    };
+
+    private List<string> GetHighlightReel()
+    {
+        if (Session?.CategoryResults == null) return new List<string>();
+
+        var highlights = new List<(string category, CategoryWinner winner, int score)>();
+        
+        void AddIfNotNull(string category, CategoryWinner? winner)
+        {
+            if (winner != null)
+                highlights.Add((category, winner, winner.EntertainmentScore));
+        }
+
+        AddIfNotNull("Best Joke", Session.CategoryResults.BestJoke);
+        AddIfNotNull("Hottest Take", Session.CategoryResults.HottestTake);
+        AddIfNotNull("Best Roast", Session.CategoryResults.BestRoast);
+        AddIfNotNull("Biggest Argument", Session.CategoryResults.BiggestArgumentStarter);
+        AddIfNotNull("Random Tangent", Session.CategoryResults.FunniestRandomTangent);
+
+        return highlights
+            .OrderByDescending(h => h.score)
+            .Take(5)
+            .Select(h => $"{h.category} - {h.winner.Speaker} at {h.winner.Timestamp}: \"{h.winner.Quote.Substring(0, Math.Min(h.winner.Quote.Length, 50))}...\"")
+            .ToList();
+    }
+
+    private void GoToStats() => Navigation.NavigateTo("/discussions/stats");
+}

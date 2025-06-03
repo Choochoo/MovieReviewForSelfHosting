@@ -2,89 +2,279 @@
 @inject IWebHostEnvironment WebHostEnvironment
 @using System.IO
 @using System.Globalization
+@using System.Text.RegularExpressions
 
-<h3>Upload Audio Files Version 2.2!</h3>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h3 class="mb-4">🎤 Movie Session Upload</h3>
+        </div>
+    </div>
 
-<InputFile OnChange="@LoadFiles" multiple accept=".mp3,.wav,.ogg,.aac,.m4a,.mp4" class="form-control-file mb-3" />
+    <div class="row">
+        <!-- Session Details Form -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">🎬 Session Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Movie Title</label>
+                        <input type="text" class="form-control" @bind="movieTitle" placeholder="e.g., Dune Part Two" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Session Date</label>
+                        <input type="date" class="form-control" @bind="sessionDate" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Participants Present</label>
+                        <div class="row g-2">
+                            @for (int i = 1; i <= 6; i++)
+                            {
+                                var speakerNum = i;
+                                <div class="col-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="speaker@(speakerNum)" 
+                                               @onchange="@(e => ToggleSpeaker(speakerNum, (bool)e.Value!))" />
+                                        <label class="form-check-label" for="speaker@(speakerNum)">
+                                            🎤 Speaker @speakerNum
+                                        </label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
 
-@if (!string.IsNullOrEmpty(errorMessage))
-{
-    <div class="alert alert-danger mt-3">@errorMessage</div>
-}
-
-@foreach (var file in uploadedFiles)
-{
-    <div class="mt-3">
-        <strong>@file.OriginalFileName</strong>
-        <div class="progress">
-            <div class="progress-bar" role="progressbar" style="width: @file.UploadedPercentage%;" aria-valuenow="@file.UploadedPercentage" aria-valuemin="0" aria-valuemax="100">
-                @file.UploadedPercentage.ToString("F1")%
+                    <div class="alert alert-info">
+                        <strong>Folder will be created as:</strong><br/>
+                        @GetFolderName()
+                    </div>
+                </div>
             </div>
         </div>
-        <small>@FormatBytes(file.UploadedBytes) / @FormatBytes(file.Size)</small>
-        <div>Saved as: @file.NewFileName</div>
+
+        <!-- File Upload Section -->
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">📁 Upload Audio Files</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <p class="text-muted">Upload individual speaker files and/or master recording</p>
+                        <div class="border border-2 border-dashed rounded p-4 text-center">
+                            <InputFile OnChange="@LoadFiles" multiple accept=".mp3,.wav,.ogg,.aac,.m4a,.mp4,.mov,.avi,.mkv" class="form-control" />
+                            <p class="mt-2 mb-0 text-muted">
+                                <i class="bi bi-cloud-upload"></i> Drop files here or click to browse
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (uploadedFiles.Any())
+                    {
+                        <h6>Uploading Files:</h6>
+                        @foreach (var file in uploadedFiles)
+                        {
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong>@file.DisplayName</strong>
+                                    <span class="badge @(file.IsComplete ? "bg-success" : "bg-primary")">
+                                        @(file.IsComplete ? "Complete" : "Uploading...")
+                                    </span>
+                                </div>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar @(file.IsComplete ? "bg-success" : "progress-bar-striped progress-bar-animated")" 
+                                         role="progressbar" 
+                                         style="width: @file.UploadedPercentage%;" 
+                                         aria-valuenow="@file.UploadedPercentage" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        @file.UploadedPercentage.ToString("F0")%
+                                    </div>
+                                </div>
+                                <small class="text-muted">@FormatBytes(file.UploadedBytes) / @FormatBytes(file.Size)</small>
+                            </div>
+                        }
+                    }
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> @errorMessage
+                        </div>
+                    }
+
+                    @if (uploadComplete)
+                    {
+                        <div class="alert alert-success mt-3">
+                            <i class="bi bi-check-circle"></i> Upload complete! Files saved to: @finalFolderPath
+                        </div>
+                        <button class="btn btn-primary" @onclick="StartNewUpload">
+                            <i class="bi bi-plus"></i> Upload Another Session
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
     </div>
-}
+
+    <!-- Instructions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">📝 File Naming Guidelines</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Individual Speaker Files:</h6>
+                            <ul>
+                                <li><code>1_Speaker1.wav</code> - Mic #1 recording</li>
+                                <li><code>2_Speaker2.mp3</code> - Mic #2 recording</li>
+                                <li><code>3_Speaker3.m4a</code> - Mic #3 recording</li>
+                                <li>... up to <code>6_Speaker6.wav</code></li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Master Recording (optional):</h6>
+                            <ul>
+                                <li><code>master_recording.wav</code></li>
+                                <li><code>group_audio.mp3</code></li>
+                                <li><code>combined_session.m4a</code></li>
+                                <li>Any file with "master", "combined", "full", or "group"</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-info-circle"></i> <strong>Important:</strong> Speaker numbers (1-6) represent consistent microphone assignments. Speaker 1 is always the same person across all sessions.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
+    private string movieTitle = string.Empty;
+    private DateTime sessionDate = DateTime.Today;
+    private HashSet<int> presentSpeakers = new();
     private List<FileUploadProgress> uploadedFiles = new();
-    private const int ChunkSize = 1024 * 1024; // 1 MB chunks
     private string errorMessage = string.Empty;
+    private bool uploadComplete = false;
+    private string finalFolderPath = string.Empty;
+    private const int ChunkSize = 1024 * 1024; // 1 MB chunks
 
-    private static readonly string[] AllowedExtensions = { ".mp3", ".wav", ".ogg", ".aac", ".m4a", ".mp4" };
+    private static readonly string[] AllowedExtensions = { 
+        ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp"
+    };
+
+    private void ToggleSpeaker(int speakerNum, bool isChecked)
+    {
+        if (isChecked)
+            presentSpeakers.Add(speakerNum);
+        else
+            presentSpeakers.Remove(speakerNum);
+    }
+
+    private string GetFolderName()
+    {
+        if (string.IsNullOrWhiteSpace(movieTitle))
+            return "YYYY-MM-DD_MovieTitle";
+        
+        var sanitizedTitle = Regex.Replace(movieTitle.Trim(), @"[^a-zA-Z0-9\s-]", "")
+                                  .Replace(" ", "_");
+        return $"{sessionDate:yyyy-MM-dd}_{sanitizedTitle}";
+    }
 
     private async Task LoadFiles(InputFileChangeEventArgs e)
     {
+        if (string.IsNullOrWhiteSpace(movieTitle))
+        {
+            errorMessage = "Please enter a movie title first.";
+            return;
+        }
+
+        if (!presentSpeakers.Any())
+        {
+            errorMessage = "Please select at least one participant.";
+            return;
+        }
+
         errorMessage = string.Empty;
-        var files = e.GetMultipleFiles(maximumFileCount: 10);
+        uploadComplete = false;
+        var files = e.GetMultipleFiles(maximumFileCount: 20);
         uploadedFiles.Clear();
 
+        // Create target folder
+        var folderName = GetFolderName();
+        var pendingDir = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", "pending");
+        var targetFolder = Path.Combine(pendingDir, folderName);
+        Directory.CreateDirectory(targetFolder);
+        finalFolderPath = targetFolder;
+
+        // Queue files for upload
         foreach (var file in files)
         {
             if (IsAudioFile(file.Name))
             {
-                var newFileName = GenerateUniqueFileName(file.Name);
-                uploadedFiles.Add(new FileUploadProgress(file.Name, newFileName, file.Size));
+                var displayName = DetermineFileType(file.Name);
+                uploadedFiles.Add(new FileUploadProgress(file.Name, displayName, file.Size));
             }
             else
             {
-                errorMessage += $"{file.Name} is not a supported audio file. ";
+                errorMessage += $"{file.Name} is not a supported audio/video file. ";
             }
         }
 
+        // Start upload progress timer
         using var timer = new Timer(_ => InvokeAsync(StateHasChanged));
-        timer.Change(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+        timer.Change(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
 
+        // Upload files
         foreach (var file in files)
         {
             if (IsAudioFile(file.Name))
             {
-                await UploadFile(file);
+                await UploadFile(file, targetFolder);
             }
         }
 
+        uploadComplete = true;
         await InvokeAsync(StateHasChanged);
     }
 
-    private bool IsAudioFile(string fileName)
+    private string DetermineFileType(string fileName)
     {
-        return AllowedExtensions.Contains(Path.GetExtension(fileName).ToLowerInvariant());
+        var lowerName = fileName.ToLower();
+        
+        // Check for speaker files
+        var speakerMatch = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
+        if (speakerMatch.Success)
+        {
+            return $"🎤 Speaker {speakerMatch.Groups[1].Value}";
+        }
+        
+        // Check for master recording
+        if (lowerName.Contains("master") || lowerName.Contains("combined") || 
+            lowerName.Contains("full") || lowerName.Contains("group"))
+        {
+            return "🎬 Master Recording";
+        }
+        
+        return fileName;
     }
 
-    private string GenerateUniqueFileName(string originalFileName)
-    {
-        return $"{Guid.NewGuid()}{Path.GetExtension(originalFileName)}";
-    }
-
-    private async Task UploadFile(IBrowserFile file)
+    private async Task UploadFile(IBrowserFile file, string targetFolder)
     {
         try
         {
-            var uploadsFolder = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
-            Directory.CreateDirectory(uploadsFolder);
-
             var progress = uploadedFiles.First(f => f.OriginalFileName == file.Name);
-            var filePath = Path.Combine(uploadsFolder, progress.NewFileName);
+            var filePath = Path.Combine(targetFolder, file.Name);
 
             using var stream = file.OpenReadStream(maxAllowedSize: 10L * 1024 * 1024 * 1024); // 10 GB
             using var fileStream = new FileStream(filePath, FileMode.Create);
@@ -97,12 +287,30 @@
                 await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
                 progress.UploadedBytes += bytesRead;
             }
+            
+            progress.IsComplete = true;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error uploading file {file.Name}: {ex.Message}");
             errorMessage += $"Error uploading {file.Name}: {ex.Message}. ";
         }
+    }
+
+    private void StartNewUpload()
+    {
+        movieTitle = string.Empty;
+        sessionDate = DateTime.Today;
+        presentSpeakers.Clear();
+        uploadedFiles.Clear();
+        errorMessage = string.Empty;
+        uploadComplete = false;
+        finalFolderPath = string.Empty;
+    }
+
+    private bool IsAudioFile(string fileName)
+    {
+        return AllowedExtensions.Contains(Path.GetExtension(fileName).ToLowerInvariant());
     }
 
     private string FormatBytes(long bytes)
@@ -121,15 +329,16 @@
     private class FileUploadProgress
     {
         public string OriginalFileName { get; set; }
-        public string NewFileName { get; set; }
+        public string DisplayName { get; set; }
         public long Size { get; set; }
         public long UploadedBytes { get; set; }
         public double UploadedPercentage => (double)UploadedBytes / Size * 100;
+        public bool IsComplete { get; set; }
 
-        public FileUploadProgress(string originalFileName, string newFileName, long size)
+        public FileUploadProgress(string originalFileName, string displayName, long size)
         {
             OriginalFileName = originalFileName;
-            NewFileName = newFileName;
+            DisplayName = displayName;
             Size = size;
         }
     }

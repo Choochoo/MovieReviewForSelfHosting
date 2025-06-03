@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
 {
@@ -6,6 +7,8 @@ namespace MovieReviewApp.Models
     {
         public Guid Id { get; set; } = Guid.NewGuid();
     }
+    
+    [MongoCollection("MovieEvents")]
     public class MovieEvent : BaseModel
     {
         public int? PhaseNumber { get; set; }

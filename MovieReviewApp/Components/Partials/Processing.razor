@@ -1,45 +1,10 @@
 ﻿@page "/discussions/processing"
-
-
-
-@if (isUnlocked)
-{
-    <ProcessAudio />
-    <ProcessingStatsCommands />
-}
-else
-{
-    <h3>Enter PIN to unlock processing options</h3>
-    <div class="form-group">
-        <label for="pinInput">PIN</label>
-        <input id="pinInput" type="password" class="form-control" @bind="inputPIN" placeholder="Enter PIN" />
-    </div>
-    <button class="btn btn-primary" @onclick="ValidatePIN">Unlock</button>
-
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="alert alert-danger mt-3">
-            @errorMessage
-        </div>
-    }
-}
+@inject NavigationManager Navigation
 
 @code {
-    private string inputPIN = string.Empty;
-    private string correctPIN = "4156"; 
-    private bool isUnlocked = true;
-    private string errorMessage = string.Empty;
-
-    private void ValidatePIN()
+    protected override void OnInitialized()
     {
-        if (inputPIN == correctPIN)
-        {
-            isUnlocked = true;
-            errorMessage = string.Empty; // Clear any error message
-        }
-        else
-        {
-            errorMessage = "Invalid PIN. Please try again.";
-        }
+        // Redirect to the new processing center
+        Navigation.NavigateTo("/discussions/upload/process");
     }
 }
