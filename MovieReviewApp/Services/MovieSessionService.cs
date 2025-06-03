@@ -8,7 +8,7 @@ namespace MovieReviewApp.Services;
 
 public class MovieSessionService
 {
-    private readonly GenericMongoDb _database;
+    private readonly MongoDbService _database;
     private readonly GladiaService _gladiaService;
     private readonly MovieSessionAnalysisService _analysisService;
     private readonly AudioClipService _audioClipService;
@@ -17,7 +17,7 @@ public class MovieSessionService
     private readonly IConfiguration _configuration;
 
     public MovieSessionService(
-        GenericMongoDb database,
+        MongoDbService database,
         GladiaService gladiaService,
         MovieSessionAnalysisService analysisService,
         AudioClipService audioClipService,
@@ -65,8 +65,8 @@ public class MovieSessionService
         // Determine participants
         DetermineParticipants(session);
 
-        // Save to database
-        await _database.UpsertAsync("MovieSessions", session);
+        // Save to database - CLEAN API!
+        await _database.UpsertAsync(session);
 
         _logger.LogInformation("Created movie session {SessionId} for {MovieTitle} on {Date}", 
             session.Id, session.MovieTitle, session.Date);
@@ -151,7 +151,7 @@ public class MovieSessionService
 
     public async Task ProcessSession(string sessionId, Action<ProcessingStatus, int, string>? progressCallback = null)
     {
-        var session = await _database.GetByIdAsync<MovieSession>("MovieSessions", sessionId);
+        var session = await _database.GetByIdAsync<MovieSession>(sessionId);
         if (session == null)
         {
             throw new ArgumentException($"Session {sessionId} not found");
@@ -162,7 +162,7 @@ public class MovieSessionService
             // Step 1: Validation
             progressCallback?.Invoke(ProcessingStatus.Validating, 10, "Validating session data");
             session.Status = ProcessingStatus.Validating;
-            await _database.UpsertAsync("MovieSessions", session);
+            await _database.UpsertAsync(session);
 
             if (!session.AudioFiles.Any())
             {
@@ -172,7 +172,7 @@ public class MovieSessionService
             // Step 2: Transcription
             progressCallback?.Invoke(ProcessingStatus.Transcribing, 20, "Starting transcription");
             session.Status = ProcessingStatus.Transcribing;
-            await _database.UpsertAsync("MovieSessions", session);
+            await _database.UpsertAsync(session);
 
             var audioFilePaths = session.AudioFiles.Select(f => f.FilePath).ToList();
             var transcriptionResults = await _gladiaService.ProcessMultipleFilesAsync(audioFilePaths, 
@@ -198,7 +198,7 @@ public class MovieSessionService
             // Step 3: AI Analysis
             progressCallback?.Invoke(ProcessingStatus.Analyzing, 75, "Analyzing transcripts for entertainment moments");
             session.Status = ProcessingStatus.Analyzing;
-            await _database.UpsertAsync("MovieSessions", session);
+            await _database.UpsertAsync(session);
 
             await AnalyzeSession(session);
 
@@ -207,7 +207,7 @@ public class MovieSessionService
             session.Status = ProcessingStatus.Complete;
             session.ProcessedAt = DateTime.UtcNow;
 
-            await _database.UpsertAsync("MovieSessions", session);
+            await _database.UpsertAsync(session);
             
             _logger.LogInformation("Successfully processed session {SessionId}", sessionId);
         }
@@ -217,7 +217,7 @@ public class MovieSessionService
             
             session.Status = ProcessingStatus.Failed;
             session.ErrorMessage = ex.Message;
-            await _database.UpsertAsync("MovieSessions", session);
+            await _database.UpsertAsync(session);
             
             throw;
         }
@@ -396,35 +396,60 @@ public class MovieSessionService
 
     public async Task<List<MovieSession>> GetAllSessions()
     {
-        return await _database.GetAllAsync<MovieSession>("MovieSessions");
+        return await _database.GetAllAsync<MovieSession>();
     }
 
     public async Task<List<MovieSession>> GetRecentSessions(int limit = 10)
     {
-        var allSessions = await GetAllSessions();
-        return allSessions
-            .OrderByDescending(s => s.CreatedAt)
-            .Take(limit)
-            .ToList();
+        // Use the new paging API for better performance!
+        var (sessions, _) = await _database.GetPagedAsync<MovieSession>(
+            page: 1,
+            pageSize: limit,
+            orderBy: s => s.CreatedAt,
+            descending: true
+        );
+        
+        return sessions;
     }
 
     public async Task<MovieSession?> GetSession(string sessionId)
     {
-        return await _database.GetByIdAsync<MovieSession>("MovieSessions", sessionId);
+        return await _database.GetByIdAsync<MovieSession>(sessionId);
     }
 
-    public async Task DeleteSession(string sessionId)
+    public async Task<bool> DeleteSession(string sessionId)
     {
-        await _database.DeleteAsync<MovieSession>("MovieSessions", sessionId);
+        return await _database.DeleteByIdAsync<MovieSession>(sessionId);
     }
 
     public async Task<List<MovieSession>> SearchSessions(string searchTerm)
     {
-        var allSessions = await GetAllSessions();
-        return allSessions
-            .Where(s => s.MovieTitle.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                       s.ParticipantsPresent.Any(p => p.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)))
-            .OrderByDescending(s => s.Date)
-            .ToList();
+        // Use the new text search API for better performance!
+        return await _database.SearchTextAsync<MovieSession>(
+            searchTerm,
+            s => s.MovieTitle,
+            s => s.FolderPath
+        );
+    }
+
+    // Additional convenience methods using the new API
+    public async Task<long> GetSessionCount()
+    {
+        return await _database.CountAsync<MovieSession>();
+    }
+
+    public async Task<bool> HasAnySessions()
+    {
+        return await _database.AnyAsync<MovieSession>();
+    }
+
+    public async Task<List<MovieSession>> GetSessionsByDateRange(DateTime start, DateTime end)
+    {
+        return await _database.FindAsync<MovieSession>(s => s.Date >= start && s.Date <= end);
+    }
+
+    public async Task<List<MovieSession>> GetFailedSessions()
+    {
+        return await _database.FindAsync<MovieSession>(s => s.Status == ProcessingStatus.Failed);
     }
 }

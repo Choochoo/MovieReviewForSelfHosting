@@ -6,11 +6,11 @@ namespace MovieReviewApp.Services
 {
     public class ImageMigrationService
     {
-        private readonly GenericMongoDb _database;
+        private readonly MongoDbService _database;
         private readonly ImageService _imageService;
         private readonly ILogger<ImageMigrationService> _logger;
 
-        public ImageMigrationService(GenericMongoDb database, ImageService imageService, ILogger<ImageMigrationService> logger)
+        public ImageMigrationService(MongoDbService database, ImageService imageService, ILogger<ImageMigrationService> logger)
         {
             _database = database;
             _imageService = imageService;

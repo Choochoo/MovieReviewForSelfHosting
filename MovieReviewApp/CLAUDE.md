@@ -93,7 +93,7 @@ This is a Blazor Server application (.NET 8.0) for tracking movie reviews across
 ### Database Collections
 
 - `Phases` - Movie review phases
-- `MovieReviews` - Individual movie events  
+- `MovieEvents` - Individual movie events  
 - `People` - Participants
 - `Settings` - Application settings
 - `StatsCommands` - Processed statistics

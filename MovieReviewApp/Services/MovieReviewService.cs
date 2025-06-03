@@ -7,9 +7,9 @@ namespace MovieReviewApp.Services
 {
     public class MovieReviewService
     {
-        private readonly GenericMongoDb _db;
+        private readonly MongoDbService _db;
 
-        public MovieReviewService(GenericMongoDb db)
+        public MovieReviewService(MongoDbService db)
         {
             _db = db;
         }

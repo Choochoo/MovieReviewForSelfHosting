@@ -98,14 +98,7 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 10L * 1024 * 1024 * 1024; // 10 GB
 });
 
-// Add MongoDB services
-builder.Services.AddSingleton<GenericMongoDb>(provider => 
-    new GenericMongoDb(
-        provider.GetRequiredService<IConfiguration>(),
-        provider.GetRequiredService<SecretsManager>(),
-        provider.GetRequiredService<InstanceManager>()));
-
-// Add the new clean MongoDB service
+// Add MongoDB service
 builder.Services.AddSingleton<MongoDbService>(provider => 
     new MongoDbService(
         provider.GetRequiredService<IConfiguration>(),
