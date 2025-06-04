@@ -33,7 +33,9 @@
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -i \"ShowResultsDuringVoting\" --type json)",
       "Bash(/usr/bin/dotnet build:*)",
       "WebFetch(domain:docs.gladia.io)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(dotnet add package Markdig)",
+      "WebFetch(domain:api.gladia.io)"
     ],
     "deny": []
   }

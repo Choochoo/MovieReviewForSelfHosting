@@ -118,6 +118,7 @@ builder.Services.AddScoped<MovieReviewService>();
 // MongoDb service replaced with generic system
 builder.Services.AddScoped<MessengerService>();
 builder.Services.AddScoped<ImageService>();
+builder.Services.AddScoped<MarkdownService>();
 
 // Only register stats processor if not in first-run setup (it requires database)
 if (!instanceManager.IsFirstRun)
@@ -133,6 +134,7 @@ builder.Services.AddScoped<GladiaService>();
 builder.Services.AddScoped<MovieSessionAnalysisService>();
 builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
+builder.Services.AddScoped<AudioFileOrganizer>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 

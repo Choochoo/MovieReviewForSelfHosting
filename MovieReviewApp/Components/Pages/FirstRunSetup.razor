@@ -46,6 +46,31 @@
                     <h3>🎤 Audio Processing (Optional)</h3>
                     <p class="section-description">Enable audio transcription features. Leave blank to disable audio processing.</p>
                     
+                    <div class="audio-requirements">
+                        <h4>📋 Audio Processing Requirements:</h4>
+                        <ul class="requirements-list">
+                            <li><strong>FFmpeg Required:</strong> Install FFmpeg for automatic MP3 conversion</li>
+                            <li><strong>Smart Compression:</strong> Large WAV files (>100MB) automatically converted to MP3</li>
+                            <li><strong>Size Reduction:</strong> Typical 600MB WAV → 60MB MP3 (90% smaller uploads)</li>
+                            <li><strong>Supported Formats:</strong> WAV, MP3, M4A, AAC, OGG, FLAC, MP4, MOV, AVI, MKV</li>
+                        </ul>
+                        
+                        <div class="ffmpeg-install">
+                            <h5>Install FFmpeg:</h5>
+                            <div class="install-commands">
+                                <div class="command-group">
+                                    <strong>Windows:</strong> <code>winget install FFmpeg</code>
+                                </div>
+                                <div class="command-group">
+                                    <strong>macOS:</strong> <code>brew install ffmpeg</code>
+                                </div>
+                                <div class="command-group">
+                                    <strong>Linux:</strong> <code>sudo apt install ffmpeg</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="form-group">
                         <label for="gladiaKey">Gladia API Key</label>
                         <input type="password" id="gladiaKey" @bind="gladiaKey" class="form-control" 
@@ -348,6 +373,81 @@
         background: rgba(255, 0, 128, 0.1);
         border: 1px solid var(--error-color);
         color: var(--error-color);
+    }
+
+    .audio-requirements {
+        background: var(--surface-hover);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+        margin-bottom: 1.5rem;
+    }
+
+    .audio-requirements h4 {
+        color: var(--accent-primary);
+        margin-top: 0;
+        margin-bottom: 1rem;
+        font-size: 1rem;
+    }
+
+    .audio-requirements h5 {
+        color: var(--text-primary);
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .requirements-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1rem 0;
+    }
+
+    .requirements-list li {
+        padding: 0.5rem 0;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .requirements-list li:last-child {
+        border-bottom: none;
+    }
+
+    .requirements-list strong {
+        color: var(--text-primary);
+    }
+
+    .ffmpeg-install {
+        margin-top: 1rem;
+    }
+
+    .install-commands {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .command-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .command-group strong {
+        min-width: 70px;
+        color: var(--text-primary);
+    }
+
+    .command-group code {
+        background: var(--background-primary);
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        border: 1px solid var(--border-color);
+        color: var(--accent-primary);
+        font-family: 'Courier New', monospace;
+        font-size: 0.8rem;
     }
 
     @@media (max-width: 768px) {

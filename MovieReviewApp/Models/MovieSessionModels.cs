@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
@@ -11,8 +9,8 @@ namespace MovieReviewApp.Models
         public DateTime Date { get; set; }
         public string MovieTitle { get; set; } = string.Empty;
         public string FolderPath { get; set; } = string.Empty;
-        public List<string> ParticipantsPresent { get; set; } = new();
-        public List<string> ParticipantsAbsent { get; set; } = new();
+        public List<string> ParticipantsPresent { get; set; } = [];
+        public List<string> ParticipantsAbsent { get; set; } = [];
         public ProcessingStatus Status { get; set; } = ProcessingStatus.Pending;
         public List<AudioFile> AudioFiles { get; set; } = new();
         public CategoryResults CategoryResults { get; set; } = new();
@@ -20,6 +18,7 @@ namespace MovieReviewApp.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ProcessedAt { get; set; }
         public string? ErrorMessage { get; set; }
+        public Dictionary<int, string> MicAssignments { get; set; } = new();
     }
 
     public class AudioFile
@@ -30,8 +29,16 @@ namespace MovieReviewApp.Models
         public bool IsMasterRecording { get; set; }
         public long FileSize { get; set; }
         public TimeSpan? Duration { get; set; }
+        public string? AudioUrl { get; set; }
         public string? TranscriptId { get; set; }
         public string? TranscriptText { get; set; }
+        public AudioProcessingStatus ProcessingStatus { get; set; } = AudioProcessingStatus.Pending;
+        public string? Mp3FilePath { get; set; }
+        public long? Mp3FileSize { get; set; }
+        public string? ConversionError { get; set; }
+        public DateTime? ConvertedAt { get; set; }
+        public DateTime? UploadedAt { get; set; }
+        public DateTime? ProcessedAt { get; set; }
     }
 
     public class CategoryResults
@@ -128,6 +135,17 @@ namespace MovieReviewApp.Models
         Low,
         Medium,
         High
+    }
+
+    public enum AudioProcessingStatus
+    {
+        Pending,           // Just uploaded, not processed yet
+        PendingMp3,        // Needs MP3 conversion
+        FailedMp3,         // MP3 conversion failed
+        ProcessedMp3,      // Successfully converted to MP3
+        UploadedToGladia,  // Uploaded to Gladia for transcription
+        TranscriptionComplete, // Gladia transcription successful
+        Failed             // General processing failure
     }
 
     public class ProcessingQueueItem

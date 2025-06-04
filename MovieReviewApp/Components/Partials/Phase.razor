@@ -8,12 +8,13 @@
 @inject MessengerService MessengerService
 @inject SecretsManager SecretsManager
 @inject ImageService ImageService
+@inject MarkdownService MarkdownService
 
 @if (MovieEvent != null)
 {
     try
     {
-        <div class="card mb-3">
+        <div class="card mb-3 @(MovieEvent.IsEditing ? "editing" : "")">
             <div class="card-body">
                 <p style="text-align:center;font-size:1.2em">
                     @try
@@ -45,7 +46,42 @@
                         </div>
                         <div class="form-group">
                             <label><b>Reason:</b></label>
-                            <textarea placeholder="Your reason for choosing this film" @bind="@MovieEvent.Reasoning" class="form-control"></textarea>
+                            <div class="markdown-editor-container">
+                                <ul class="nav nav-tabs mb-2">
+                                    <li class="nav-item">
+                                        <button class="nav-link @(showMarkdownPreview ? "" : "active")" type="button" @onclick="() => showMarkdownPreview = false">
+                                            Edit
+                                        </button>
+                                    </li>
+                                    <li class="nav-item">
+                                        <button class="nav-link @(showMarkdownPreview ? "active" : "")" type="button" @onclick="() => showMarkdownPreview = true">
+                                            Preview
+                                        </button>
+                                    </li>
+                                </ul>
+                                @if (showMarkdownPreview)
+                                {
+                                    <div class="markdown-preview form-control" style="min-height: 100px; height: auto;">
+                                        @if (string.IsNullOrWhiteSpace(MovieEvent.Reasoning))
+                                        {
+                                            <span class="text-muted">Nothing to preview</span>
+                                        }
+                                        else
+                                        {
+                                            @((MarkupString)MovieEvent.Reasoning.Replace("\n", "<br/>"))
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <textarea placeholder="Your reason for choosing this film (supports Markdown formatting)" 
+                                              @bind="@MovieEvent.Reasoning" 
+                                              @bind:event="oninput"
+                                              class="form-control"
+                                              rows="15"></textarea>
+                                    <small class="text-muted">Supports Markdown: **bold**, *italic*, [links](url), lists, etc.</small>
+                                }
+                            </div>
                         </div>
                         <div class="form-group">
                             <label><b>Meetup Time:</b></label>
@@ -142,8 +178,8 @@
 
                         @if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
                         {
-                            <div>
-                                <p style="text-align:justify; width:90%;margin-left:5%">&nbsp;&nbsp;&nbsp;&nbsp;@MovieEvent.Reasoning</p>
+                            <div class="reasoning-content" style="width:90%;margin-left:5%">
+                                @((MarkupString)MovieEvent.Reasoning)
                             </div>
                         }
 
@@ -203,6 +239,7 @@ else
     private string? Synopsis = "Loading...";
     private string _apiKey = string.Empty;
     private bool isLoading = false;
+    private bool showMarkdownPreview = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -368,6 +405,12 @@ else
             {
                 MovieEvent.IsEditing = true;
 
+                // Remove <br/> tags when editing
+                if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
+                {
+                    MovieEvent.Reasoning = MarkdownService.RemoveLineBreaks(MovieEvent.Reasoning);
+                }
+
                 // Set default MeetupTime if not already set
                 if (!MovieEvent.MeetupTime.HasValue)
                 {
@@ -419,6 +462,13 @@ else
                 {
                     MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
                 }
+                
+                // Add <br/> tags before saving
+                if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
+                {
+                    MovieEvent.Reasoning = MarkdownService.AddLineBreaks(MovieEvent.Reasoning);
+                }
+                
                 await Task.Run(() => movieReviewService.AddOrUpdateMovieEvent(MovieEvent));
 
                 // Reload the MovieEvent from database to get the latest saved state
@@ -450,3 +500,92 @@ else
         }
     }
 }
+
+<style>
+    .reasoning-content {
+        text-align: justify;
+    }
+
+    .reasoning-content p {
+        margin-bottom: 0.5rem;
+    }
+
+    .reasoning-content ul, .reasoning-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .reasoning-content a {
+        color: #0066cc;
+        text-decoration: none;
+    }
+
+    .reasoning-content a:hover {
+        text-decoration: underline;
+    }
+
+    .reasoning-content blockquote {
+        border-left: 3px solid #ccc;
+        padding-left: 1rem;
+        margin: 0.5rem 0;
+        color: #666;
+    }
+
+    .reasoning-content code {
+        background-color: #f5f5f5;
+        padding: 0.125rem 0.25rem;
+        border-radius: 3px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    }
+
+    .reasoning-content pre {
+        background-color: #f5f5f5;
+        padding: 0.75rem;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin: 0.5rem 0;
+    }
+
+    .reasoning-content pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+
+    .markdown-preview{
+        background-color: initial;
+    }
+
+    .markdown-editor-container .nav-tabs {
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .markdown-editor-container .nav-link {
+        color: #495057;
+        background-color: transparent;
+        border: 1px solid transparent;
+        border-top-left-radius: .25rem;
+        border-top-right-radius: .25rem;
+        padding: .5rem 1rem;
+        cursor: pointer;
+    }
+
+    .markdown-editor-container .nav-link.active {
+        color: #495057;
+        background-color: #fff;
+        border-color: #dee2e6 #dee2e6 #fff;
+    }
+
+    .markdown-editor-container .nav-link:hover {
+        border-color: #e9ecef #e9ecef #dee2e6;
+    }
+
+    .markdown-preview {
+        background-color: #fff;
+        overflow-y: auto;
+        max-height: 300px;
+    }
+
+    .markdown-preview p:last-child {
+        margin-bottom: 0;
+    }
+</style>

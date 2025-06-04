@@ -97,7 +97,14 @@ else
                                     <a href="@pastevent.IMDb" target="_blank">link</a>
                                 }
                             </td>
-                            <td>@pastevent.Reasoning</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(pastevent.Reasoning))
+                                {
+                                    <div class="reasoning-content">
+                                        @((MarkupString)pastevent.Reasoning)
+                                    </div>
+                                }
+                            </td>
                         </tr>
                     }
                 }
@@ -154,7 +161,7 @@ else
                         @if (selectedMovie.MeetupTime.HasValue)
                         {
                             <div class="detail-row">
-                                <strong>Meetup:</strong> @selectedMovie.MeetupTime?.ToString("dddd M/d/yyyy h:mm tt")
+                                <strong>Meetup:</strong> @selectedMovie.MeetupTime?.ToString("M/d/yyyy h:mm tt")
                             </div>
                         }
                         @if (selectedMovie.AlreadySeen && selectedMovie.SeenDate.HasValue)
@@ -188,7 +195,9 @@ else
                         {
                             <div class="detail-section">
                                 <strong>Reason for choosing:</strong>
-                                <p class="reasoning-text">@selectedMovie.Reasoning</p>
+                                <div class="reasoning-text reasoning-content">
+                                    @((MarkupString)selectedMovie.Reasoning)
+                                </div>
                             </div>
                         }
                         @if (!string.IsNullOrEmpty(selectedMovie.Synopsis))
@@ -470,6 +479,61 @@ else
         text-align: justify;
     }
 
+    /* Markdown content styles */
+    .markdown-content p {
+        margin-bottom: 0.5rem;
+    }
+
+    .markdown-content ul, .markdown-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .markdown-content a {
+        color: var(--accent-primary);
+        text-decoration: none;
+    }
+
+    .markdown-content a:hover {
+        text-decoration: underline;
+    }
+
+    .markdown-content blockquote {
+        border-left: 3px solid var(--accent-primary);
+        padding-left: 1rem;
+        margin: 0.5rem 0;
+        color: var(--text-secondary);
+    }
+
+    .markdown-content code {
+        background-color: var(--surface-hover);
+        padding: 0.125rem 0.25rem;
+        border-radius: 3px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    }
+
+    .markdown-content pre {
+        background-color: var(--surface-hover);
+        padding: 0.75rem;
+        border-radius: 5px;
+        overflow-x: auto;
+        margin: 0.5rem 0;
+    }
+
+    .markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+    }
+
+    /* Table cell markdown styles */
+    td .markdown-content {
+        display: inline-block;
+    }
+
+    td p {
+        margin: 0;
+    }
+
     .imdb-link {
         color: var(--accent-primary);
         text-decoration: none;
@@ -545,5 +609,22 @@ else
         border-radius: 0.75rem;
         overflow: hidden;
         border: 1px solid var(--border-color);
+    }
+
+    /* Reasoning content styles */
+    .reasoning-content {
+        text-align: justify;
+        line-height: 1.6;
+    }
+
+    .reasoning-content p {
+        margin-bottom: 0.5rem;
+    }
+
+    /* Table cell reasoning styles */
+    td .reasoning-content {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 </style>

@@ -1,0 +1,210 @@
+@using MovieReviewApp.Models
+@using MovieReviewApp.Services
+@using MovieReviewApp.Database
+@inject MovieReviewService MovieReviewService
+@inject MovieSessionService MovieSessionService
+
+<div class="participant-assignment">
+    <h6 class="mb-3">🎤 Assign Participants to Microphones</h6>    
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading people...</p>
+        </div>
+    }
+    else if (people == null || !people.Any())
+    {
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i> No people found in database. Please add people in Settings first.
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="mt-2">
+                    <small class="text-muted">@statusMessage</small>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="row g-3">
+            @for (int micNumber = 1; micNumber <= people.Count(); micNumber++) // Show mics based on actual people count
+            {
+                var mic = micNumber; // Capture for closure
+                <div class="col-md-6">
+                    <div class="mb-2">
+                        <label class="form-label">Mic @mic</label>
+                        <select class="form-select" @onchange="@(e => OnMicAssignmentChanged(mic, e.Value?.ToString()))">
+                            <option value="">-- Not Assigned --</option>
+                            @foreach (var person in GetAvailablePeople(mic))
+                            {
+                                var isSelected = MicAssignments.TryGetValue(mic, out var assignedName) && assignedName == person.Name;
+                                <option value="@person.Name" selected="@isSelected">@person.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="mt-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="LoadPreviousAssignments">
+                <i class="bi bi-clock-history"></i> Load Previous Session
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger ms-1" @onclick="ClearAssignments">
+                <i class="bi bi-x-circle"></i> Clear All
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-info mt-2">
+                <small>@statusMessage</small>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Dictionary<int, string> MicAssignments { get; set; } = new();
+    [Parameter] public EventCallback<Dictionary<int, string>> MicAssignmentsChanged { get; set; }
+    [Parameter] public HashSet<int> PresentSpeakers { get; set; } = new();
+    [Parameter] public EventCallback<HashSet<int>> PresentSpeakersChanged { get; set; }
+
+    private List<Person>? people = null;
+    private string statusMessage = string.Empty;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPeople();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Only load people once, don't reload on every parameter change
+        if (people == null || !people.Any())
+        {
+            await LoadPeople();
+        }
+    }
+
+    private async Task LoadPeople()
+    {
+        try
+        {
+            isLoading = true;
+            statusMessage = "Loading people...";
+            
+            // Load people from database using the same approach as Settings page
+            people = MovieReviewService.GetAllPeople(false); // false = don't respect order for mic assignment
+            
+            Console.WriteLine($"Loaded {people.Count} people from database");
+            statusMessage = $"Loaded {people.Count} people";
+            
+            // If no assignments provided, try to load from previous session
+            if (!MicAssignments.Any() && people.Any())
+            {
+                await LoadPreviousAssignments();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading people: {ex.Message}");
+            statusMessage = $"Error: {ex.Message}";
+            people = new List<Person>();
+        }
+        finally
+        {
+            isLoading = false;
+            // Force UI update
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnMicAssignmentChanged(int micNumber, string? personName)
+    {
+        if (string.IsNullOrEmpty(personName))
+        {
+            // Remove assignment
+            MicAssignments.Remove(micNumber);
+            PresentSpeakers.Remove(micNumber);
+        }
+        else
+        {
+            // Check if this person is already assigned to another mic
+            var existingMic = MicAssignments.FirstOrDefault(kvp => kvp.Value == personName && kvp.Key != micNumber);
+            if (existingMic.Key != 0)
+            {
+                // Remove from previous mic
+                MicAssignments.Remove(existingMic.Key);
+            }
+            
+            // Assign to new mic
+            MicAssignments[micNumber] = personName;
+            PresentSpeakers.Add(micNumber);
+        }
+
+        await MicAssignmentsChanged.InvokeAsync(MicAssignments);
+        await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+    }
+
+    private async Task LoadPreviousAssignments()
+    {
+        var previousAssignments = await MovieSessionService.GetLatestMicAssignments();
+        if (previousAssignments.Any())
+        {
+            MicAssignments.Clear();
+            foreach (var assignment in previousAssignments)
+            {
+                MicAssignments[assignment.Key] = assignment.Value;
+                PresentSpeakers.Add(assignment.Key);
+            }
+            
+            statusMessage = "Loaded assignments from previous session";
+            await MicAssignmentsChanged.InvokeAsync(MicAssignments);
+            await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+        }
+        else
+        {
+            statusMessage = "No previous assignments found";
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task ClearAssignments()
+    {
+        MicAssignments.Clear();
+        PresentSpeakers.Clear();
+        statusMessage = "Assignments cleared";
+        await MicAssignmentsChanged.InvokeAsync(MicAssignments);
+        await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+        StateHasChanged();
+    }
+
+
+    private IEnumerable<Person> GetAvailablePeople(int currentMic)
+    {
+        if (people == null) return Enumerable.Empty<Person>();
+        
+        // Get the person currently assigned to this mic (if any)
+        var currentAssignment = MicAssignments.TryGetValue(currentMic, out var currentPerson) ? currentPerson : null;
+        
+        // Get all assigned people except the one assigned to the current mic
+        var assignedPeople = MicAssignments
+            .Where(kvp => kvp.Key != currentMic)
+            .Select(kvp => kvp.Value)
+            .ToHashSet();
+        
+        // Return people who are either:
+        // 1. Not assigned to any mic, OR
+        // 2. Currently assigned to this specific mic
+        return people
+            .Where(p => !assignedPeople.Contains(p.Name) || p.Name == currentAssignment)
+            .OrderBy(p => p.Order)
+            .ThenBy(p => p.Name);
+    }
+}

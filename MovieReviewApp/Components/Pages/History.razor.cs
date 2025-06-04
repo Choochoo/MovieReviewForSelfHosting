@@ -10,6 +10,9 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private MovieReviewService movieReviewService { get; set; } = default!;
 
+        [Inject]
+        private MarkdownService MarkdownService { get; set; } = default!;
+
         public required List<MovieEvent> Pastevents { get; set; }
 
         // New properties for theater view

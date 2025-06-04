@@ -1,8 +1,7 @@
-using System.Text.RegularExpressions;
-using MovieReviewApp.Models;
 using MovieReviewApp.Database;
-using System.Text.Json;
+using MovieReviewApp.Models;
 using NAudio.Wave;
+using System.Text.RegularExpressions;
 
 namespace MovieReviewApp.Services;
 
@@ -12,26 +11,17 @@ public class MovieSessionService
     private readonly GladiaService _gladiaService;
     private readonly MovieSessionAnalysisService _analysisService;
     private readonly AudioClipService _audioClipService;
+    private readonly AudioFileOrganizer _audioOrganizer;
     private readonly ILogger<MovieSessionService> _logger;
     private readonly IWebHostEnvironment _environment;
     private readonly IConfiguration _configuration;
-
-    // Participant mapping for consistent MIC assignments
-    private static readonly Dictionary<int, string> MicParticipantMap = new()
-    {
-        { 1, "Participant 1" }, // TODO: Update with actual names from configuration
-        { 2, "Participant 2" },
-        { 3, "Participant 3" },
-        { 4, "Participant 4" },
-        { 5, "Participant 5" },
-        { 6, "Participant 6" }
-    };
 
     public MovieSessionService(
         MongoDbService database,
         GladiaService gladiaService,
         MovieSessionAnalysisService analysisService,
         AudioClipService audioClipService,
+        AudioFileOrganizer audioOrganizer,
         ILogger<MovieSessionService> logger,
         IWebHostEnvironment environment,
         IConfiguration configuration)
@@ -40,34 +30,44 @@ public class MovieSessionService
         _gladiaService = gladiaService;
         _analysisService = analysisService;
         _audioClipService = audioClipService;
+        _audioOrganizer = audioOrganizer;
         _logger = logger;
         _environment = environment;
         _configuration = configuration;
     }
 
-    public async Task<MovieSession> CreateSessionFromFolder(string folderPath)
+    public async Task<MovieSession> PrepareSessionFromFolder(string folderPath, Dictionary<int, string>? micAssignments = null)
     {
         var folderName = Path.GetFileName(folderPath);
-        
-        // Try to extract date from folder name (not required since dates in folder names aren't reliable)
-        var dateMatch = Regex.Match(folderName, @"(\d{4})[-_](\d{2})[-_](\d{2})");
+
+        // Extract date from folder name (format: YYYY-MonthName-MovieTitle)
+        var monthNameMatch = Regex.Match(folderName, @"(\d{4})-([A-Za-z]+)-(.+)");
         DateTime sessionDate;
-        
-        if (dateMatch.Success)
+
+        if (monthNameMatch.Success)
         {
             try
             {
-                sessionDate = new DateTime(
-                    int.Parse(dateMatch.Groups[1].Value),
-                    int.Parse(dateMatch.Groups[2].Value),
-                    int.Parse(dateMatch.Groups[3].Value)
-                );
-                _logger.LogInformation("Extracted date {Date} from folder name", sessionDate.ToShortDateString());
+                var year = int.Parse(monthNameMatch.Groups[1].Value);
+                var monthName = monthNameMatch.Groups[2].Value;
+                
+                // Parse month name to number
+                if (DateTime.TryParseExact($"{monthName} 1, {year}", "MMMM d, yyyy", 
+                    System.Globalization.CultureInfo.InvariantCulture, 
+                    System.Globalization.DateTimeStyles.None, out sessionDate))
+                {
+                    _logger.LogInformation("Extracted date {Date} from folder name", sessionDate.ToShortDateString());
+                }
+                else
+                {
+                    sessionDate = DateTime.Now;
+                    _logger.LogWarning("Invalid month name '{MonthName}' in folder name, using current date", monthName);
+                }
             }
             catch
             {
                 sessionDate = DateTime.Now;
-                _logger.LogWarning("Invalid date in folder name, using current date");
+                _logger.LogWarning("Invalid date format in folder name, using current date");
             }
         }
         else
@@ -84,43 +84,42 @@ public class MovieSessionService
             Date = sessionDate,
             MovieTitle = movieTitle,
             FolderPath = folderPath,
-            Status = ProcessingStatus.Pending
+            Status = ProcessingStatus.Pending,
+            MicAssignments = micAssignments ?? new Dictionary<int, string>()
         };
 
         // Scan for audio files
         await ScanAudioFiles(session);
-        
-        // Determine participants
+
+        // Determine participants using mic assignments if available
         DetermineParticipants(session);
 
-        // Save to database - CLEAN API!
-        await _database.UpsertAsync(session);
-
-        _logger.LogInformation("Created movie session {SessionId} for {MovieTitle} on {Date}", 
+        _logger.LogInformation("Prepared movie session {SessionId} for {MovieTitle} on {Date} (not saved to database yet)",
             session.Id, session.MovieTitle, session.Date);
 
         return session;
     }
 
+    public async Task<MovieSession> SaveSessionToDatabase(MovieSession session)
+    {
+        await _database.UpsertAsync(session);
+        _logger.LogInformation("Saved movie session {SessionId} to database after successful processing", session.Id);
+        return session;
+    }
+
     private string SuggestMovieTitle(string folderName)
     {
-        // Remove common separators and clean up
-        var title = folderName
-            .Replace("_", " ")
-            .Replace("-", " ")
-            .Replace(".", " ");
+        // Extract movie title from format: YYYY-MonthName-MovieTitle
+        var monthNameMatch = Regex.Match(folderName, @"(\d{4})-([A-Za-z]+)-(.+)");
+        if (monthNameMatch.Success)
+        {
+            var moviePart = monthNameMatch.Groups[3].Value;
+            // Convert hyphens to spaces for movie title
+            return moviePart.Replace("-", " ").Trim();
+        }
 
-        // Remove date patterns (they're not reliable per requirements)
-        title = Regex.Replace(title, @"\b\d{4}[-_]\d{2}[-_]\d{2}\b", "").Trim();
-        title = Regex.Replace(title, @"\b\d{2}[-_]\d{2}[-_]\d{4}\b", "").Trim();
-
-        // Normalize multiple spaces
-        title = Regex.Replace(title, @"\s+", " ");
-
-        // Title case
-        title = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(title.ToLower());
-
-        return !string.IsNullOrWhiteSpace(title) ? title : folderName;
+        // Fallback: return folder name as-is if format doesn't match
+        return folderName;
     }
 
     private async Task ScanAudioFiles(MovieSession session)
@@ -142,7 +141,7 @@ public class MovieSessionService
             var fileName = Path.GetFileName(filePath);
             var fileNameUpper = fileName.ToUpper();
             var fileInfo = new FileInfo(filePath);
-            
+
             var audioFile = new AudioFile
             {
                 FileName = fileName,
@@ -169,7 +168,7 @@ public class MovieSessionService
             else if (fileNameUpper == "PHONE.WAV" || fileNameUpper == "SOUND_PAD.WAV" || fileNameUpper == "SOUNDPAD.WAV")
             {
                 identifiedFiles.Add(fileName);
-                _logger.LogDebug("Identified {FileType} file: {FileName}", 
+                _logger.LogDebug("Identified {FileType} file: {FileName}",
                     fileNameUpper.Contains("PHONE") ? "phone" : "sound pad", fileName);
             }
             // Check for master recording with timestamp pattern (e.g., 2024_1122_1839.wav)
@@ -180,7 +179,7 @@ public class MovieSessionService
                 _logger.LogInformation("Identified timestamped master mix file: {FileName}", fileName);
             }
             // Check for master recording patterns
-            else if (fileName.ToLower().Contains("master") || 
+            else if (fileName.ToLower().Contains("master") ||
                      fileName.ToLower().Contains("combined") ||
                      fileName.ToLower().Contains("full") ||
                      fileName.ToLower().Contains("group"))
@@ -207,6 +206,35 @@ public class MovieSessionService
             _logger.LogWarning("Multiple unidentified files. Selected {FileName} as master mix based on size", largestFile.FileName);
         }
 
+        // Rename master recording to MASTER_MIX.WAV
+        var masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording);
+        if (masterFile != null && !masterFile.FileName.Equals("MASTER_MIX.WAV", StringComparison.OrdinalIgnoreCase))
+        {
+            var oldPath = masterFile.FilePath;
+            var directory = Path.GetDirectoryName(oldPath);
+            var newPath = Path.Combine(directory!, "MASTER_MIX.WAV");
+
+            try
+            {
+                // If MASTER_MIX.WAV already exists, don't overwrite
+                if (!File.Exists(newPath))
+                {
+                    File.Move(oldPath, newPath);
+                    masterFile.FileName = "MASTER_MIX.WAV";
+                    masterFile.FilePath = newPath;
+                    _logger.LogInformation("Renamed master mix file from {OldName} to MASTER_MIX.WAV", Path.GetFileName(oldPath));
+                }
+                else
+                {
+                    _logger.LogWarning("MASTER_MIX.WAV already exists, keeping original file name: {FileName}", masterFile.FileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to rename master mix file from {OldName} to MASTER_MIX.WAV", masterFile.FileName);
+            }
+        }
+
         // Log warning if no master recording found
         if (!session.AudioFiles.Any(f => f.IsMasterRecording))
         {
@@ -228,13 +256,23 @@ public class MovieSessionService
         var allSpeakers = Enumerable.Range(1, 6).ToList();
         var absentSpeakers = allSpeakers.Except(presentSpeakers).ToList();
 
-        session.ParticipantsPresent = presentSpeakers.Select(GetParticipantName).ToList();
-        session.ParticipantsAbsent = absentSpeakers.Select(GetParticipantName).ToList();
+        // Use mic assignments if available, otherwise show generic mic labels
+        session.ParticipantsPresent = presentSpeakers.Select(mic =>
+            session.MicAssignments.TryGetValue(mic, out var name) && !string.IsNullOrEmpty(name) 
+                ? name 
+                : GetParticipantName(mic)
+        ).ToList();
+
+        session.ParticipantsAbsent = absentSpeakers.Select(mic =>
+            session.MicAssignments.TryGetValue(mic, out var name) && !string.IsNullOrEmpty(name) 
+                ? name 
+                : GetParticipantName(mic)
+        ).ToList();
     }
 
     public static string GetParticipantName(int micNumber)
     {
-        return MicParticipantMap.TryGetValue(micNumber, out var name) ? name : $"Speaker{micNumber}";
+        return $"Mic {micNumber}";
     }
 
     private async Task<TimeSpan?> GetMediaDuration(string filePath)
@@ -248,6 +286,190 @@ public class MovieSessionService
         {
             _logger.LogWarning(ex, "Could not get duration for file {FilePath}", filePath);
             return null;
+        }
+    }
+
+    public async Task ProcessSession(MovieSession session, Action<ProcessingStatus, int, string>? progressCallback = null)
+    {
+        try
+        {
+            // Step 1: Validation
+            progressCallback?.Invoke(ProcessingStatus.Validating, 10, "Validating session data");
+            session.Status = ProcessingStatus.Validating;
+
+            if (!session.AudioFiles.Any())
+            {
+                throw new Exception("No audio files found in session");
+            }
+
+            // Step 2: Transcription
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 20, "Starting transcription");
+            session.Status = ProcessingStatus.Transcribing;
+
+            // Use the session's folder path for organizing files, not the generic uploads folder
+            var sessionFolderPath = session.FolderPath;
+            _audioOrganizer.InitializeAudioFolders(sessionFolderPath);
+
+            // Check if Gladia service is properly configured
+            _gladiaService.LogConfigurationStatus();
+            
+            if (!_gladiaService.IsConfigured)
+            {
+                throw new Exception("Gladia API key not configured. Cannot process audio files.");
+            }
+
+            // Phase 1: Convert all WAV files to MP3
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 10, "Converting audio files to MP3...");
+            
+            var conversionResults = await _gladiaService.ConvertAllWavsToMp3Async(session.AudioFiles, sessionFolderPath,
+                (message, current, total) =>
+                {
+                    var progress = 10 + (int)((double)current / total * 20); // 10-30%
+                    progressCallback?.Invoke(ProcessingStatus.Transcribing, progress, message);
+                });
+
+            // Phase 2: Move successful MP3s to processed_mp3 and delete original WAVs
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 30, "Organizing converted files...");
+            
+            foreach (var (audioFile, success, error) in conversionResults)
+            {
+                if (success && !string.IsNullOrEmpty(audioFile.Mp3FilePath))
+                {
+                    // Files are already in pending_mp3 from conversion process
+                    // Just update file path to MP3 location and clean up WAV
+                    var originalWavPath = audioFile.FilePath;
+                    audioFile.FilePath = audioFile.Mp3FilePath;
+                    
+                    // Delete original WAV file if it's different from MP3
+                    if (File.Exists(originalWavPath) && originalWavPath != audioFile.Mp3FilePath)
+                    {
+                        try
+                        {
+                            File.Delete(originalWavPath);
+                            _logger.LogInformation("Deleted original WAV file: {FilePath}", originalWavPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to delete original WAV file: {FilePath}", originalWavPath);
+                        }
+                    }
+                }
+                else
+                {
+                    // Files are already moved to failed folder by conversion process
+                    audioFile.ConversionError = error;
+                }
+            }
+
+            // Phase 3: Upload all MP3s to Gladia
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 35, "Uploading files to Gladia...");
+            
+            var mp3Files = session.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.PendingMp3).ToList();
+            if (!mp3Files.Any())
+            {
+                throw new Exception("No MP3 files were successfully converted for upload.");
+            }
+            
+            var uploadResults = await _gladiaService.UploadAllMp3sToGladiaAsync(mp3Files, sessionFolderPath,
+                (message, current, total) =>
+                {
+                    var progress = 35 + (int)((double)current / total * 25); // 35-60%
+                    progressCallback?.Invoke(ProcessingStatus.Transcribing, progress, message);
+                });
+
+            // Phase 4: Start transcriptions and wait for completion
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 60, "Starting transcriptions...");
+            
+            var transcriptionTasks = new List<Task>();
+            foreach (var (audioFile, success, error) in uploadResults)
+            {
+                if (success && !string.IsNullOrEmpty(audioFile.AudioUrl))
+                {
+                    transcriptionTasks.Add(ProcessSingleTranscription(audioFile, session.MicAssignments, sessionFolderPath));
+                }
+                else
+                {
+                    audioFile.ProcessingStatus = AudioProcessingStatus.FailedMp3;
+                    audioFile.ConversionError = error;
+                    
+                    // Move failed upload to failed_mp3 folder
+                    if (!string.IsNullOrEmpty(audioFile.Mp3FilePath))
+                    {
+                        audioFile.Mp3FilePath = await _audioOrganizer.MoveMp3FileToStatusFolder(audioFile, sessionFolderPath);
+                    }
+                }
+            }
+
+            // Wait for all transcriptions to complete
+            await Task.WhenAll(transcriptionTasks);
+            
+            // Phase 5: Save transcription files to session folder
+            progressCallback?.Invoke(ProcessingStatus.Transcribing, 70, "Saving transcription files...");
+            
+            foreach (var audioFile in session.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete))
+            {
+                if (!string.IsNullOrEmpty(audioFile.TranscriptText))
+                {
+                    var transcriptFileName = Path.ChangeExtension(audioFile.FileName, ".txt");
+                    var transcriptPath = Path.Combine(sessionFolderPath, transcriptFileName);
+                    
+                    await File.WriteAllTextAsync(transcriptPath, audioFile.TranscriptText);
+                    _logger.LogInformation("Saved transcript to: {TranscriptPath}", transcriptPath);
+                }
+            }
+
+            _logger.LogInformation("Audio processing completed. {SuccessCount} successful, {FailedCount} failed", 
+                session.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete),
+                session.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.Failed || f.ProcessingStatus == AudioProcessingStatus.FailedMp3));
+
+            // Step 3: AI Analysis
+            progressCallback?.Invoke(ProcessingStatus.Analyzing, 75, "Analyzing transcripts for entertainment moments");
+            session.Status = ProcessingStatus.Analyzing;
+
+            await AnalyzeSession(session);
+
+            // Step 4: Complete - ONLY NOW save to database after 100% success
+            // Verify ALL files have successful transcripts before saving
+            var successfulTranscripts = session.AudioFiles.Count(f => 
+                f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete && 
+                !string.IsNullOrEmpty(f.TranscriptText));
+            
+            var totalFiles = session.AudioFiles.Count;
+            
+            if (successfulTranscripts == 0)
+            {
+                throw new Exception($"No successful transcripts generated from {totalFiles} audio files. Session not saved.");
+            }
+            
+            if (successfulTranscripts < totalFiles)
+            {
+                _logger.LogWarning("Only {SuccessCount}/{TotalCount} files successfully transcribed for session {SessionId}", 
+                    successfulTranscripts, totalFiles, session.Id);
+            }
+            
+            // Final validation: ensure we have analysis results
+            if (session.CategoryResults == null)
+            {
+                throw new Exception("Session analysis not completed. Session not saved.");
+            }
+            
+            progressCallback?.Invoke(ProcessingStatus.Complete, 100, "Processing complete");
+            session.Status = ProcessingStatus.Complete;
+            session.ProcessedAt = DateTime.UtcNow;
+
+            await SaveSessionToDatabase(session);
+            
+            _logger.LogInformation("Successfully saved MovieSession {SessionId} with {SuccessCount}/{TotalCount} successful transcripts", 
+                session.Id, successfulTranscripts, totalFiles);
+
+            _logger.LogInformation("Successfully processed and saved session {SessionId}", session.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process session {SessionId}", session.Id);
+            session.Status = ProcessingStatus.Failed;
+            session.ErrorMessage = ex.Message;
+            throw;
         }
     }
 
@@ -276,25 +498,67 @@ public class MovieSessionService
             session.Status = ProcessingStatus.Transcribing;
             await _database.UpsertAsync(session);
 
-            var audioFilePaths = session.AudioFiles.Select(f => f.FilePath).ToList();
-            var transcriptionResults = await _gladiaService.ProcessMultipleFilesAsync(audioFilePaths, 
-                (fileName, current, total) => 
+            // Use the session's folder path for organizing files, not the generic uploads folder
+            var sessionFolderPath = session.FolderPath;
+            _audioOrganizer.InitializeAudioFolders(sessionFolderPath);
+
+            // Check if Gladia service is properly configured
+            _gladiaService.LogConfigurationStatus();
+            
+            if (!_gladiaService.IsConfigured)
+            {
+                _logger.LogWarning("Gladia API key not configured, skipping transcription for session {SessionId}", session.Id);
+                
+                // Set status but don't move files since we're skipping transcription
+                foreach (var audioFile in session.AudioFiles)
+                {
+                    if (audioFile.ProcessingStatus == AudioProcessingStatus.Pending)
+                    {
+                        audioFile.ProcessingStatus = AudioProcessingStatus.Failed;
+                        audioFile.ConversionError = "Gladia API key not configured - transcription skipped";
+                    }
+                }
+                
+                // Skip to analysis with fallback
+                progressCallback?.Invoke(ProcessingStatus.Analyzing, 75, "Skipping transcription - using fallback analysis");
+                session.Status = ProcessingStatus.Analyzing;
+                await _database.UpsertAsync(session);
+                await AnalyzeSession(session);
+                
+                progressCallback?.Invoke(ProcessingStatus.Complete, 100, "Processing complete");
+                session.Status = ProcessingStatus.Complete;
+                session.ProcessedAt = DateTime.UtcNow;
+                await _database.UpsertAsync(session);
+                return;
+            }
+
+            // Don't move files from their original location automatically
+            // Files will be moved during actual processing if needed
+
+            _logger.LogInformation("Starting transcription for {FileCount} audio files", session.AudioFiles.Count);
+            
+            var transcriptionResults = await _gladiaService.ProcessMultipleFilesAsync(session.AudioFiles,
+                session.MicAssignments, // Pass mic assignments for speaker name mapping
+                (fileName, current, total) =>
                 {
                     var progress = 20 + (int)((double)current / total * 50); // 20-70%
                     progressCallback?.Invoke(ProcessingStatus.Transcribing, progress, $"Transcribing {fileName}");
                 });
-
-            // Update audio files with transcription data
-            for (int i = 0; i < session.AudioFiles.Count; i++)
-            {
-                var audioFile = session.AudioFiles[i];
-                var transcriptionResult = transcriptionResults.FirstOrDefault(r => r.source_file_path == audioFile.FilePath);
                 
-                if (transcriptionResult?.result?.transcription?.full_transcript != null)
+            _logger.LogInformation("Transcription completed. Results: {SuccessCount} successful, {FailedCount} failed", 
+                transcriptionResults.Count(r => r.status == "done"),
+                transcriptionResults.Count(r => r.status == "error"));
+
+            // Only move files that actually failed - successful files stay in place
+            foreach (var audioFile in session.AudioFiles)
+            {
+                if (audioFile.ProcessingStatus == AudioProcessingStatus.Failed || 
+                    audioFile.ProcessingStatus == AudioProcessingStatus.FailedMp3)
                 {
-                    audioFile.TranscriptId = transcriptionResult.id;
-                    audioFile.TranscriptText = transcriptionResult.result.transcription.full_transcript;
+                    // Move failed files to failed subfolder for organization
+                    audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath);
                 }
+                // Successful files (TranscriptionComplete, ProcessedMp3) stay in original location
             }
 
             // Step 3: AI Analysis
@@ -304,23 +568,50 @@ public class MovieSessionService
 
             await AnalyzeSession(session);
 
-            // Step 4: Complete
+            // Step 4: Complete - ONLY NOW save to database after 100% success
+            // Verify ALL files have successful transcripts before saving
+            var successfulTranscripts = session.AudioFiles.Count(f => 
+                f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete && 
+                !string.IsNullOrEmpty(f.TranscriptText));
+            
+            var totalFiles = session.AudioFiles.Count;
+            
+            if (successfulTranscripts == 0)
+            {
+                throw new Exception($"No successful transcripts generated from {totalFiles} audio files. Session not saved.");
+            }
+            
+            if (successfulTranscripts < totalFiles)
+            {
+                _logger.LogWarning("Only {SuccessCount}/{TotalCount} files successfully transcribed for session {SessionId}", 
+                    successfulTranscripts, totalFiles, session.Id);
+            }
+            
+            // Final validation: ensure we have analysis results
+            if (session.CategoryResults == null)
+            {
+                throw new Exception("Session analysis not completed. Session not saved.");
+            }
+            
             progressCallback?.Invoke(ProcessingStatus.Complete, 100, "Processing complete");
             session.Status = ProcessingStatus.Complete;
             session.ProcessedAt = DateTime.UtcNow;
 
             await _database.UpsertAsync(session);
             
+            _logger.LogInformation("Successfully saved MovieSession {SessionId} with {SuccessCount}/{TotalCount} successful transcripts", 
+                session.Id, successfulTranscripts, totalFiles);
+
             _logger.LogInformation("Successfully processed session {SessionId}", sessionId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process session {SessionId}", sessionId);
-            
+
             session.Status = ProcessingStatus.Failed;
             session.ErrorMessage = ex.Message;
             await _database.UpsertAsync(session);
-            
+
             throw;
         }
     }
@@ -330,29 +621,50 @@ public class MovieSessionService
         // Check if we have transcripts to analyze
         var transcriptsAvailable = session.AudioFiles.Any(f => !string.IsNullOrEmpty(f.TranscriptText));
         
+        // Log detailed information about transcript availability
+        _logger.LogInformation("Analyzing session {SessionId}: {TotalFiles} audio files, {TranscriptFiles} with transcripts", 
+            session.Id, session.AudioFiles.Count, session.AudioFiles.Count(f => !string.IsNullOrEmpty(f.TranscriptText)));
+            
+        foreach (var audioFile in session.AudioFiles)
+        {
+            _logger.LogDebug("Audio file {FileName}: Status={Status}, HasTranscript={HasTranscript}, TranscriptLength={Length}", 
+                audioFile.FileName, 
+                audioFile.ProcessingStatus, 
+                !string.IsNullOrEmpty(audioFile.TranscriptText),
+                audioFile.TranscriptText?.Length ?? 0);
+        }
+
         if (!transcriptsAvailable)
         {
-            throw new Exception("No transcripts available for analysis");
+            _logger.LogWarning("No transcripts available for analysis in session {SessionId}. Audio file statuses: {Statuses}", 
+                session.Id, 
+                string.Join(", ", session.AudioFiles.Select(f => $"{f.FileName}:{f.ProcessingStatus}")));
+                
+            // Use fallback analysis instead of throwing error
+            _logger.LogInformation("Using fallback analysis for session {SessionId}", session.Id);
+            session.CategoryResults = CreateFallbackAnalysis(session);
+            session.SessionStats = CreateFallbackStats(session);
+            return;
         }
 
         try
         {
             // Use the AI analysis service to analyze the session
             session.CategoryResults = await _analysisService.AnalyzeSessionAsync(session);
-            
+
             // Generate session stats based on the analysis results
             session.SessionStats = _analysisService.GenerateSessionStats(session, session.CategoryResults);
-            
+
             // Generate audio clips for Top 5 lists
             await GenerateAudioClips(session);
-            
-            _logger.LogInformation("Successfully analyzed session {SessionId} with {HighlightCount} highlights", 
+
+            _logger.LogInformation("Successfully analyzed session {SessionId} with {HighlightCount} highlights",
                 session.Id, session.SessionStats.HighlightMoments);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "AI analysis failed for session {SessionId}, using fallback analysis", session.Id);
-            
+
             // Fallback to basic analysis if AI analysis fails
             session.CategoryResults = CreateFallbackAnalysis(session);
             session.SessionStats = CreateFallbackStats(session);
@@ -438,7 +750,7 @@ public class MovieSessionService
         try
         {
             var clipsGenerated = 0;
-            
+
             // Generate clips for Funniest Sentences
             if (session.CategoryResults.FunniestSentences?.Entries.Any() == true)
             {
@@ -446,7 +758,7 @@ public class MovieSessionService
                 var clipUrls = await _audioClipService.GenerateClipsForTopFiveAsync(session, session.CategoryResults.FunniestSentences);
                 clipsGenerated += clipUrls.Count;
             }
-            
+
             // Generate clips for Most Bland Comments
             if (session.CategoryResults.MostBlandComments?.Entries.Any() == true)
             {
@@ -454,7 +766,7 @@ public class MovieSessionService
                 var clipUrls = await _audioClipService.GenerateClipsForTopFiveAsync(session, session.CategoryResults.MostBlandComments);
                 clipsGenerated += clipUrls.Count;
             }
-            
+
             _logger.LogInformation("Generated {ClipCount} audio clips for session {SessionId}", clipsGenerated, session.Id);
         }
         catch (Exception ex)
@@ -480,13 +792,13 @@ public class MovieSessionService
                     entry.SourceAudioFile = session.AudioFiles.First().FileName;
                 }
             }
-            
+
             // Convert timestamp to seconds if needed
             if (entry.StartTimeSeconds == 0 && !string.IsNullOrEmpty(entry.Timestamp))
             {
                 var timeSpan = _audioClipService.ParseTimestamp(entry.Timestamp);
                 entry.StartTimeSeconds = timeSpan.TotalSeconds;
-                
+
                 // Add some reasonable duration (e.g., 5-8 seconds) if end time not specified
                 if (entry.EndTimeSeconds == 0)
                 {
@@ -510,7 +822,7 @@ public class MovieSessionService
             orderBy: s => s.CreatedAt,
             descending: true
         );
-        
+
         return sessions;
     }
 
@@ -553,5 +865,62 @@ public class MovieSessionService
     public async Task<List<MovieSession>> GetFailedSessions()
     {
         return await _database.FindAsync<MovieSession>(s => s.Status == ProcessingStatus.Failed);
+    }
+
+    public async Task<Dictionary<int, string>> GetLatestMicAssignments()
+    {
+        // Get all sessions with mic assignments and sort by date
+        var sessionsWithAssignments = await _database.FindAsync<MovieSession>(
+            s => s.MicAssignments != null
+        );
+
+        var latestSession = sessionsWithAssignments
+            .Where(s => s.MicAssignments != null && s.MicAssignments.Count > 0)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefault();
+
+        return latestSession?.MicAssignments ?? new Dictionary<int, string>();
+    }
+
+    private async Task ProcessSingleTranscription(AudioFile audioFile, Dictionary<int, string> micAssignments, string sessionFolderPath)
+    {
+        try
+        {
+            // Start transcription with the uploaded audio URL
+            var transcriptionId = await _gladiaService.StartTranscriptionAsync(audioFile.AudioUrl!);
+            
+            // Wait for completion
+            var result = await _gladiaService.WaitForTranscriptionAsync(transcriptionId);
+            
+            // Apply speaker name mapping based on mic assignments and filename
+            var rawTranscript = result.result?.transcription?.full_transcript;
+            audioFile.TranscriptText = !string.IsNullOrEmpty(rawTranscript) 
+                ? _gladiaService.MapSpeakerLabelsToNames(rawTranscript, micAssignments, audioFile.FileName)
+                : rawTranscript;
+            
+            audioFile.TranscriptId = result.id;
+            audioFile.ProcessingStatus = AudioProcessingStatus.TranscriptionComplete;
+            audioFile.ProcessedAt = DateTime.UtcNow;
+            
+            // Move completed transcription to processed_mp3 folder
+            if (!string.IsNullOrEmpty(audioFile.Mp3FilePath))
+            {
+                audioFile.Mp3FilePath = await _audioOrganizer.MoveMp3FileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+            }
+            
+            _logger.LogInformation("Successfully transcribed {FileName}", audioFile.FileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to transcribe {FileName}", audioFile.FileName);
+            audioFile.ProcessingStatus = AudioProcessingStatus.FailedMp3;
+            audioFile.ConversionError = ex.Message;
+            
+            // Move failed transcription to failed_mp3 folder
+            if (!string.IsNullOrEmpty(audioFile.Mp3FilePath))
+            {
+                audioFile.Mp3FilePath = await _audioOrganizer.MoveMp3FileToStatusFolder(audioFile, sessionFolderPath);
+            }
+        }
     }
 }

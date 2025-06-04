@@ -28,6 +28,7 @@ Each instance is completely isolated with its own:
 
 - .NET 8.0 or later
 - MongoDB instance (local or cloud)
+- **FFmpeg** (required for audio processing) - see [Audio Processing Setup](#-audio-processing-setup) below
 - API keys for:
   - [TMDB](https://www.themoviedb.org/settings/api) (required, free)
   - [Gladia](https://gladia.io/) (optional, for audio transcription)
@@ -119,6 +120,54 @@ Each instance stores its data separately:
 - **All movie data** visible at once
 - **Sortable columns** for different viewing preferences
 
+## 🎵 Audio Processing Setup
+
+### FFmpeg Installation (Required)
+
+The application automatically converts large WAV files (>100MB) to MP3 for faster, more reliable uploads to Gladia. This requires FFmpeg to be installed on your system.
+
+#### Windows
+```bash
+# Using winget (recommended)
+winget install FFmpeg
+
+# Or download from https://ffmpeg.org/download.html
+```
+
+#### macOS
+```bash
+# Using Homebrew
+brew install ffmpeg
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+# Using apt
+sudo apt update
+sudo apt install ffmpeg
+```
+
+#### Linux (CentOS/RHEL/Fedora)
+```bash
+# Using yum/dnf
+sudo yum install ffmpeg
+# or
+sudo dnf install ffmpeg
+```
+
+### Audio Processing Features
+
+- **Smart Compression**: Files >100MB automatically converted to MP3 before upload
+- **Quality Optimization**: 128kbps MP3 with 44.1kHz sample rate (perfect for speech transcription)
+- **Size Reduction**: Typical 600MB WAV → 60MB MP3 (90% reduction)
+- **Reliability**: Smaller files eliminate upload timeouts and stream errors
+- **Automatic Cleanup**: Temporary files are automatically deleted after processing
+
+### Supported Audio Formats
+
+**Input formats**: WAV, MP3, M4A, AAC, OGG, FLAC, MP4, MOV, AVI, MKV, WEBM, M4V, 3GP  
+**Upload optimization**: Large WAV files are automatically converted to MP3 for better performance
+
 ## 🛠️ Development
 
 ### Development Setup
@@ -188,6 +237,12 @@ This is a personal family project, but feel free to fork and adapt for your own 
 - Verify your API keys are active and have sufficient credits
 - Check API rate limits if requests are failing
 - Ensure network connectivity to external APIs
+
+### Audio Processing Issues
+- **FFmpeg not found**: Install FFmpeg using the instructions in [Audio Processing Setup](#-audio-processing-setup)
+- **Large file upload failures**: The app automatically converts >100MB WAV files to MP3, but requires FFmpeg
+- **"Error while copying content to a stream"**: Usually resolved by MP3 conversion (requires FFmpeg)
+- **Conversion failures**: Check FFmpeg installation with `ffmpeg -version` in terminal/command prompt
 
 ---
 

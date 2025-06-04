@@ -27,14 +27,21 @@ namespace MovieReviewApp.Services
                 "App:DisplayName"
             };
 
+            Console.WriteLine("SecureConfigurationProvider: Loading secrets...");
             foreach (var secret in secrets)
             {
                 var value = _secretsManager.GetSecret(secret);
                 if (!string.IsNullOrEmpty(value))
                 {
                     _data[secret] = value;
+                    Console.WriteLine($"SecureConfigurationProvider: Loaded {secret} (length: {value.Length})");
+                }
+                else
+                {
+                    Console.WriteLine($"SecureConfigurationProvider: {secret} is empty/null");
                 }
             }
+            Console.WriteLine($"SecureConfigurationProvider: Loaded {_data.Count} secrets total");
         }
 
         public bool TryGet(string key, out string value)
@@ -99,7 +106,9 @@ namespace MovieReviewApp.Services
 
         public IConfigurationProvider Build(IConfigurationBuilder builder)
         {
-            return new SecureConfigurationProvider(_secretsManager);
+            var provider = new SecureConfigurationProvider(_secretsManager);
+            provider.Load(); // Ensure secrets are loaded
+            return provider;
         }
     }
 

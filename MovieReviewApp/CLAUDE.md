@@ -130,6 +130,54 @@ Files per instance:
 - **Gladia**: Audio transcription with speaker diarization (optional)
 - **Facebook**: Messenger integration for notifications (optional)
 
-### Important Instructions
+## Audio Processing & FFmpeg
 
-- **Git Commits**: Never include Claude references (🤖 Generated with Claude Code, Co-Authored-By: Claude) in git commit messages
+### FFmpeg Requirement
+The application requires FFmpeg for optimal audio processing:
+- **Smart MP3 Conversion**: Large WAV files (>100MB) automatically converted to MP3 before Gladia upload
+- **Performance**: 600MB WAV → 60MB MP3 (90% reduction) for faster, more reliable uploads
+- **Quality Settings**: 128kbps MP3 with 44.1kHz sample rate (optimal for speech transcription)
+- **Temporary Files**: Automatic cleanup of converted files after processing
+
+### Audio Processing Pipeline
+1. **File Detection**: `MovieSessionService.cs` scans for audio files with pattern recognition
+2. **Smart Conversion**: `GladiaService.cs` automatically converts large WAV files using FFmpeg
+3. **Upload**: Optimized files uploaded to Gladia API for transcription
+4. **Analysis**: `MovieSessionAnalysisService.cs` processes transcripts for entertainment moments
+5. **Clip Generation**: `AudioClipService.cs` creates highlight clips from analysis results
+
+### Supported Audio Formats
+**Input**: WAV, MP3, M4A, AAC, OGG, FLAC, MP4, MOV, AVI, MKV, WEBM, M4V, 3GP  
+**Processing**: Large files automatically optimized for upload performance
+
+## Testing and Quality
+
+### Build Commands
+```bash
+dotnet build                    # Standard build with validation
+dotnet build -c Release        # Release build for production
+```
+
+### Running Tests
+No formal test suite currently implemented. Manual testing through:
+- Instance creation and configuration
+- Audio file processing workflows
+- Database operations across collections
+- API integrations (TMDB, Gladia, Facebook)
+
+## Important Development Guidelines
+
+### Git Commit Standards
+- **Never mention Claude**: Do not include any references to Claude, AI assistance, or automated generation in commit messages
+- **Focus on functionality**: Describe what was changed and why, not how it was created
+- **Be descriptive**: Use clear, concise commit messages that explain the business value
+
+### Security Requirements
+- **No API Keys in Code**: All sensitive data stored in per-instance encrypted `secrets.json`
+- **Template Distribution**: Public repository contains only `appsettings.json.template` with placeholders
+- **Instance Isolation**: Each instance has completely separate configuration and data
+
+### Configuration Management
+- **First-Run Setup**: New instances automatically redirect to `/setup` for secure configuration
+- **Template-Based**: Development uses `appsettings.json.template` copied to `appsettings.json`
+- **Per-Instance Storage**: Configuration stored in platform-specific app data directories

@@ -76,6 +76,13 @@ h1, h2, h3, h4, h5, h6 {
     animation: gradientShift 3s ease infinite;
 }
 
+/* Fix for headings with badges - restore text visibility */
+h1 .badge, h2 .badge, h3 .badge, h4 .badge, h5 .badge, h6 .badge {
+    -webkit-text-fill-color: initial;
+    background-clip: initial;
+    -webkit-background-clip: initial;
+}
+
 @keyframes gradientShift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
@@ -326,7 +333,7 @@ main {
     overflow: hidden;
 }
 
-.card:hover {
+.card:hover:not(.editing) {
     transform: translateY(-4px);
     box-shadow: var(--shadow-lg), var(--shadow-glow);
     border-color: var(--accent-primary);
@@ -655,8 +662,19 @@ i, .icon, [class*="bi-"], [class*="fa-"], [class*="fas-"], [class*="far-"], [cla
 }
 
 /* Focus states */
-h1:focus {
+h1:focus, h2:focus, h3:focus, h4:focus, h5:focus, h6:focus {
     outline: none;
+}
+
+/* Prevent any auto-scrolling behavior */
+html {
+    scroll-behavior: auto !important;
+}
+
+/* Ensure focus doesn't cause scrolling */
+*:focus {
+    scroll-margin: 0 !important;
+    scroll-padding: 0 !important;
 }
 
 /* Cyberpunk glitch effect */
@@ -693,4 +711,44 @@ h1:focus {
 
 .glitch {
     animation: glitch 2s infinite;
+}
+
+/* Badge overrides for dark theme */
+.badge {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.bg-primary {
+    background-color: var(--accent-primary) !important;
+    color: var(--background-primary) !important;
+}
+
+.bg-secondary {
+    background-color: var(--text-secondary) !important;
+    color: var(--background-primary) !important;
+}
+
+.bg-success {
+    background-color: var(--success-color) !important;
+    color: var(--background-primary) !important;
+}
+
+.bg-danger {
+    background-color: var(--error-color) !important;
+    color: var(--text-primary) !important;
+}
+
+.bg-warning {
+    background-color: var(--warning-color) !important;
+    color: var(--background-primary) !important;
+}
+
+.bg-info {
+    background-color: var(--accent-tertiary) !important;
+    color: var(--background-primary) !important;
 }

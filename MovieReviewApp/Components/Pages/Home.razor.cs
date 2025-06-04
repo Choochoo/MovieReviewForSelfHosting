@@ -202,6 +202,11 @@ namespace MovieReviewApp.Components.Pages
             var existingPhaseEvents = ExistingEvents.Where(e => e.PhaseNumber == phaseNumber);
             foreach (var existingEvent in existingPhaseEvents)
             {
+                // Set default MeetupTime if null
+                if (!existingEvent.MeetupTime.HasValue)
+                {
+                    existingEvent.MeetupTime = existingEvent.StartDate.StartOfMonth().LastFridayOfMonth().AddHours(18);
+                }
                 phase.Events.Add(existingEvent);
                 availablePeople.Remove(existingEvent.Person);
                 currentDate = existingEvent.EndDate.AddDays(1);
@@ -220,7 +225,7 @@ namespace MovieReviewApp.Components.Pages
                     PhaseNumber = phaseNumber,
                     FromDatabase = false,
                     IsEditing = false,
-                    MeetupTime = currentDate.LastFridayOfMonth().AddHours(18) // Default to 6pm on last Friday of month
+                    MeetupTime = currentDate.StartOfMonth().LastFridayOfMonth().AddHours(18) // Default to 6pm on last Friday of month
                 });
 
                 availablePeople.Remove(person);
