@@ -1,4 +1,6 @@
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using MovieReviewApp.Attributes;
 using MovieReviewApp.Enums;

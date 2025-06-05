@@ -297,7 +297,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        availableMovies = MovieReviewService.GetAllMovieEvents();
+        availableMovies = await MovieReviewService.GetAllMovieEventsAsync();
         await LoadExistingSessions();
         StartRefreshTimer();
     }

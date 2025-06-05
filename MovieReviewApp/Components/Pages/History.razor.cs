@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Components;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -26,9 +25,9 @@ namespace MovieReviewApp.Components.Pages
                       .OrderByDescending(e => e.StartDate)
                       .ToList() ?? new List<MovieEvent>();
 
-        protected override void OnInitialized()
+        protected override async Task OnInitializedAsync()
         {
-            Pastevents = movieReviewService.GetAllMovieEvents();
+            Pastevents = await movieReviewService.GetAllMovieEventsAsync();
         }
 
         private void ToggleView(bool showGrid)

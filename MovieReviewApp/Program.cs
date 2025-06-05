@@ -4,9 +4,6 @@ using MovieReviewApp.Database;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
 
 // Parse command line arguments
 CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
@@ -112,7 +109,7 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 // Add MongoDB service
-builder.Services.AddSingleton<MongoDbService>(provider => 
+builder.Services.AddSingleton<MongoDbService>(provider =>
     new MongoDbService(
         provider.GetRequiredService<IConfiguration>(),
         provider.GetRequiredService<SecretsManager>(),
@@ -179,6 +176,7 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
+
 // Add first-run setup middleware (before static files for setup page styling)
 app.UseFirstRunSetup();
 
@@ -202,6 +200,5 @@ Console.WriteLine();
 Console.WriteLine("Press Ctrl+C to stop the application");
 Console.WriteLine();
 
-BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresentation.CSharpLegacy));
 
 app.Run();

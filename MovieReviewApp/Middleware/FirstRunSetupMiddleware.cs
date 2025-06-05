@@ -44,7 +44,10 @@ namespace MovieReviewApp.Middleware
                     Console.WriteLine($"  Config file: {instanceManager.ConfigPath} - Exists: {File.Exists(instanceManager.ConfigPath)}");
                     if (!context.Response.HasStarted)
                     {
-                        context.Response.Redirect("/setup");
+                        Console.WriteLine($"FirstRunSetupMiddleware: Redirecting to /setup (first run)");
+                        context.Response.StatusCode = 302;
+                        context.Response.Headers.Location = "/setup";
+                        await context.Response.CompleteAsync();
                         return;
                     }
                 }
@@ -61,7 +64,10 @@ namespace MovieReviewApp.Middleware
                     Console.WriteLine($"  Missing: {string.Join(", ", secretsManager.GetMissingSecrets())}");
                     if (!context.Response.HasStarted)
                     {
-                        context.Response.Redirect("/setup");
+                        Console.WriteLine($"FirstRunSetupMiddleware: Redirecting to /setup (missing secrets)");
+                        context.Response.StatusCode = 302;
+                        context.Response.Headers.Location = "/setup";
+                        await context.Response.CompleteAsync();
                         return;
                     }
                 }

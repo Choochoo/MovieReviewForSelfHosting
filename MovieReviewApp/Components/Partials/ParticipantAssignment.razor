@@ -105,7 +105,7 @@
             statusMessage = "Loading people...";
             
             // Load people from database using the same approach as Settings page
-            people = MovieReviewService.GetAllPeople(false); // false = don't respect order for mic assignment
+            people = await MovieReviewService.GetAllPeopleAsync(false); // false = don't respect order for mic assignment
             
             Console.WriteLine($"Loaded {people.Count} people from database");
             statusMessage = $"Loaded {people.Count} people";

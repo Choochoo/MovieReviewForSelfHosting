@@ -49,7 +49,7 @@
             </div>
             
             <div class="settings-save">
-                <button type="button" class="btn btn-primary" @onclick="SaveGeneralSettings">
+                <button type="button" class="btn btn-primary" @onclick="async () => await SaveGeneralSettings()">
                     Save General Settings
                 </button>
             </div>
@@ -110,13 +110,13 @@
                                     <td class="col-actions">
                                         @if (person.IsEditing)
                                         {
-                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => Save(person)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await Save(person)">Save</button>
                                             <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Cancel(person)">Cancel</button>
                                         }
                                         else
                                         {
                                             <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Edit(person)">Edit</button>
-                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => Delete(person)">Delete</button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await Delete(person)">Delete</button>
                                         }
                                     </td>
                                 </tr>
@@ -128,7 +128,7 @@
                                 <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
                             </td>
                             <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="AddPerson">Add</button>
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
                             </td>
                         </tr>
                     </tbody>
@@ -208,13 +208,13 @@
                                     <td class="col-actions">
                                         @if (question.IsEditing)
                                         {
-                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => SaveQuestion(question)">Save</button>
-                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => CancelQuestionEdit(question)">Cancel</button>
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await SaveQuestion(question)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="async () => await CancelQuestionEdit(question)">Cancel</button>
                                         }
                                         else
                                         {
                                             <button type="button" class="btn btn-sm btn-secondary" @onclick="() => EditQuestion(question)">Edit</button>
-                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeleteQuestion(question)">Delete</button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await DeleteQuestion(question)">Delete</button>
                                         }
                                     </td>
                                 </tr>
@@ -229,7 +229,7 @@
                                 <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
                             </td>
                             <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="AddQuestion">Add</button>
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
                             </td>
                         </tr>
                     </tbody>

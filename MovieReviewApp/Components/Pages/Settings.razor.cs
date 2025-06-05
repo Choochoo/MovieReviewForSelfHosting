@@ -3,21 +3,20 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Components.Pages
 {
-    public partial class Settings
+    public partial class Settings : ComponentBase
     {
         [Inject]
         private MovieReviewService movieReviewService { get; set; } = default!;
-        
+
         [Inject]
         private InstanceManager instanceManager { get; set; } = default!;
-        
+
         [Inject]
         private NavigationManager navigationManager { get; set; } = default!;
-        
+
         [Inject]
         private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
         private List<Person>? People { get; set; } = new();
@@ -28,7 +27,7 @@ namespace MovieReviewApp.Components.Pages
         public bool RespectOrder = false;
         public string GroupName = "";
         public List<Setting> settings = new List<Setting>();
-        
+
         private List<DiscussionQuestion>? DiscussionQuestions { get; set; } = new();
         public string NewQuestionText = "";
         public bool NewQuestionIsActive = true;
@@ -42,27 +41,55 @@ namespace MovieReviewApp.Components.Pages
 
         protected override async Task OnInitializedAsync()
         {
-            settings = movieReviewService.GetSettings();
-            RespectOrder = false; // default value
-            var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
-            if (setting != null && !string.IsNullOrEmpty(setting.Value))
-                bool.TryParse(setting.Value, out RespectOrder);
-            StartDate = DateTime.Parse(settings.First(x => x.Key == "StartDate").Value);
-            TimeCount = int.Parse(settings.First(x => x.Key == "TimeCount").Value);
-            TimePeriod = settings.First(x => x.Key == "TimePeriod").Value;
-            
-            // Load group name from instance config
-            var instanceConfig = instanceManager.GetInstanceConfig();
-            GroupName = instanceConfig.DisplayName;
-            
-            People = movieReviewService.GetAllPeople(RespectOrder);
-            EnsureValidOrder();
-            
-            // Load discussion questions
-            DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+            try
+            {
+                settings = await movieReviewService.GetSettingsAsync();
+                RespectOrder = false; // default value
+                var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+                if (setting != null && !string.IsNullOrEmpty(setting.Value))
+                    bool.TryParse(setting.Value, out RespectOrder);
+
+                // Safe parsing with defaults
+                var startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
+                if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out var parsedStartDate))
+                    StartDate = parsedStartDate;
+                else
+                    StartDate = DateTime.Now;
+
+                var timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
+                if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out var parsedTimeCount))
+                    TimeCount = parsedTimeCount;
+                else
+                    TimeCount = 1;
+
+                var timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
+                TimePeriod = timePeriodSetting?.Value ?? "Month";
+
+                // Load group name from instance config
+                var instanceConfig = instanceManager.GetInstanceConfig();
+                GroupName = instanceConfig.DisplayName;
+
+                People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+                await EnsureValidOrder();
+
+                // Load discussion questions
+                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in Settings.OnInitializedAsync: {ex.Message}");
+                // Set safe defaults to prevent UI blocking
+                StartDate = DateTime.Now;
+                TimeCount = 1;
+                TimePeriod = "Month";
+                GroupName = "Movie Group";
+                People = new List<Person>();
+                DiscussionQuestions = new List<DiscussionQuestion>();
+                settings = new List<Setting>();
+            }
         }
 
-        private void EnsureValidOrder()
+        private async Task EnsureValidOrder()
         {
             if (People == null) return;
 
@@ -77,19 +104,19 @@ namespace MovieReviewApp.Components.Pages
                 if (orderedPeople[i].Order != i + 1)
                 {
                     orderedPeople[i].Order = i + 1;
-                    movieReviewService.AddOrUpdatePerson(orderedPeople[i]);
+                    await movieReviewService.AddOrUpdatePersonAsync(orderedPeople[i]);
                 }
             }
 
-            People = movieReviewService.GetAllPeople(RespectOrder);
+            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
         }
 
-        private void AddPerson()
+        private async Task AddPerson()
         {
             var newPersonOrder = (People?.Count ?? 0) + 1;
-            movieReviewService.AddPerson(new Person { Name = NewPerson, Order = newPersonOrder });
+            await movieReviewService.AddPersonAsync(new Person { Name = NewPerson, Order = newPersonOrder });
             NewPerson = "New Person";
-            People = movieReviewService.GetAllPeople(RespectOrder);
+            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
         }
 
         private void Edit(Person person)
@@ -104,44 +131,44 @@ namespace MovieReviewApp.Components.Pages
                 person.IsEditing = false;
         }
 
-        private void Delete(Person person)
+        private async Task Delete(Person person)
         {
             if (person != null)
             {
-                movieReviewService.DeletePerson(person);
-                People = movieReviewService.GetAllPeople(RespectOrder);
-                EnsureValidOrder(); // Reorder after deletion
+                await movieReviewService.DeletePersonAsync(person);
+                People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+                await EnsureValidOrder(); // Reorder after deletion
             }
         }
 
-        private void Save(Person person)
+        private async Task Save(Person person)
         {
             if (person != null)
             {
-                movieReviewService.AddOrUpdatePerson(person);
+                await movieReviewService.AddOrUpdatePersonAsync(person);
                 this.Cancel(person);
             }
         }
 
-        private void SaveDate()
+        private async Task SaveDate()
         {
             var dateSetting = settings.First(x => x.Key == "StartDate");
             dateSetting.Value = StartDate.ToString();
-            movieReviewService.AddOrUpdateSetting(dateSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(dateSetting);
         }
 
-        private void SaveOccurance(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+        private async Task SaveOccurance(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
         {
             var timeCountSetting = settings.First(x => x.Key == "TimeCount");
             timeCountSetting.Value = TimeCount.ToString();
-            movieReviewService.AddOrUpdateSetting(timeCountSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(timeCountSetting);
 
             var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
             timePeriodSetting.Value = TimePeriod;
-            movieReviewService.AddOrUpdateSetting(timePeriodSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(timePeriodSetting);
         }
 
-        private void SaveRespectOrder()
+        private async Task SaveRespectOrder()
         {
             var orderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
             if (orderSetting == null)
@@ -153,11 +180,11 @@ namespace MovieReviewApp.Components.Pages
             {
                 orderSetting.Value = RespectOrder.ToString();
             }
-            movieReviewService.AddOrUpdateSetting(orderSetting);
-            People = movieReviewService.GetAllPeople(RespectOrder);
+            await movieReviewService.AddOrUpdateSettingAsync(orderSetting);
+            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
         }
 
-        private void SaveGeneralSettings()
+        private async Task SaveGeneralSettings()
         {
             // Save Group Name to instance config
             var instanceConfig = instanceManager.GetInstanceConfig();
@@ -175,28 +202,28 @@ namespace MovieReviewApp.Components.Pages
             {
                 orderSetting.Value = RespectOrder.ToString();
             }
-            movieReviewService.AddOrUpdateSetting(orderSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(orderSetting);
 
             // Save Start Date
             var dateSetting = settings.First(x => x.Key == "StartDate");
             dateSetting.Value = StartDate.ToString();
-            movieReviewService.AddOrUpdateSetting(dateSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(dateSetting);
 
             // Save Time Count
             var timeCountSetting = settings.First(x => x.Key == "TimeCount");
             timeCountSetting.Value = TimeCount.ToString();
-            movieReviewService.AddOrUpdateSetting(timeCountSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(timeCountSetting);
 
             // Save Time Period
             var timePeriodSetting = settings.First(x => x.Key == "TimePeriod");
             timePeriodSetting.Value = TimePeriod;
-            movieReviewService.AddOrUpdateSetting(timePeriodSetting);
+            await movieReviewService.AddOrUpdateSettingAsync(timePeriodSetting);
 
             // Refresh people list with updated respect order setting
-            People = movieReviewService.GetAllPeople(RespectOrder);
-            
-            // Force navigation refresh to update the title in NavMenu
-            navigationManager.NavigateTo(navigationManager.Uri, forceLoad: true);
+            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+
+            // Update UI state instead of forcing a full page reload
+            StateHasChanged();
         }
 
         private async Task MoveUp(Person person)
@@ -210,10 +237,10 @@ namespace MovieReviewApp.Components.Pages
                     personAbove.Order = person.Order;
                     person.Order = tempOrder;
 
-                    movieReviewService.AddOrUpdatePerson(person);
-                    movieReviewService.AddOrUpdatePerson(personAbove);
+                    await movieReviewService.AddOrUpdatePersonAsync(person);
+                    await movieReviewService.AddOrUpdatePersonAsync(personAbove);
 
-                    People = movieReviewService.GetAllPeople(RespectOrder);
+                    People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
                 }
             }
         }
@@ -229,10 +256,10 @@ namespace MovieReviewApp.Components.Pages
                     personBelow.Order = person.Order;
                     person.Order = tempOrder;
 
-                    movieReviewService.AddOrUpdatePerson(person);
-                    movieReviewService.AddOrUpdatePerson(personBelow);
+                    await movieReviewService.AddOrUpdatePersonAsync(person);
+                    await movieReviewService.AddOrUpdatePersonAsync(personBelow);
 
-                    People = movieReviewService.GetAllPeople(RespectOrder);
+                    People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
                 }
             }
         }
@@ -256,17 +283,13 @@ namespace MovieReviewApp.Components.Pages
                 question.IsEditing = true;
         }
 
-        private void CancelQuestionEdit(DiscussionQuestion question)
+        private async Task CancelQuestionEdit(DiscussionQuestion question)
         {
             if (question != null)
             {
                 question.IsEditing = false;
                 // Reload to revert changes
-                Task.Run(async () =>
-                {
-                    DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
-                    StateHasChanged();
-                });
+                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
             }
         }
 
