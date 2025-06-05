@@ -11,10 +11,41 @@ namespace MovieReviewApp.Services
         public InstanceManager(string? instanceName = null)
         {
             var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            
+            // Handle WSL environment - use Windows path if running in WSL
+            if (IsRunningInWSL())
+            {
+                // In WSL, we need to use the Windows AppData path
+                // Try to detect the Windows username from the current path or use hardcoded fallback
+                var currentPath = Directory.GetCurrentDirectory();
+                Console.WriteLine($"InstanceManager: Current directory in WSL: {currentPath}");
+                
+                // Extract Windows username from path if possible
+                var match = System.Text.RegularExpressions.Regex.Match(currentPath, @"/mnt/c/Users/([^/]+)/");
+                if (match.Success)
+                {
+                    var windowsUsername = match.Groups[1].Value;
+                    appDataPath = $"/mnt/c/Users/{windowsUsername}/AppData/Roaming";
+                    Console.WriteLine($"InstanceManager: Detected Windows username: {windowsUsername}");
+                }
+                else
+                {
+                    // Fallback to hardcoded path
+                    appDataPath = "/mnt/c/Users/Jared/AppData/Roaming";
+                    Console.WriteLine($"InstanceManager: Using fallback Windows username: Jared");
+                }
+            }
+            
             _instancesRootPath = Path.Combine(appDataPath, "MovieReviewApp", "instances");
             
             _instanceName = instanceName ?? GetDefaultInstanceName();
             _instancePath = Path.Combine(_instancesRootPath, _instanceName);
+            
+            Console.WriteLine($"InstanceManager: Running in WSL: {IsRunningInWSL()}");
+            Console.WriteLine($"InstanceManager: AppData path: {appDataPath}");
+            Console.WriteLine($"InstanceManager: Instance path: {_instancePath}");
+            Console.WriteLine($"InstanceManager: Secrets path: {SecretsPath}");
+            Console.WriteLine($"InstanceManager: Config path: {ConfigPath}");
             
             Directory.CreateDirectory(_instancePath);
         }
@@ -124,6 +155,14 @@ namespace MovieReviewApp.Services
 
             // Generate unique port based on instance name hash
             return 5000 + Math.Abs(_instanceName.GetHashCode() % 100);
+        }
+
+        private static bool IsRunningInWSL()
+        {
+            // Check if we're running in WSL by looking for WSL-specific environment variables
+            return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
+                   !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_INTEROP")) ||
+                   File.Exists("/proc/sys/fs/binfmt_misc/WSLInterop");
         }
     }
 

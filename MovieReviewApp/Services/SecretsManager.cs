@@ -12,7 +12,9 @@ namespace MovieReviewApp.Services
         {
             _instanceManager = instanceManager;
             _secretsFilePath = instanceManager.SecretsPath;
+            Console.WriteLine($"SecretsManager: Loading secrets from {_secretsFilePath}");
             _secrets = LoadSecrets();
+            Console.WriteLine($"SecretsManager: Loaded {_secrets.Count} secrets");
         }
 
         public bool IsFirstRun => _instanceManager.IsFirstRun;
@@ -61,18 +63,24 @@ namespace MovieReviewApp.Services
 
         private Dictionary<string, string> LoadSecrets()
         {
+            Console.WriteLine($"SecretsManager.LoadSecrets: Checking file existence at {_secretsFilePath}");
             if (!File.Exists(_secretsFilePath))
             {
+                Console.WriteLine($"SecretsManager.LoadSecrets: File does not exist");
                 return new Dictionary<string, string>();
             }
 
             try
             {
+                Console.WriteLine($"SecretsManager.LoadSecrets: Reading file");
                 var json = File.ReadAllText(_secretsFilePath);
-                return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+                var secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+                Console.WriteLine($"SecretsManager.LoadSecrets: Successfully loaded {secrets.Count} secrets");
+                return secrets;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"SecretsManager.LoadSecrets: Error loading secrets - {ex.Message}");
                 return new Dictionary<string, string>();
             }
         }

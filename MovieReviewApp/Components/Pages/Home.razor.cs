@@ -99,11 +99,14 @@ namespace MovieReviewApp.Components.Pages
         private List<Phase> DbPhases => _dbPhases ??= movieReviewService.GetAllPhases().OrderBy(p => p.StartDate).ToList();
 
         // Add cached property for discussion questions
-        private List<DiscussionQuestion> _discussionQuestions;
-        public List<DiscussionQuestion> DiscussionQuestions => _discussionQuestions ??= GetDiscussionQuestionsAsync().Result;
+        private List<DiscussionQuestion>? _discussionQuestions;
+        public List<DiscussionQuestion>? DiscussionQuestions => _discussionQuestions;
 
-        protected override void OnInitialized()
+        protected override async Task OnInitializedAsync()
         {
+            // Load discussion questions asynchronously
+            _discussionQuestions = await discussionQuestionsService.GetActiveQuestionsAsync();
+            
             if (AllNames.Length == 0 || StartDate == DateTime.MinValue)
             {
                 CurrentEvent = null;
@@ -352,9 +355,5 @@ namespace MovieReviewApp.Components.Pages
             return null;
         }
 
-        private async Task<List<DiscussionQuestion>> GetDiscussionQuestionsAsync()
-        {
-            return await discussionQuestionsService.GetActiveQuestionsAsync();
-        }
     }
 }
