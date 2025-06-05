@@ -1,448 +1,219 @@
-﻿@page "/discussions/list"
-@using System.IO
-@using System.Text.Json
-@using System.Text.RegularExpressions
-@inject IWebHostEnvironment WebHostEnvironment
-@inject HttpClient Http
-@inject IConfiguration Configuration
+@using MovieReviewApp.Models
+@using MovieReviewApp.Services
+@inject MovieSessionService MovieSessionService
+@inject NavigationManager Navigation
 
-<h3>Processed Files</h3>
-
-@if (!string.IsNullOrEmpty(ErrorMessage))
-{
-    <div class="alert alert-danger" role="alert">
-        @ErrorMessage
-    </div>
-}
-
-@if (Folders == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <div class="mb-3">
-        <label for="folderSelect" class="form-label">Select Folder:</label>
-        <select id="folderSelect" class="form-select" @onchange="OnFolderSelected">
-            <option value="">Choose a folder...</option>
-            @foreach (var folder in Folders)
-            {
-                <option value="@folder">@folder.Replace("-", " ")</option>
-            }
-        </select>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h3 class="mb-4">🎭 Movie Discussion Sessions</h3>
+        </div>
     </div>
 
-    @if (!string.IsNullOrEmpty(SelectedFolder))
+    @if (isLoading)
     {
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4>Files for @SelectedFolder.Replace("-", " ")</h4>
-            <button @onclick="GuessNames" class="btn btn-secondary" disabled="@IsProcessing">Guess Names</button>
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading processed sessions...</p>
+        </div>
+    }
+    else if (!sessions.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No processed discussion sessions found yet.
+            <br>
+            <small>Sessions will appear here after audio processing is completed.</small>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var session in sessions)
+            {
+                <div class="col-lg-6 col-xl-4">
+                    <div class="card h-100 shadow-sm @GetCardClass(session)">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 text-truncate">@session.MovieTitle</h6>
+                            <span class="badge @GetStatusBadgeClass(session.Status)">
+                                @GetStatusIcon(session.Status) @session.Status
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3"></i> @session.Date.ToString("MMM dd, yyyy")
+                                    @if (session.ProcessedAt.HasValue)
+                                    {
+                                        <br><i class="bi bi-check-circle"></i> Processed @session.ProcessedAt.Value.ToString("MMM dd")
+                                    }
+                                </small>
+                            </div>
+
+                            @if (session.SessionStats != null)
+                            {
+                                <div class="mb-3">
+                                    <div class="row text-center">
+                                        <div class="col-4">
+                                            <div class="border-end">
+                                                <div class="fw-bold text-primary">@session.SessionStats.TotalDuration</div>
+                                                <small class="text-muted">Duration</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="border-end">
+                                                <div class="fw-bold text-success">@session.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.Complete)</div>
+                                                <small class="text-muted">Files</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="fw-bold text-warning">@session.SessionStats.HighlightMoments</div>
+                                            <small class="text-muted">Highlights</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (session.ParticipantsPresent.Any())
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-1">Participants:</small>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var participant in session.ParticipantsPresent.Take(4))
+                                        {
+                                            <span class="badge bg-light text-dark">@participant</span>
+                                        }
+                                        @if (session.ParticipantsPresent.Count > 4)
+                                        {
+                                            <span class="badge bg-secondary">+@(session.ParticipantsPresent.Count - 4) more</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrEmpty(session.SessionStats?.BestMomentsSummary))
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-1">Best Moments:</small>
+                                    <p class="small mb-0">@GetTruncatedSummary(session.SessionStats.BestMomentsSummary)</p>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary btn-sm flex-fill" @onclick="() => ViewSession(session.Id)">
+                                    <i class="bi bi-eye"></i> View Details
+                                </button>
+                                @if (session.CategoryResults != null)
+                                {
+                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ViewHighlights(session.Id)">
+                                        <i class="bi bi-star"></i> Highlights
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
 
-        @if (IsProcessing)
+        @if (sessions.Count >= 20)
         {
-            <div class="progress mb-3">
-                <div class="progress-bar" role="progressbar" style="width: @($"{ProgressPercentage}%");" aria-valuenow="@ProgressPercentage" aria-valuemin="0" aria-valuemax="100">@($"{ProgressPercentage}%")</div>
+            <div class="text-center mt-4">
+                <button class="btn btn-outline-primary" @onclick="LoadMoreSessions" disabled="@isLoadingMore">
+                    @if (isLoadingMore)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    Load More Sessions
+                </button>
             </div>
-            <p class="text-muted">@StatusMessage</p>
         }
-
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>File Name</th>
-                    <th>Type</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var file in Files)
-                {
-                    <tr>
-                        <td>@file.Name</td>
-                        <td>@file.Extension</td>
-                        <td>
-                            @if (file.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
-                            {
-                                <button @onclick="() => ViewTextFile(file.FullName)" class="btn btn-primary">View</button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
     }
-}
-
-@if (!string.IsNullOrEmpty(TextFileContent))
-{
-    <div class="mt-4">
-        <h4>File Content</h4>
-        <pre>@TextFileContent</pre>
-    </div>
-}
+</div>
 
 @code {
-    private List<string> Folders { get; set; } = new List<string>();
-    private List<FileInfo> Files { get; set; } = new List<FileInfo>();
-    private string SelectedFolder { get; set; } = "";
-    private string TextFileContent { get; set; } = "";
-    private string _apiKey { get; set; } = "";
-    private string ErrorMessage { get; set; } = "";
-    private bool IsProcessing { get; set; }
-    private int ProgressPercentage { get; set; }
-    private string StatusMessage { get; set; } = "";
+    private List<MovieSession> sessions = new();
+    private bool isLoading = true;
+    private bool isLoadingMore = false;
+    private int currentLimit = 20;
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            await LoadFolders();
-            _apiKey = Configuration["OpenAI:ApiKey"];
-            if (string.IsNullOrEmpty(_apiKey))
-            {
-                ErrorMessage = "API key not found in configuration.";
-            }
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Error initializing: {ex.Message}";
-        }
+        await LoadSessions();
     }
 
-    private async Task LoadFolders()
+    private async Task LoadSessions()
     {
+        isLoading = true;
         try
         {
-            StatusMessage = "Loading folders...";
-            IsProcessing = true;
-            ProgressPercentage = 0;
-            StateHasChanged();
-
-            var uploadsPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads");
-            Directory.CreateDirectory(uploadsPath);
-            Folders = Directory.GetDirectories(uploadsPath)
-                               .Select(Path.GetFileName)
-                               .Where(x => x.IndexOf("_") == -1)
-                               .ToList();
-
-            ProgressPercentage = 100;
-            StatusMessage = "Folders loaded successfully.";
+            sessions = await MovieSessionService.GetRecentSessions(currentLimit);
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"Error loading folders: {ex.Message}";
+            Console.WriteLine($"Error loading sessions: {ex.Message}");
+            sessions = new List<MovieSession>();
         }
         finally
         {
-            IsProcessing = false;
-            StateHasChanged();
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
-    private async Task OnFolderSelected(ChangeEventArgs e)
+    private async Task LoadMoreSessions()
     {
-        try
-        {
-            SelectedFolder = e.Value.ToString();
-            if (!string.IsNullOrEmpty(SelectedFolder))
-            {
-                await LoadFiles(SelectedFolder);
-            }
-            else
-            {
-                Files.Clear();
-            }
-            TextFileContent = string.Empty;
-            ErrorMessage = string.Empty;
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Error selecting folder: {ex.Message}";
-        }
+        isLoadingMore = true;
+        currentLimit += 20;
+        await LoadSessions();
+        isLoadingMore = false;
     }
 
-    private async Task LoadFiles(string folderName)
+    private void ViewSession(string sessionId)
     {
-        try
-        {
-            StatusMessage = "Loading files...";
-            IsProcessing = true;
-            ProgressPercentage = 0;
-            StateHasChanged();
-
-            var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", folderName);
-            Files = Directory.GetFiles(folderPath)
-                             .Where(f => Path.GetExtension(f).Equals(".txt", StringComparison.OrdinalIgnoreCase))
-                             .Select(f => new FileInfo(f))
-                             .ToList();
-
-            ProgressPercentage = 100;
-            StatusMessage = "Files loaded successfully.";
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Error loading files: {ex.Message}";
-        }
-        finally
-        {
-            IsProcessing = false;
-            StateHasChanged();
-        }
+        Navigation.NavigateTo($"/discussions/session/{sessionId}");
     }
 
-    private async Task ViewTextFile(string filePath)
+    private void ViewHighlights(string sessionId)
     {
-        try
-        {
-            TextFileContent = await File.ReadAllTextAsync(filePath);
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Error viewing file: {ex.Message}";
-        }
+        Navigation.NavigateTo($"/discussions/session/{sessionId}#highlights");
     }
 
-    private async Task GuessNames()
+    private string GetCardClass(MovieSession session) => session.Status switch
     {
-        IsProcessing = true;
-        ProgressPercentage = 0;
-        StatusMessage = "Initializing name guessing process...";
-        ErrorMessage = string.Empty;
-        StateHasChanged();
+        ProcessingStatus.Complete => "border-success",
+        ProcessingStatus.Failed => "border-danger",
+        ProcessingStatus.Analyzing => "border-warning",
+        _ => ""
+    };
 
-        try
-        {
-            if (string.IsNullOrEmpty(_apiKey))
-            {
-                ErrorMessage = "API key is missing. Please check your configuration.";
-                return;
-            }
-
-            if (string.IsNullOrEmpty(SelectedFolder))
-            {
-                ErrorMessage = "No folder selected. Please select a folder before guessing names.";
-                return;
-            }
-
-            var folderPath = Path.Combine(WebHostEnvironment.WebRootPath, "uploads", SelectedFolder);
-            if (!Directory.Exists(folderPath))
-            {
-                ErrorMessage = $"The selected folder '{SelectedFolder}' does not exist.";
-                return;
-            }
-
-            var textFiles = Directory.GetFiles(folderPath, "*.txt");
-
-            if (textFiles.Length == 0)
-            {
-                ErrorMessage = "No text files found in the selected folder.";
-                return;
-            }
-
-            StatusMessage = "Reading file contents...";
-            ProgressPercentage = 10;
-            StateHasChanged();
-
-            var fileContents = new List<string>();
-            foreach (var file in textFiles)
-            {
-                try
-                {
-                    fileContents.Add(await File.ReadAllTextAsync(file));
-                }
-                catch (IOException ioEx)
-                {
-                    ErrorMessage = $"Error reading file {Path.GetFileName(file)}: {ioEx.Message}";
-                    return;
-                }
-            }
-
-            StatusMessage = "Preparing API request...";
-            ProgressPercentage = 30;
-            StateHasChanged();
-
-            var prompt = @"Please analyze the conversations in the following files and assign names to the speakers. Use this template for your response:
-
-[FILE_START:1]
-Speaker A: [Name]
-Speaker B: [Name]
-...
-[FILE_END:1]
-
-[FILE_START:2]
-Speaker A: [Name]
-Speaker B: [Name]
-...
-[FILE_END:2]
-
-... (continue for all files)
-
-Important instructions:
-1. Use only the names Jared, Lacey, Keri, Dave, Jeremiah, and Nikki.
-2. Include only the speakers that appear in each file. Do not include entries for speakers not present.
-3. The speaker designations (A, B, C, etc.) are specific to each file and do not need to be consistent across files. For example, Jared could be Speaker A in one file and Speaker C in another.
-4. The number of files may vary. Provide assignments for each file present in the input.
-5. If you're unsure about a speaker's identity, use your best judgment based on the conversation context.
-
-Here are the file contents:
-
-";
-
-            for (int i = 0; i < fileContents.Count; i++)
-            {
-                prompt += $"File {i + 1} content:\n{fileContents[i]}\n\n";
-            }
-
-            prompt += "Please provide your analysis following the template above, adjusting for the actual number of files present.";
-
-            var request = new
-            {
-                model = "chatgpt-4o-latest",
-                messages = new[]
-                {
-                    new { role = "system", content = "You are an assistant that helps identify speakers in conversations." },
-                    new { role = "user", content = prompt }
-                }
-            };
-
-            StatusMessage = "Sending request to OpenAI API...";
-            ProgressPercentage = 50;
-            StateHasChanged();
-
-            Http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
-            HttpResponseMessage response;
-            try
-            {
-                response = await Http.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", request);
-                StatusMessage = "Received response from OpenAI API...";
-                ProgressPercentage = 60;
-                StateHasChanged();
-            }
-            catch (HttpRequestException httpEx)
-            {
-                ErrorMessage = $"Error connecting to OpenAI API: {httpEx.Message}";
-                return;
-            }
-
-            if (response.IsSuccessStatusCode)
-            {
-                StatusMessage = "Processing API response...";
-                ProgressPercentage = 70;
-                StateHasChanged();
-
-                var responseBody = await response.Content.ReadAsStringAsync();
-
-                try
-                {
-                    using (JsonDocument doc = JsonDocument.Parse(responseBody))
-                    {
-                        var root = doc.RootElement;
-                        var choices = root.GetProperty("choices");
-                        var messageContent = choices[0].GetProperty("message").GetProperty("content").GetString();
-
-                        StatusMessage = "Applying guessed names to files...";
-                        ProgressPercentage = 80;
-                        StateHasChanged();
-
-                        for (int i = 0; i < textFiles.Length; i++)
-                        {
-                            var fileContent = await File.ReadAllTextAsync(textFiles[i]);
-                            var updatedContent = ApplyGuessedNames(fileContent, messageContent, i);
-                            await File.WriteAllTextAsync(textFiles[i], updatedContent);
-
-                            ProgressPercentage = 80 + (i + 1) * 20 / textFiles.Length;
-                            StatusMessage = $"Updated file {i + 1} of {textFiles.Length}...";
-                            StateHasChanged();
-                        }
-                    }
-
-                    StatusMessage = "Names guessed and applied successfully.";
-                    ProgressPercentage = 100;
-                    StateHasChanged();
-
-                    await LoadFolders();
-                    await LoadFiles(SelectedFolder);
-                }
-                catch (JsonException jsonEx)
-                {
-                    ErrorMessage = $"Error parsing API response: {jsonEx.Message}";
-                }
-                catch (IOException ioEx)
-                {
-                    ErrorMessage = $"Error writing to files: {ioEx.Message}";
-                }
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                ErrorMessage = $"API request failed: {response.StatusCode} - {errorContent}";
-            }
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Unexpected error in GuessNames: {ex.Message}";
-        }
-        finally
-        {
-            IsProcessing = false;
-            if (string.IsNullOrEmpty(ErrorMessage))
-            {
-                StatusMessage = "Process completed successfully.";
-            }
-            else
-            {
-                StatusMessage = "Process completed with errors.";
-            }
-            StateHasChanged();
-        }
-    }
-
-    private string ApplyGuessedNames(string fileContent, string messageContent, int fileIndex)
+    private string GetStatusBadgeClass(ProcessingStatus status) => status switch
     {
-        try
-        {
-            var speakerMap = new Dictionary<string, string>();
-            var filePattern = $@"\[FILE_START:{fileIndex + 1}\](.*?)\[FILE_END:{fileIndex + 1}\]";
-            var match = Regex.Match(messageContent, filePattern, RegexOptions.Singleline);
+        ProcessingStatus.Complete => "bg-success",
+        ProcessingStatus.Failed => "bg-danger",
+        ProcessingStatus.Analyzing => "bg-warning",
+        ProcessingStatus.Transcribing => "bg-info",
+        ProcessingStatus.Validating => "bg-secondary",
+        _ => "bg-secondary"
+    };
 
-            if (!match.Success)
-            {
-                ErrorMessage += $"\nNo speaker assignments found for file {fileIndex + 1}.";
-                return fileContent;
-            }
+    private string GetStatusIcon(ProcessingStatus status) => status switch
+    {
+        ProcessingStatus.Complete => "✅",
+        ProcessingStatus.Failed => "❌",
+        ProcessingStatus.Analyzing => "🔄",
+        ProcessingStatus.Transcribing => "🎤",
+        ProcessingStatus.Validating => "⏳",
+        _ => "❓"
+    };
 
-            var fileAssignments = match.Groups[1].Value.Trim();
-            var lines = fileAssignments.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var line in lines)
-            {
-                var parts = line.Split(':', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 2)
-                {
-                    var speaker = parts[0].Trim();
-                    var name = parts[1].Trim();
-                    speakerMap[speaker] = name;
-                }
-            }
-
-            if (speakerMap.Count == 0)
-            {
-                ErrorMessage += $"\nNo valid speaker mappings found for file {fileIndex + 1}.";
-                return fileContent;
-            }
-
-            foreach (var speaker in speakerMap)
-            {
-                fileContent = Regex.Replace(fileContent, $@"{Regex.Escape(speaker.Key)}:", $"{speaker.Value}:", RegexOptions.IgnoreCase);
-            }
-
-            return fileContent;
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage += $"\nError applying guessed names to file {fileIndex + 1}: {ex.Message}";
-            return fileContent;
-        }
+    private string GetTruncatedSummary(string summary)
+    {
+        if (string.IsNullOrEmpty(summary) || summary.Length <= 100)
+            return summary;
+        
+        return summary.Substring(0, 100) + "...";
     }
 }

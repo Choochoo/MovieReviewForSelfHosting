@@ -15,7 +15,8 @@
       "Bash(dotnet --info)",
       "Bash(chmod:*)",
       "Bash(echo:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(dotnet build)"
     ],
     "deny": []
   }

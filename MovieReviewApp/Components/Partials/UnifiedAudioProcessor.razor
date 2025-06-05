@@ -1,0 +1,600 @@
+@using MovieReviewApp.Database
+@using MovieReviewApp.Models
+@using MovieReviewApp.Services
+@using System.Globalization
+@using System.Text.RegularExpressions
+@inject IWebHostEnvironment WebHostEnvironment
+@inject MovieSessionService MovieSessionService
+@inject MongoDbService MongoDbService
+@inject MovieReviewService MovieReviewService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h3 class="mb-4">🎬 Unified Audio Processing</h3>
+        </div>
+    </div>
+
+    @if (selectedSession == null)
+    {
+        <!-- Session Selection/Creation -->
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Select or Create Session</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- Create New Session -->
+                            <div class="col-md-6">
+                                <h6>Create New Session</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Select Movie</label>
+                                    <select class="form-select" @onchange="OnMovieSelected">
+                                        <option value="">-- Select a movie --</option>
+                                        @if (availableMovies != null)
+                                        {
+                                            @foreach (var movie in availableMovies)
+                                            {
+                                                <option value="@movie.Id">
+                                                    @movie.Movie - (@movie.StartDate.ToString("MMMM yyyy"))
+                                                </option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <ParticipantAssignment 
+                                        @bind-MicAssignments="micAssignments"
+                                        @bind-PresentSpeakers="presentSpeakers" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="border border-2 border-dashed rounded p-4 text-center">
+                                        <InputFile OnChange="@LoadFiles" multiple accept=".mp3,.wav,.ogg,.aac,.m4a,.mp4,.mov,.avi,.mkv" class="form-control" />
+                                        <p class="mt-2 mb-0 text-muted">
+                                            <i class="bi bi-cloud-upload"></i> Drop files here or click to browse
+                                        </p>
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(errorMessage))
+                                {
+                                    <div class="alert alert-danger">
+                                        <i class="bi bi-exclamation-triangle"></i> @errorMessage
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Load Existing Session -->
+                            <div class="col-md-6">
+                                <h6>Load Existing Session</h6>
+                                @if (existingSessions.Any())
+                                {
+                                    <div class="list-group">
+                                        @foreach (var session in existingSessions.Take(10))
+                                        {
+                                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 class="mb-1">@session.MovieTitle</h6>
+                                                    <small class="text-muted">@session.Date.ToString("MMM dd, yyyy") • @session.AudioFiles.Count files</small>
+                                                </div>
+                                                <div class="btn-group">
+                                                    <button class="btn btn-sm btn-primary" @onclick="() => LoadSession(session)">
+                                                        Load
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSession(session)" 
+                                                            @onclick:preventDefault="true">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> No existing sessions found
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Session Processing View -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🎬 @selectedSession.MovieTitle - @selectedSession.Date.ToString("MMM dd, yyyy")</h5>
+                        <div>
+                            <button class="btn btn-sm btn-light me-2" @onclick="SaveSession" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="bi bi-save"></i> Save
+                            </button>
+                            <button class="btn btn-sm btn-outline-light" @onclick="BackToSelection">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (selectedSession.AudioFiles.Any())
+                        {
+                            <!-- Processing Table -->
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%">File</th>
+                                            <th style="width: 15%">Status</th>
+                                            <th style="width: 35%">Progress</th>
+                                            <th style="width: 15%">Actions</th>
+                                            <th style="width: 10%">Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var file in selectedSession.AudioFiles)
+                                        {
+                                            <tr class="@GetRowClass(file.ProcessingStatus)">
+                                                <td>
+                                                    <div>
+                                                        <strong>@file.FileName</strong>
+                                                        <br><small class="text-muted">@FormatBytes(file.FileSize)</small>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge @GetStatusBadgeClass(file.ProcessingStatus)">
+                                                        @GetStatusIcon(file.ProcessingStatus) @GetStatusText(file.ProcessingStatus)
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="mb-1">
+                                                        <small class="text-muted">@file.CurrentStep</small>
+                                                    </div>
+                                                    <div class="progress" style="height: 20px;">
+                                                        <div class="progress-bar @GetProgressBarClass(file.ProcessingStatus)" 
+                                                             role="progressbar" 
+                                                             style="width: @file.ProgressPercentage%;" 
+                                                             aria-valuenow="@file.ProgressPercentage" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                            @file.ProgressPercentage%
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    @if (file.CanRetry || file.ProcessingStatus == AudioProcessingStatus.Failed)
+                                                    {
+                                                        <div class="dropdown">
+                                                            <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                                Start
+                                                            </button>
+                                                            <ul class="dropdown-menu">
+                                                                <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.ConvertingToMp3)">Convert to MP3</a></li>
+                                                                <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.UploadingToGladia)">Upload to Gladia</a></li>
+                                                                <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.Transcribing)">Start Transcription</a></li>
+                                                                <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.ProcessingWithAI)">Run AI Analysis</a></li>
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                    else if (IsInProgress(file.ProcessingStatus))
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-warning" @onclick="() => CancelProcess(file)">
+                                                            <i class="bi bi-stop"></i> Stop
+                                                        </button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-muted">-</span>
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#details-@file.FileName.Replace(".", "-")">
+                                                        <i class="bi bi-info-circle"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <!-- Expandable Details Row -->
+                                            <tr class="collapse" id="details-@file.FileName.Replace(".", "-")">
+                                                <td colspan="5">
+                                                    <div class="card card-body bg-light">
+                                                        <div class="row">
+                                                            <div class="col-md-6">
+                                                                <strong>Processing Details:</strong>
+                                                                <ul class="mb-2">
+                                                                    <li>File Path: <code>@file.FilePath</code></li>
+                                                                    <li>Speaker: @(file.SpeakerNumber?.ToString() ?? "Unknown")</li>
+                                                                    <li>Master Recording: @(file.IsMasterRecording ? "Yes" : "No")</li>
+                                                                    <li>Last Updated: @file.LastUpdated.ToString("HH:mm:ss")</li>
+                                                                </ul>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                @if (!string.IsNullOrEmpty(file.ConversionError))
+                                                                {
+                                                                    <strong class="text-danger">Error:</strong>
+                                                                    <p class="text-danger">@file.ConversionError</p>
+                                                                }
+                                                                @if (!string.IsNullOrEmpty(file.TranscriptText))
+                                                                {
+                                                                    <strong>Transcript Preview:</strong>
+                                                                    <p class="small text-muted">@(file.TranscriptText.Length > 200 ? file.TranscriptText.Substring(0, 200) + "..." : file.TranscriptText)</p>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Bulk Actions -->
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <h6>Bulk Actions</h6>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-success" @onclick="StartFullWorkflow" disabled="@isProcessing">
+                                            <i class="bi bi-play-circle"></i> Process All Files
+                                        </button>
+                                        <button class="btn btn-warning" @onclick="RetryFailedFiles" disabled="@isProcessing">
+                                            <i class="bi bi-arrow-clockwise"></i> Retry Failed
+                                        </button>
+                                        <button class="btn btn-info" @onclick="RefreshStatus">
+                                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <h6>Session Progress</h6>
+                                    <div class="progress" style="height: 30px;">
+                                        <div class="progress-bar bg-success" 
+                                             role="progressbar" 
+                                             style="width: @GetOverallProgress()%;">
+                                            @GetOverallProgress()% Complete
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> No audio files found in this session.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private MovieSession? selectedSession;
+    private List<MovieEvent>? availableMovies;
+    private List<MovieSession> existingSessions = new();
+    private Dictionary<int, string> micAssignments = new();
+    private HashSet<int> presentSpeakers = new();
+    private string errorMessage = string.Empty;
+    private bool isProcessing = false;
+    private bool isSaving = false;
+    private Timer? refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        availableMovies = MovieReviewService.GetAllMovieEvents();
+        await LoadExistingSessions();
+        StartRefreshTimer();
+    }
+
+    private void StartRefreshTimer()
+    {
+        refreshTimer = new Timer(async _ => await RefreshStatus(), null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+    }
+
+    private async Task LoadExistingSessions()
+    {
+        existingSessions = await MovieSessionService.GetRecentSessions(20);
+    }
+
+    private async Task OnMovieSelected(ChangeEventArgs e)
+    {
+        var movieIdStr = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(movieIdStr) && Guid.TryParse(movieIdStr, out var movieId))
+        {
+            var movie = availableMovies?.FirstOrDefault(m => m.Id == movieId);
+            if (movie != null)
+            {
+                var session = new MovieSession
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    MovieTitle = movie.Movie ?? string.Empty,
+                    Date = movie.StartDate.Date,
+                    MicAssignments = new Dictionary<int, string>(micAssignments),
+                    ParticipantsPresent = presentSpeakers.Select(s => micAssignments.TryGetValue(s, out var name) ? name : $"Speaker {s + 1}").ToList()
+                };
+                selectedSession = session;
+            }
+        }
+    }
+
+    private async Task LoadFiles(InputFileChangeEventArgs e)
+    {
+        if (selectedSession == null)
+        {
+            errorMessage = "Please select a movie first.";
+            return;
+        }
+
+        errorMessage = string.Empty;
+        var files = e.GetMultipleFiles(maximumFileCount: 20);
+
+        foreach (var file in files)
+        {
+            if (IsAudioFile(file.Name))
+            {
+                var audioFile = new AudioFile
+                {
+                    FileName = file.Name,
+                    FilePath = Path.Combine("temp", file.Name), // Will be updated after upload
+                    FileSize = file.Size,
+                    ProcessingStatus = AudioProcessingStatus.Pending,
+                    CurrentStep = "File uploaded, ready to process",
+                    ProgressPercentage = 0,
+                    CanRetry = true
+                };
+
+                // Upload file to temp location for now
+                var tempPath = Path.Combine(WebHostEnvironment.WebRootPath, "temp", file.Name);
+                Directory.CreateDirectory(Path.GetDirectoryName(tempPath)!);
+                
+                using var stream = file.OpenReadStream(maxAllowedSize: 10L * 1024 * 1024 * 1024);
+                using var fileStream = new FileStream(tempPath, FileMode.Create);
+                await stream.CopyToAsync(fileStream);
+                
+                audioFile.FilePath = tempPath;
+                selectedSession.AudioFiles.Add(audioFile);
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadSession(MovieSession session)
+    {
+        selectedSession = session;
+        micAssignments = new Dictionary<int, string>(session.MicAssignments);
+        presentSpeakers = session.MicAssignments.Keys.ToHashSet();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteSession(MovieSession session)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the session for '{session.MovieTitle}'? This action cannot be undone."))
+        {
+            await MongoDbService.DeleteByIdAsync<MovieSession>(Guid.Parse(session.Id));
+            await LoadExistingSessions();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveSession()
+    {
+        if (selectedSession == null) return;
+        
+        isSaving = true;
+        try
+        {
+            await MongoDbService.UpsertAsync(selectedSession);
+        }
+        finally
+        {
+            isSaving = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void BackToSelection()
+    {
+        selectedSession = null;
+        micAssignments.Clear();
+        presentSpeakers.Clear();
+        errorMessage = string.Empty;
+    }
+
+    private async Task StartProcess(AudioFile file, AudioProcessingStatus targetStatus)
+    {
+        file.ProcessingStatus = targetStatus;
+        file.ProgressPercentage = 0;
+        file.CurrentStep = GetStatusText(targetStatus);
+        file.LastUpdated = DateTime.UtcNow;
+        file.CanRetry = false;
+
+        // Here you would call the appropriate service method
+        // For now, just simulate progress
+        _ = SimulateProgress(file, targetStatus);
+        
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SimulateProgress(AudioFile file, AudioProcessingStatus targetStatus)
+    {
+        // This is a placeholder - replace with actual service calls
+        for (int i = 0; i <= 100; i += 10)
+        {
+            await Task.Delay(500);
+            file.ProgressPercentage = i;
+            file.LastUpdated = DateTime.UtcNow;
+            
+            if (i == 100)
+            {
+                file.ProcessingStatus = targetStatus switch
+                {
+                    AudioProcessingStatus.ConvertingToMp3 => AudioProcessingStatus.PendingMp3,
+                    AudioProcessingStatus.UploadingToGladia => AudioProcessingStatus.UploadedToGladia,
+                    AudioProcessingStatus.Transcribing => AudioProcessingStatus.TranscriptionComplete,
+                    AudioProcessingStatus.ProcessingWithAI => AudioProcessingStatus.Complete,
+                    _ => AudioProcessingStatus.Complete
+                };
+                file.CurrentStep = "Completed successfully";
+                file.CanRetry = true;
+            }
+            
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CancelProcess(AudioFile file)
+    {
+        file.ProcessingStatus = AudioProcessingStatus.Failed;
+        file.CurrentStep = "Cancelled by user";
+        file.CanRetry = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StartFullWorkflow()
+    {
+        isProcessing = true;
+        // Implement full workflow processing
+        isProcessing = false;
+    }
+
+    private async Task RetryFailedFiles()
+    {
+        if (selectedSession == null) return;
+        
+        var failedFiles = selectedSession.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.Failed).ToList();
+        foreach (var file in failedFiles)
+        {
+            await StartProcess(file, AudioProcessingStatus.Pending);
+        }
+    }
+
+    private async Task RefreshStatus()
+    {
+        if (selectedSession != null)
+        {
+            // Reload session from database to get latest status
+            var updated = await MongoDbService.GetByIdAsync<MovieSession>(Guid.Parse(selectedSession.Id));
+            if (updated != null)
+            {
+                selectedSession = updated;
+            }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Helper methods for UI
+    private string GetRowClass(AudioProcessingStatus status) => status switch
+    {
+        AudioProcessingStatus.Failed => "table-danger",
+        AudioProcessingStatus.Complete => "table-success",
+        _ when IsInProgress(status) => "table-warning",
+        _ => ""
+    };
+
+    private string GetStatusBadgeClass(AudioProcessingStatus status) => status switch
+    {
+        AudioProcessingStatus.Failed => "bg-danger",
+        AudioProcessingStatus.Complete => "bg-success",
+        _ when IsInProgress(status) => "bg-warning",
+        _ => "bg-secondary"
+    };
+
+    private string GetProgressBarClass(AudioProcessingStatus status) => status switch
+    {
+        AudioProcessingStatus.Failed => "bg-danger",
+        AudioProcessingStatus.Complete => "bg-success",
+        _ when IsInProgress(status) => "progress-bar-striped progress-bar-animated",
+        _ => ""
+    };
+
+    private string GetStatusIcon(AudioProcessingStatus status) => status switch
+    {
+        AudioProcessingStatus.Pending => "⏳",
+        AudioProcessingStatus.ConvertingToMp3 => "🔄",
+        AudioProcessingStatus.PendingMp3 => "⏸️",
+        AudioProcessingStatus.FailedMp3 => "❌",
+        AudioProcessingStatus.ProcessedMp3 => "🔧",
+        AudioProcessingStatus.UploadingToGladia => "⬆️",
+        AudioProcessingStatus.UploadedToGladia => "☁️",
+        AudioProcessingStatus.Transcribing => "🎤",
+        AudioProcessingStatus.TranscriptionComplete => "📝",
+        AudioProcessingStatus.ProcessingWithAI => "🤖",
+        AudioProcessingStatus.Complete => "✅",
+        AudioProcessingStatus.Failed => "❌",
+        _ => "❓"
+    };
+
+    private string GetStatusText(AudioProcessingStatus status) => status switch
+    {
+        AudioProcessingStatus.Pending => "Pending",
+        AudioProcessingStatus.ConvertingToMp3 => "Converting",
+        AudioProcessingStatus.PendingMp3 => "Ready for Upload",
+        AudioProcessingStatus.FailedMp3 => "Conversion Failed",
+        AudioProcessingStatus.ProcessedMp3 => "MP3 Ready",
+        AudioProcessingStatus.UploadingToGladia => "Uploading",
+        AudioProcessingStatus.UploadedToGladia => "Uploaded",
+        AudioProcessingStatus.Transcribing => "Transcribing",
+        AudioProcessingStatus.TranscriptionComplete => "Transcribed",
+        AudioProcessingStatus.ProcessingWithAI => "AI Processing",
+        AudioProcessingStatus.Complete => "Complete",
+        AudioProcessingStatus.Failed => "Failed",
+        _ => "Unknown"
+    };
+
+    private bool IsInProgress(AudioProcessingStatus status) => status is 
+        AudioProcessingStatus.ConvertingToMp3 or 
+        AudioProcessingStatus.UploadingToGladia or 
+        AudioProcessingStatus.Transcribing or 
+        AudioProcessingStatus.ProcessingWithAI;
+
+    private int GetOverallProgress()
+    {
+        if (selectedSession?.AudioFiles.Any() != true) return 0;
+        
+        var totalFiles = selectedSession.AudioFiles.Count;
+        var completedFiles = selectedSession.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.Complete);
+        
+        return (int)((double)completedFiles / totalFiles * 100);
+    }
+
+    private bool IsAudioFile(string fileName)
+    {
+        var allowedExtensions = new[] { ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp" };
+        return allowedExtensions.Contains(Path.GetExtension(fileName).ToLowerInvariant());
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return string.Format("{0:n1} {1}", number, suffixes[counter]);
+    }
+
+    public void Dispose()
+    {
+        refreshTimer?.Dispose();
+    }
+}

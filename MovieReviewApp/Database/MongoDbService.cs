@@ -278,37 +278,12 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Deletes a document by ID
         /// </summary>
-        public async Task<bool> DeleteByIdAsync<T>(object id)
+        public async Task<bool> DeleteByIdAsync<T>(Guid id)
         {
             var collection = GetCollection<T>();
             if (collection == null) return false;
 
-            FilterDefinition<T> filter;
-
-            if (id is Guid guidId)
-            {
-                filter = Builders<T>.Filter.Eq("_id", guidId);
-            }
-            else if (id is string stringId)
-            {
-                // For string IDs that contain GUIDs, try both the string and parsed GUID
-                if (Guid.TryParse(stringId, out var parsedGuid))
-                {
-                    // Try both formats - string and GUID - since MongoDB might store either
-                    var stringFilter = Builders<T>.Filter.Eq("_id", stringId);
-                    var guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
-                    filter = Builders<T>.Filter.Or(stringFilter, guidFilter);
-                }
-                else
-                {
-                    filter = Builders<T>.Filter.Eq("_id", stringId);
-                }
-            }
-            else
-            {
-                filter = Builders<T>.Filter.Eq("_id", id);
-            }
-
+            var filter = Builders<T>.Filter.Eq("_id", id);
             var result = await collection.DeleteOneAsync(filter);
             return result.DeletedCount > 0;
         }
@@ -687,18 +662,6 @@ namespace MovieReviewApp.Database
             await collection.InsertOneAsync(document);
         }
 
-        /// <summary>
-        /// Deletes a document by ID from a collection by string name
-        /// </summary>
-        public async Task<bool> DeleteAsync<T>(string collectionName, string id)
-        {
-            var collection = GetCollection<T>(collectionName);
-            if (collection == null) return false;
-
-            var filter = Builders<T>.Filter.Eq("_id", id);
-            var result = await collection.DeleteOneAsync(filter);
-            return result.DeletedCount > 0;
-        }
 
         /// <summary>
         /// Searches for documents in a collection by string name

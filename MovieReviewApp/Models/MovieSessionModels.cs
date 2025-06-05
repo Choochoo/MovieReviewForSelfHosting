@@ -40,6 +40,10 @@ namespace MovieReviewApp.Models
         public DateTime? UploadedAt { get; set; }
         public DateTime? ProcessedAt { get; set; }
         public string? JsonFilePath { get; set; }
+        public int ProgressPercentage { get; set; } = 0;
+        public string? CurrentStep { get; set; } = "Waiting to start";
+        public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+        public bool CanRetry { get; set; } = false;
     }
 
     public class SessionStats
@@ -92,13 +96,18 @@ namespace MovieReviewApp.Models
 
     public enum AudioProcessingStatus
     {
-        Pending,           // Just uploaded, not processed yet
-        PendingMp3,        // Needs MP3 conversion
-        FailedMp3,         // MP3 conversion failed
-        ProcessedMp3,      // Successfully converted to MP3
-        UploadedToGladia,  // Uploaded to Gladia for transcription
+        Pending,              // Just uploaded, not processed yet
+        ConvertingToMp3,      // Currently converting WAV to MP3
+        PendingMp3,           // MP3 conversion complete, ready for upload
+        FailedMp3,            // MP3 conversion failed
+        ProcessedMp3,         // Successfully converted to MP3
+        UploadingToGladia,    // Currently uploading to Gladia
+        UploadedToGladia,     // Uploaded to Gladia for transcription
+        Transcribing,         // Gladia is processing transcription
         TranscriptionComplete, // Gladia transcription successful
-        Failed             // General processing failure
+        ProcessingWithAI,     // OpenAI analysis in progress
+        Complete,             // All processing complete
+        Failed                // General processing failure
     }
 
     public class ProcessingQueueItem

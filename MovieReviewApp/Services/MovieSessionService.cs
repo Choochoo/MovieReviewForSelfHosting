@@ -107,6 +107,273 @@ public class MovieSessionService
         return session;
     }
 
+    /// <summary>
+    /// Enhanced processing workflow using database tracking instead of folder management
+    /// </summary>
+    public async Task<MovieSession> ProcessSessionEnhanced(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        progressCallback?.Invoke("Starting enhanced processing workflow", 0);
+        
+        try
+        {
+            session.Status = ProcessingStatus.Validating;
+            await SaveSessionToDatabase(session);
+            progressCallback?.Invoke("Session validated and saved", 10);
+
+            // Phase 1: Convert WAV files to MP3
+            await ConvertAudioFiles(session, progressCallback);
+            
+            // Phase 2: Upload to Gladia
+            await UploadAudioFiles(session, progressCallback);
+            
+            // Phase 3: Process transcriptions
+            await ProcessTranscriptions(session, progressCallback);
+            
+            // Phase 4: AI Analysis
+            await RunAIAnalysis(session, progressCallback);
+            
+            session.Status = ProcessingStatus.Complete;
+            session.ProcessedAt = DateTime.UtcNow;
+            await SaveSessionToDatabase(session);
+            
+            progressCallback?.Invoke("Processing complete", 100);
+            return session;
+        }
+        catch (Exception ex)
+        {
+            session.Status = ProcessingStatus.Failed;
+            session.ErrorMessage = ex.Message;
+            await SaveSessionToDatabase(session);
+            throw;
+        }
+    }
+
+    private async Task ConvertAudioFiles(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        var wavFiles = session.AudioFiles.Where(f => f.FilePath.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (!wavFiles.Any()) return;
+
+        progressCallback?.Invoke("Converting WAV files to MP3", 20);
+        
+        for (int i = 0; i < wavFiles.Count; i++)
+        {
+            var file = wavFiles[i];
+            file.ProcessingStatus = AudioProcessingStatus.ConvertingToMp3;
+            file.CurrentStep = "Converting to MP3";
+            file.ProgressPercentage = 0;
+            await SaveSessionToDatabase(session);
+
+            try
+            {
+                // Use existing Gladia service conversion logic
+                var results = await _gladiaService.ConvertAllWavsToMp3Async(
+                    new List<AudioFile> { file }, 
+                    session.FolderPath,
+                    (step, current, total) => 
+                    {
+                        file.ProgressPercentage = (int)((double)current / total * 100);
+                        file.CurrentStep = step;
+                    });
+
+                var result = results.FirstOrDefault();
+                if (result.success)
+                {
+                    file.ProcessingStatus = AudioProcessingStatus.PendingMp3;
+                    file.CurrentStep = "MP3 conversion complete";
+                    file.ProgressPercentage = 100;
+                    file.CanRetry = true;
+                }
+                else
+                {
+                    file.ProcessingStatus = AudioProcessingStatus.FailedMp3;
+                    file.ConversionError = result.error;
+                    file.CurrentStep = "MP3 conversion failed";
+                    file.CanRetry = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Failed;
+                file.ConversionError = ex.Message;
+                file.CurrentStep = "Conversion error";
+                file.CanRetry = true;
+            }
+
+            await SaveSessionToDatabase(session);
+            progressCallback?.Invoke($"Converted {i + 1}/{wavFiles.Count} files", 20 + (i + 1) * 20 / wavFiles.Count);
+        }
+    }
+
+    private async Task UploadAudioFiles(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        var filesToUpload = session.AudioFiles.Where(f => 
+            f.ProcessingStatus == AudioProcessingStatus.PendingMp3 && 
+            string.IsNullOrEmpty(f.AudioUrl)).ToList();
+        
+        if (!filesToUpload.Any()) return;
+
+        progressCallback?.Invoke("Uploading files to Gladia", 40);
+
+        for (int i = 0; i < filesToUpload.Count; i++)
+        {
+            var file = filesToUpload[i];
+            file.ProcessingStatus = AudioProcessingStatus.UploadingToGladia;
+            file.CurrentStep = "Uploading to Gladia";
+            file.ProgressPercentage = 0;
+            await SaveSessionToDatabase(session);
+
+            try
+            {
+                var results = await _gladiaService.UploadAllMp3sToGladiaAsync(
+                    new List<AudioFile> { file },
+                    session.FolderPath,
+                    (step, current, total) => 
+                    {
+                        file.ProgressPercentage = (int)((double)current / total * 100);
+                        file.CurrentStep = step;
+                    },
+                    session,
+                    SaveSessionToDatabase);
+
+                var result = results.FirstOrDefault();
+                if (result.success)
+                {
+                    file.ProcessingStatus = AudioProcessingStatus.UploadedToGladia;
+                    file.CurrentStep = "Upload complete";
+                    file.ProgressPercentage = 100;
+                    file.CanRetry = true;
+                }
+                else
+                {
+                    file.ProcessingStatus = AudioProcessingStatus.Failed;
+                    file.ConversionError = result.error;
+                    file.CurrentStep = "Upload failed";
+                    file.CanRetry = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Failed;
+                file.ConversionError = ex.Message;
+                file.CurrentStep = "Upload error";
+                file.CanRetry = true;
+            }
+
+            await SaveSessionToDatabase(session);
+            progressCallback?.Invoke($"Uploaded {i + 1}/{filesToUpload.Count} files", 40 + (i + 1) * 20 / filesToUpload.Count);
+        }
+    }
+
+    private async Task ProcessTranscriptions(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        var filesToTranscribe = session.AudioFiles.Where(f => 
+            f.ProcessingStatus == AudioProcessingStatus.UploadedToGladia && 
+            !string.IsNullOrEmpty(f.AudioUrl) &&
+            string.IsNullOrEmpty(f.TranscriptText)).ToList();
+
+        if (!filesToTranscribe.Any()) return;
+
+        progressCallback?.Invoke("Processing transcriptions", 60);
+
+        for (int i = 0; i < filesToTranscribe.Count; i++)
+        {
+            var file = filesToTranscribe[i];
+            file.ProcessingStatus = AudioProcessingStatus.Transcribing;
+            file.CurrentStep = "Starting transcription";
+            file.ProgressPercentage = 0;
+            await SaveSessionToDatabase(session);
+
+            try
+            {
+                // Start transcription
+                var numSpeakers = session.MicAssignments?.Count ?? 2;
+                var transcriptionId = await _gladiaService.StartTranscriptionAsync(
+                    file.AudioUrl!, numSpeakers, true, file.FileName);
+                
+                file.TranscriptId = transcriptionId;
+                file.CurrentStep = "Transcription in progress";
+                file.ProgressPercentage = 50;
+                await SaveSessionToDatabase(session);
+
+                // Wait for completion
+                var result = await _gladiaService.WaitForTranscriptionAsync(transcriptionId);
+                
+                // Apply speaker mapping
+                var rawTranscript = result.result?.transcription?.full_transcript;
+                file.TranscriptText = session.MicAssignments != null && !string.IsNullOrEmpty(rawTranscript)
+                    ? _gladiaService.MapSpeakerLabelsToNames(rawTranscript, session.MicAssignments, file.FileName)
+                    : rawTranscript;
+
+                file.ProcessingStatus = AudioProcessingStatus.TranscriptionComplete;
+                file.CurrentStep = "Transcription complete";
+                file.ProgressPercentage = 100;
+                file.ProcessedAt = DateTime.UtcNow;
+                file.CanRetry = true;
+            }
+            catch (Exception ex)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Failed;
+                file.ConversionError = ex.Message;
+                file.CurrentStep = "Transcription failed";
+                file.CanRetry = true;
+            }
+
+            await SaveSessionToDatabase(session);
+            progressCallback?.Invoke($"Transcribed {i + 1}/{filesToTranscribe.Count} files", 60 + (i + 1) * 20 / filesToTranscribe.Count);
+        }
+    }
+
+    private async Task RunAIAnalysis(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        var transcribedFiles = session.AudioFiles.Where(f => 
+            f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete &&
+            !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+
+        if (!transcribedFiles.Any()) return;
+
+        progressCallback?.Invoke("Running AI analysis", 80);
+
+        try
+        {
+            // Mark files as processing
+            foreach (var file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.ProcessingWithAI;
+                file.CurrentStep = "AI analysis in progress";
+                file.ProgressPercentage = 50;
+            }
+            await SaveSessionToDatabase(session);
+
+            // Run analysis using existing service
+            await _analysisService.AnalyzeSessionAsync(session);
+
+            // Mark as complete
+            foreach (var file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Complete;
+                file.CurrentStep = "Processing complete";
+                file.ProgressPercentage = 100;
+                file.CanRetry = false;
+            }
+
+            progressCallback?.Invoke("AI analysis complete", 95);
+        }
+        catch (Exception ex)
+        {
+            foreach (var file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Failed;
+                file.ConversionError = ex.Message;
+                file.CurrentStep = "AI analysis failed";
+                file.CanRetry = true;
+            }
+            throw;
+        }
+
+        await SaveSessionToDatabase(session);
+    }
+
+
     private string SuggestMovieTitle(string folderName)
     {
         // Extract movie title from format: YYYY-MonthName-MovieTitle
@@ -368,7 +635,7 @@ public class MovieSessionService
                     else
                     {
                         // Files are already moved to failed folder by conversion process
-                        audioFile.ConversionError = error;
+                        audioFile.ConversionError = error ?? "Unknown error during conversion";
                     }
                 }
             }
@@ -409,7 +676,7 @@ public class MovieSessionService
                 else
                 {
                     audioFile.ProcessingStatus = AudioProcessingStatus.FailedMp3;
-                    audioFile.ConversionError = error;
+                    audioFile.ConversionError = error ?? "Unknown error during upload";
 
                     // Move failed upload to failed_mp3 folder
                     audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
@@ -861,25 +1128,31 @@ public class MovieSessionService
 
     public async Task<List<MovieSession>> GetRecentSessions(int limit = 10)
     {
-        // Use the new paging API for better performance!
-        var (sessions, _) = await _database.GetPagedAsync<MovieSession>(
-            page: 1,
-            pageSize: limit,
-            orderBy: s => s.CreatedAt,
-            descending: true
-        );
+        // Get all completed sessions
+        var allSessions = await _database.FindAsync<MovieSession>(s => s.Status == ProcessingStatus.Complete);
+        
+        // Get all movie events to sort by their start dates
+        var movieEvents = await _database.GetAllAsync<MovieEvent>();
+        var movieEventLookup = movieEvents.ToDictionary(me => me.Movie, me => me.StartDate);
+        
+        // Sort sessions by the corresponding MovieEvent.StartDate, then by session creation date
+        var sortedSessions = allSessions
+            .OrderByDescending(s => movieEventLookup.TryGetValue(s.MovieTitle, out var startDate) ? startDate : s.Date)
+            .ThenByDescending(s => s.CreatedAt)
+            .Take(limit)
+            .ToList();
 
-        return sessions;
+        return sortedSessions;
     }
 
     public async Task<MovieSession?> GetSession(string sessionId)
     {
-        return await _database.GetByIdAsync<MovieSession>(sessionId);
+        return await _database.GetByIdAsync<MovieSession>(Guid.Parse(sessionId));
     }
 
     public async Task<bool> DeleteSession(string sessionId)
     {
-        return await _database.DeleteByIdAsync<MovieSession>(sessionId);
+        return await _database.DeleteByIdAsync<MovieSession>(Guid.Parse(sessionId));
     }
 
     public async Task<List<MovieSession>> SearchSessions(string searchTerm)

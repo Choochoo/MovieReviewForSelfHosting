@@ -10,10 +10,10 @@ public class MovieSessionAnalysisService
 {
     // Maximum transcript size to prevent OpenAI timeouts - balanced for 20-min processing
     private const int MAX_TRANSCRIPT_SIZE = 60000; // Balanced limit for longer timeout window
-    
+
     // Truncation warning message
     private const string TRUNCATION_WARNING = "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH - ANALYSIS BASED ON FIRST {0:N0} CHARACTERS FOR OPTIMAL PROCESSING]";
-    
+
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MovieSessionAnalysisService> _logger;
@@ -30,10 +30,10 @@ public class MovieSessionAnalysisService
         _audioClipService = audioClipService;
         _discussionQuestionsService = discussionQuestionsService;
         _logger = logger;
-        
+
         // Get API key from secrets manager
         _openAiApiKey = _secretsManager.GetSecret("OpenAI:ApiKey") ?? string.Empty;
-        
+
         if (!string.IsNullOrEmpty(_openAiApiKey))
         {
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_openAiApiKey}");
@@ -68,7 +68,7 @@ public class MovieSessionAnalysisService
             var analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
 
             // Log prompt size before sending to OpenAI
-            _logger.LogInformation("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars", 
+            _logger.LogInformation("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars",
                 analysisPrompt.Length, combinedTranscript.Length);
 
             // Call OpenAI to analyze the transcript
@@ -118,13 +118,13 @@ public class MovieSessionAnalysisService
         {
             // Use master recording as primary source since it captures the full conversation
             _logger.LogInformation("Using master recording for analysis (size: {Size} chars)", masterFile.TranscriptText.Length);
-            
+
             transcriptBuilder.AppendLine("=== MASTER RECORDING (Full Group Conversation) ===");
             transcriptBuilder.AppendLine("⚠️  IMPORTANT: Use ONLY timestamps from this master recording for audio clips!");
             transcriptBuilder.AppendLine("This captures everyone talking together with natural overlaps and interruptions.");
             transcriptBuilder.AppendLine("All audio clips will be generated from this file, so timestamps must match this timeline.");
             transcriptBuilder.AppendLine();
-            
+
             var masterTranscript = masterFile.TranscriptText;
             if (masterTranscript.Length > maxTranscriptSpace)
             {
@@ -132,19 +132,19 @@ public class MovieSessionAnalysisService
                 var keepSize = maxTranscriptSpace - 500; // Reserve space for truncation message
                 var beginningSize = (int)(keepSize * 0.6); // 60% from beginning
                 var endingSize = keepSize - beginningSize; // 40% from end
-                
+
                 var beginning = masterTranscript.Substring(0, beginningSize);
                 var ending = masterTranscript.Substring(masterTranscript.Length - endingSize);
-                
-                masterTranscript = beginning + 
+
+                masterTranscript = beginning +
                     $"\n\n[TRANSCRIPT TRUNCATED - SHOWING FIRST {beginningSize:N0} AND LAST {endingSize:N0} CHARACTERS]\n" +
-                    "[MIDDLE SECTION REMOVED FOR SIZE - FOCUS ON OPENING QUESTIONS AND KEY MOMENTS]\n\n" + 
+                    "[MIDDLE SECTION REMOVED FOR SIZE - FOCUS ON OPENING QUESTIONS AND KEY MOMENTS]\n\n" +
                     ending;
-                
-                _logger.LogWarning("Master recording smart-truncated from {Original} to {Truncated} characters (beginning + end)", 
+
+                _logger.LogWarning("Master recording smart-truncated from {Original} to {Truncated} characters (beginning + end)",
                     masterFile.TranscriptText.Length, masterTranscript.Length);
             }
-            
+
             transcriptBuilder.AppendLine(masterTranscript);
             transcriptBuilder.AppendLine();
             transcriptBuilder.AppendLine("=== END MASTER RECORDING ===");
@@ -153,32 +153,32 @@ public class MovieSessionAnalysisService
         {
             // Fall back to individual mics only if no master recording available
             _logger.LogInformation("No master recording available, using {Count} individual mic recordings", individualFiles.Count);
-            
+
             transcriptBuilder.AppendLine("=== INDIVIDUAL MIC RECORDINGS ===");
             transcriptBuilder.AppendLine("⚠️  WARNING: Do NOT use timestamps from individual mics for audio clips!");
             transcriptBuilder.AppendLine("These capture individual speakers clearly but timestamps may not align with master recording.");
             transcriptBuilder.AppendLine("Use these ONLY for speaker identification and quote verification.");
             transcriptBuilder.AppendLine();
-            
+
             var remainingSpace = maxTranscriptSpace;
             var filesAdded = 0;
-            
+
             foreach (var audioFile in individualFiles.OrderBy(f => f.SpeakerNumber ?? 99))
             {
                 var speakerLabel = audioFile.SpeakerNumber.HasValue ? $"Speaker {audioFile.SpeakerNumber}" : "Unknown Speaker";
                 var fileName = Path.GetFileNameWithoutExtension(audioFile.FilePath);
                 var headerSize = $"--- {speakerLabel} ({fileName}) ---\n".Length;
-                
+
                 if (headerSize + 500 > remainingSpace) // Need at least 500 chars for meaningful content
                 {
                     _logger.LogWarning("Stopping at {FilesAdded} individual files due to size limits", filesAdded);
                     transcriptBuilder.AppendLine($"\n[ADDITIONAL {individualFiles.Count - filesAdded} INDIVIDUAL MIC FILES SKIPPED DUE TO SIZE LIMITS]");
                     break;
                 }
-                
+
                 transcriptBuilder.AppendLine($"--- {speakerLabel} ({fileName}) ---");
                 remainingSpace -= headerSize;
-                
+
                 var transcript = audioFile.TranscriptText;
                 if (transcript.Length > remainingSpace)
                 {
@@ -187,7 +187,7 @@ public class MovieSessionAnalysisService
                     _logger.LogWarning("Individual file {FileName} truncated from {Original} to {Truncated} characters",
                         fileName, audioFile.TranscriptText.Length, transcript.Length);
                 }
-                
+
                 transcriptBuilder.AppendLine(transcript);
                 transcriptBuilder.AppendLine();
                 remainingSpace -= transcript.Length + 2; // +2 for newlines
@@ -201,9 +201,9 @@ public class MovieSessionAnalysisService
         }
 
         var finalTranscript = transcriptBuilder.ToString();
-        _logger.LogInformation("Final combined transcript size: {Size} characters (max: {Max})", 
+        _logger.LogInformation("Final combined transcript size: {Size} characters (max: {Max})",
             finalTranscript.Length, MAX_TRANSCRIPT_SIZE);
-            
+
         return finalTranscript;
     }
 
@@ -212,163 +212,79 @@ public class MovieSessionAnalysisService
         var participantsList = string.Join(", ", participants);
 
         return $@"
-You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
+                You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
 
-## PARTICIPANTS:
-The following people were present for this discussion. These are their CORRECT names - please use these exact spellings when identifying speakers:
+                ## PARTICIPANTS:
+                The following people were present for this discussion. These are their CORRECT names - please use these exact spellings when identifying speakers:
 
-{participantsList}
+                {participantsList}
 
-**IMPORTANT**: When transcription software identifies speakers as ""Speaker1"", ""Speaker2"", etc. or misspells names like ""Gary"" or ""Carrie"" (when it should be ""Keri""), try to match them to the correct names above based on context and voice patterns. Use the exact spellings provided.
+                **IMPORTANT**: When transcription software identifies speakers as ""Speaker1"", ""Speaker2"", etc. or misspells names like ""Gary"" or ""Carrie"" (when it should be ""Keri""), try to match them to the correct names above based on context and voice patterns. Use the exact spellings provided.
 
-**CRITICAL NAME MATCHING RULES**:
-1. ONLY use the EXACT names from the participants list above
-2. Do NOT use variations or misspellings (e.g., if participant is ""Lacey"", NEVER use ""Lacy"")
-3. Common transcription errors to correct:
-   - ""Carrie"" or ""Gary"" or ""Kerry"" → correct to ""Keri"" (if Keri is in participants)
-   - ""Jerry"" or ""Jeremy"" → correct to ""Jeremiah"" (if Jeremiah is in participants)
-   - ""Lacy"" → correct to ""Lacey"" (if Lacey is in participants)
-   - Generic ""Speaker1"", ""Speaker2"" → match to actual participant names
-4. If unsure about speaker identity, check individual mic recordings at the same timestamp
+                ## CRITICAL SPEAKER VERIFICATION REQUIREMENTS:
 
-## IMPORTANT TRANSCRIPT CONTEXT:
-The transcript below contains multiple audio sources from the SAME conversation:
-- All recordings happened simultaneously during one discussion
-- Individual mic files show clearer speech from specific people
-- Master/mix recordings show the full group dynamic with overlaps
-- When timestamps align, people are responding to each other in real-time
-- Use ALL sources together to understand the complete conversation flow
+                **MASTER_MIX TRANSCRIPTIONS ARE OFTEN WRONG!** You MUST verify every speaker attribution by cross-referencing with individual microphone recordings.
 
-**CRITICAL: TIMESTAMP REQUIREMENTS FOR AUDIO CLIPS**:
-- ALL timestamps MUST be relative to the MASTER RECORDING (master_mix file)
-- When identifying moments for audio clips, verify the timestamp exists in the master recording
-- If you find a moment in an individual mic file, find the corresponding timestamp in the master recording
-- Audio clips will ONLY be generated from the master recording file
-- Do NOT use individual mic timestamps directly - they may not align with master recording
+                ### Speaker Verification Process:
+                1. **Microphone Mapping**: Individual mic files (mic1.wav, mic2.wav, etc.) correspond to participants in the EXACT order listed above:
+                   - mic1.wav = {participants.ElementAtOrDefault(0) ?? "First participant"}
+                   - mic2.wav = {participants.ElementAtOrDefault(1) ?? "Second participant"}
+                   - mic3.wav = {participants.ElementAtOrDefault(2) ?? "Third participant"}
+                   - etc.
 
-**FOR VERIFICATION**: If you're unsure about who said something, cross-reference the same timestamp across different audio sources. The individual mic recordings often have clearer attribution than the master recording.
+                2. **Verification Steps for EVERY Quote**:
+                   - Find the timestamp in master_mix where something interesting was said
+                   - Check that EXACT timestamp in ALL individual mic recordings
+                   - The clearest audio at that timestamp indicates the TRUE speaker
+                   - Individual mic files use ""speaker: 0"" - this just means the person on that mic
+                   - TRUST THE INDIVIDUAL MIC OVER MASTER_MIX
 
-## YOUR MISSION:
-Find the most ENTERTAINING moments - the edgier, the better! Look for moments that made people gasp, laugh uncontrollably, or get fired up. These are real friends talking honestly, so capture their authentic, unfiltered reactions.
+                3. **Example**:
+                   - Master_mix at 123.45s shows: ""Dave: This movie sucked""
+                   - Check timestamp 123.45s in all individual files
+                   - If mic3.wav has clear audio saying ""This movie sucked"" at 123.45s
+                   - Then the third participant ({participants.ElementAtOrDefault(2) ?? "Third participant"}) said it
+                   - NOT Dave (unless Dave happens to be the third participant)
 
-## ANALYSIS CATEGORIES:
+                4. **Handling Variations**:
+                   - Minor word differences are acceptable: ""That's crazy"" vs ""That is crazy""
+                   - Different transcription services may hear things slightly differently
+                   - Focus on matching the core content and timestamp
 
-### CONTROVERSIAL & SPICY TAKES
-1. **Most Offensive Take** - The comment that made everyone go ""WHOA!"" - inappropriate jokes, savage observations, or statements that crossed lines
-2. **Hottest Take** - The most controversial opinion that divided the room - defending terrible movies, trashing beloved ones, or contrarian viewpoints
-3. **Biggest Argument Starter** - The comment that started actual drama, raised voices, or passionate disagreements
+                5. **Overlapping Speech**:
+                   - When multiple people talk at once, ONLY include the main speaker's content
+                   - Remove side comments, ""yeah"", laughter, or unrelated interjections
+                   - Be STRICT about this - only keep directly relevant speech
 
-### PEAK COMEDY GOLD  
-4. **Best Joke** - The line that had everyone dying laughing - crude humor, perfect timing, or unexpected punchlines
-5. **Best Roast** - The most brutal, savage takedown of the movie, actors, or each other - mean but hilarious
-6. **Funniest Random Tangent** - When the conversation went completely off the rails in the best possible way
+                6. **Quality Control**:
+                   - If you can't find a quote in ANY individual mic file, mark it as [UNVERIFIED]
+                   - Never guess based on ""who would say this"" - only use mic verification
+                   - Individual mics are the SOURCE OF TRUTH
 
-### GROUP DYNAMICS & REACTIONS
-7. **Most Passionate Defense** - Someone getting genuinely heated defending their position - emotional, intense, maybe a little unhinged
-8. **Biggest Unanimous Reaction** - When EVERYONE had the same ""WTF"" moment - collective outrage, disgust, or shock
-9. **Most Boring Statement** - The comment that sucked all energy from the room - painfully bland or obvious
-10. **Best Plot Twist Revelation** - The ""WAIT WHAT"" moment when someone dropped knowledge that blew minds
+                ## IMPORTANT TRANSCRIPT CONTEXT:
+                The transcript below contains multiple audio sources from the SAME conversation:
+                - Master_mix recording shows the full group dynamic
+                - Individual mic recordings (mic1, mic2, etc.) show specific people clearly
+                - All recordings are time-synchronized
+                - When master_mix says ""Speaker1"" or gets a name wrong, check individual mics!
 
-### PERSONALITY MOMENTS
-11. **Movie Snob Moment** - Peak pretentious film bro behavior - overthinking, name-dropping, or being insufferably intellectual
-12. **Guilty Pleasure Admission** - Someone confessing they actually enjoyed something embarrassing - the shame is palpable
-13. **Quietest Person's Best Moment** - When the quiet one finally spoke up and dropped a bomb
+                **CRITICAL: For EVERY quote you include in your analysis:**
+                1. Note which individual mic file verified the speaker
+                2. Use the participant name from the ordered list above
+                3. Never trust master_mix speaker labels without verification
 
-### TOP 5 LISTS
-14. **Top 5 Funniest Sentences** - The most quotable, shareable, laugh-out-loud lines
-15. **Top 5 Most Bland Comments** - The most soul-crushingly boring statements
+                ## YOUR MISSION:
+                [Rest of your existing prompt continues here...]
 
-### INITIAL DISCUSSION QUESTIONS
-16. **Opening Questions & Answers** - Extract the standard discussion questions asked at the beginning and each person's answers
+                ## VERIFICATION CHECKLIST:
+                Before attributing ANY quote to ANYONE:
+                - ✓ Did I check the timestamp in all individual mic files?
+                - ✓ Did I find clear audio in a specific mic file?
+                - ✓ Did I map the mic number to the correct participant name?
+                - ✓ Am I ignoring what master_mix claims about who said it?
 
-### CONVERSATION ANALYTICS
-17. **Speaking Statistics** - Count approximate words spoken by each person for ""Most Talkative"" and ""Quietest Person""
-18. **Question Patterns** - Count questions asked by each person to identify ""Most Inquisitive""
-19. **Interruption Tracking** - Note instances of people talking over each other or interrupting
-20. **Laughter Analysis** - Track moments that caused laughter to identify ""Funniest Person""
-21. **Profanity Count** - Count curse words used by each person for ""Foul Mouth"" rankings
-
-## WHAT TO LOOK FOR:
-- **Inappropriate humor** that friends share when they think no one's listening
-- **Savage roasts** and brutal honesty about movies, actors, or each other  
-- **Moments of chaos** where everyone's talking over each other or reacting strongly
-- **Uncomfortable truths** and opinions that make people squirm
-- **Perfect comedic timing** and unexpected punchlines
-- **Raw emotional reactions** - genuine anger, excitement, disgust, or shock
-- **Inside jokes** and callback references that show group dynamics
-- **Cringe moments** that are painful but hilarious in hindsight
-
-## CRITICAL VERIFICATION REQUIREMENTS:
-
-**VERIFY EVERY QUOTE**: Before attributing any quote to someone, double-check that it makes logical sense:
-- Would this person really say this about themselves? (e.g., ""Dave: I have to pick a movie with a midget everytime for Dave"" is WRONG - Dave wouldn't refer to himself in third person)
-- Does the quote match the speaker's voice/perspective throughout the conversation?
-- Look at the actual transcript context around that timestamp - is the attribution correct?
-- If something seems off, check nearby lines or other audio sources for the real speaker
-
-**RED FLAGS TO WATCH FOR**:
-- Someone referring to themselves in third person (""John said John likes movies"" = WRONG)
-- Quotes that contradict how someone has been speaking throughout
-- Attributions that don't match the conversational flow
-- Misplaced pronouns (""I"" vs ""he/she"" confusion)
-
-## INSTRUCTIONS:
-
-1. **Go for the GOLD**: Prioritize moments that are genuinely shocking, hilarious, or memorable
-2. **Embrace the Chaos**: Look for unfiltered, authentic reactions - not polite movie discussion  
-3. **Context is King**: Capture what made each moment land so hard
-4. **No Sanitizing**: These are friends being real - capture their authentic voices and reactions
-5. **Entertainment First**: If it's not replay-worthy, it's not worth including
-6. **Shock Value**: The more ""I can't believe they said that"" the better
-7. **Quotability**: Look for lines people will repeat and reference later
-8. **Speaker Names**: ALWAYS use the correct participant names listed above. If unsure, use context clues from the conversation to match speakers to the right names.
-9. **VERIFY ATTRIBUTION**: Double-check every quote makes sense coming from that specific person before including it.
-
-## RESPONSE FORMAT:
-
-Respond with a JSON object containing each category. For regular categories (1-13), return an object with the following properties: speaker, timestamp, quote, setup, groupReaction, whyItsGreat, audioQuality, entertainmentScore, runnersUp (an array of objects with speaker, timestamp, briefDescription, place). 
-
-For Top 5 lists (14-15), return an object with an ""entries"" array. Each entry should have: rank (1-5), speaker, timestamp, quote, context, audioQuality, score (1-10), reasoning, and estimated start/end times in seconds from the beginning of that audio file.
-
-For Initial Discussion Questions (16), return an object with a ""questions"" array. Each question should have: question (the actual question asked), speaker (who answered), answer (their response), timestamp, entertainmentValue (1-10), estimatedStartEnd array for audio clipping.
-
-**SPECIFIC OPENING QUESTIONS TO EXTRACT**:
-The group answers these discussion questions at the start of every session. Find each person's individual answers:
-
-{await GetFormattedDiscussionQuestionsAsync()}
-
-**CRITICAL DISCUSSION QUESTION RULES**:
-1. **ONE ANSWER PER PERSON PER QUESTION**: Each participant answers each question EXACTLY ONCE
-2. **NO DUPLICATES**: If you see ""Lacey"" answering the same question twice, you've made an error - check timestamps and context
-3. **VERIFY SPEAKER**: Cross-reference individual mic recordings to confirm who's actually speaking
-4. **ROUND-ROBIN FORMAT**: The group typically goes around with each person answering in turn
-5. **CHECK LOGIC**: If you have 4 participants and 4 questions, you should have exactly 16 total answers (4 people × 4 questions)
-
-**HOW TO VERIFY SPEAKERS FOR QUESTIONS**:
-- Look at the individual mic recordings at the same timestamp
-- The person whose individual mic has the clearest audio is the speaker
-- Listen for pronouns: ""I liked it"" vs ""She liked it"" tells you who's speaking
-- Check the flow: participants usually answer in a consistent order
-
-Look for these questions being asked/answered early in the discussion (usually first 15-20 minutes). Extract each person's individual answers to create a complete picture of everyone's initial thoughts before the deeper discussion begins.
-
-If a category has no clear moments, use null for that category.
-
-## TRANSCRIPT TO ANALYZE:
-
-{transcript}
-
-## FINAL VALIDATION CHECKLIST:
-Before submitting your response, verify:
-1. ✓ All speaker names match EXACTLY with the participants list (no ""Lacy"" if it's ""Lacey"")
-2. ✓ No person answers the same discussion question twice
-3. ✓ All quotes make logical sense from the attributed speaker (no third-person self-references)
-4. ✓ Discussion questions have one answer per person per question
-5. ✓ Speaker attributions have been cross-checked with individual mic recordings where possible
-
-Please analyze this transcript and identify the best moments for each category. Focus on entertainment value and what would be fun to revisit later.";
+                Remember: Master_mix helps you find interesting moments. Individual mics tell you WHO ACTUALLY SAID IT.";
     }
-
     private async Task<string> CallOpenAIForAnalysis(string prompt)
     {
         var requestBody = new
@@ -408,13 +324,13 @@ Please analyze this transcript and identify the best moments for each category. 
 
             // Try to parse as nested structure first, then fall back to flat structure
             var categoryResults = TryParseNestedStructure(jsonContent) ?? TryParseFlatStructure(jsonContent);
-            
+
             if (categoryResults == null)
             {
                 _logger.LogError("Failed to deserialize analysis data in both nested and flat formats");
                 return new CategoryResults();
             }
-            
+
             // Fix speaker name mappings
             ApplySpeakerNameMappings(categoryResults);
 
@@ -432,71 +348,71 @@ Please analyze this transcript and identify the best moments for each category. 
         try
         {
             _logger.LogDebug("Attempting to parse nested JSON structure");
-            
+
             var jsonDoc = JsonDocument.Parse(jsonContent);
             var root = jsonDoc.RootElement;
-            
+
             // Log the top-level sections found
             var topLevelSections = root.EnumerateObject().Select(p => p.Name).ToList();
             _logger.LogInformation("Found top-level JSON sections: {Sections}", string.Join(", ", topLevelSections));
-            
+
             // Log detailed structure for debugging
             LogJsonStructure(root);
-            
+
             var categoryResults = new CategoryResults();
-            
+
             // Parse CONTROVERSIAL & SPICY TAKES section
             if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Most Offensive Take", out var mostOffensive))
                 categoryResults.MostOffensiveTake = ParseCategoryWinnerFromElement(mostOffensive);
-            
+
             if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Hottest Take", out var hottestTake))
                 categoryResults.HottestTake = ParseCategoryWinnerFromElement(hottestTake);
-            
+
             if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Biggest Argument Starter", out var biggestArg))
                 categoryResults.BiggestArgumentStarter = ParseCategoryWinnerFromElement(biggestArg);
-            
+
             // Parse PEAK COMEDY GOLD section
             if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Best Joke", out var bestJoke))
                 categoryResults.BestJoke = ParseCategoryWinnerFromElement(bestJoke);
-            
+
             if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Best Roast", out var bestRoast))
                 categoryResults.BestRoast = ParseCategoryWinnerFromElement(bestRoast);
-            
+
             if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Funniest Random Tangent", out var funniestTangent))
                 categoryResults.FunniestRandomTangent = ParseCategoryWinnerFromElement(funniestTangent);
-            
+
             // Parse GROUP DYNAMICS & REACTIONS section
             if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Most Passionate Defense", out var passionateDefense))
                 categoryResults.MostPassionateDefense = ParseCategoryWinnerFromElement(passionateDefense);
-            
+
             if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Biggest Unanimous Reaction", out var unanimousReaction))
                 categoryResults.BiggestUnanimousReaction = ParseCategoryWinnerFromElement(unanimousReaction);
-            
+
             if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Most Boring Statement", out var boringStatement))
                 categoryResults.MostBoringStatement = ParseCategoryWinnerFromElement(boringStatement);
-            
+
             if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Best Plot Twist Revelation", out var plotTwist))
                 categoryResults.BestPlotTwistRevelation = ParseCategoryWinnerFromElement(plotTwist);
-            
+
             // Parse PERSONALITY MOMENTS section
             if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Movie Snob Moment", out var movieSnob))
                 categoryResults.MovieSnobMoment = ParseCategoryWinnerFromElement(movieSnob);
-            
+
             if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Guilty Pleasure Admission", out var guiltyPleasure))
                 categoryResults.GuiltyPleasureAdmission = ParseCategoryWinnerFromElement(guiltyPleasure);
-            
+
             if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Quietest Person's Best Moment", out var quietestPerson))
                 categoryResults.QuietestPersonBestMoment = ParseCategoryWinnerFromElement(quietestPerson);
-            
+
             // Parse TOP 5 LISTS section
             if (TryGetNestedCategory(root, "TOP 5 LISTS", "Top 5 Funniest Sentences", out var funniest) ||
                 TryGetNestedCategory(root, "TOP 5 LISTS", "Funniest Sentences", out funniest))
                 categoryResults.FunniestSentences = ParseTopFiveListFromElement(funniest);
-            
+
             if (TryGetNestedCategory(root, "TOP 5 LISTS", "Top 5 Most Bland Comments", out var bland) ||
                 TryGetNestedCategory(root, "TOP 5 LISTS", "Most Bland Comments", out bland))
                 categoryResults.MostBlandComments = ParseTopFiveListFromElement(bland);
-            
+
             // Parse INITIAL DISCUSSION QUESTIONS section
             if (TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "questions", out var questions) ||
                 TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "Opening Questions & Answers", out questions) ||
@@ -518,11 +434,11 @@ Please analyze this transcript and identify the best moments for each category. 
             else
             {
                 _logger.LogWarning("INITIAL DISCUSSION QUESTIONS section not found in JSON");
-                
+
                 // Try to find it with different casing or at root level
                 foreach (var property in root.EnumerateObject())
                 {
-                    if (property.Name.Contains("Initial", StringComparison.OrdinalIgnoreCase) && 
+                    if (property.Name.Contains("Initial", StringComparison.OrdinalIgnoreCase) &&
                         property.Name.Contains("Question", StringComparison.OrdinalIgnoreCase))
                     {
                         _logger.LogInformation("Found questions section with name: {PropertyName}", property.Name);
@@ -533,7 +449,7 @@ Please analyze this transcript and identify the best moments for each category. 
                     }
                 }
             }
-            
+
             // Log summary of what was parsed
             var parsedCategories = new List<string>();
             if (categoryResults.MostOffensiveTake != null) parsedCategories.Add("MostOffensiveTake");
@@ -552,7 +468,7 @@ Please analyze this transcript and identify the best moments for each category. 
             if (categoryResults.FunniestSentences != null) parsedCategories.Add("FunniestSentences");
             if (categoryResults.MostBlandComments != null) parsedCategories.Add("MostBlandComments");
             if (categoryResults.InitialQuestions != null && categoryResults.InitialQuestions.Any()) parsedCategories.Add("InitialQuestions");
-            
+
             _logger.LogInformation("Successfully parsed nested JSON structure. Categories found: {Categories}", string.Join(", ", parsedCategories));
             return categoryResults;
         }
@@ -568,10 +484,10 @@ Please analyze this transcript and identify the best moments for each category. 
         try
         {
             _logger.LogDebug("Attempting to parse flat JSON structure");
-            
+
             // Simply deserialize to the strongly typed model
             var response = JsonSerializer.Deserialize<OpenAIAnalysisResponse>(jsonContent);
-            
+
             if (response == null)
             {
                 _logger.LogError("Failed to deserialize flat analysis data - result was null");
@@ -580,14 +496,14 @@ Please analyze this transcript and identify the best moments for each category. 
 
             // Map from DTO to your domain model
             var categoryResults = MapToCategoryResults(response);
-            
+
             // Extract initial questions to session stats (will be set later)
             if (response.OpeningQuestions != null)
             {
                 // This will be handled in the session service when creating/updating the session
                 categoryResults.InitialQuestions = MapInitialQuestions(response.OpeningQuestions);
             }
-            
+
             _logger.LogInformation("Successfully parsed flat JSON structure");
             return categoryResults;
         }
@@ -601,12 +517,12 @@ Please analyze this transcript and identify the best moments for each category. 
     private bool TryGetNestedCategory(JsonElement root, string sectionName, string categoryName, out JsonElement element)
     {
         element = default;
-        
+
         // Try to find the section first
         if (root.TryGetProperty(sectionName, out var section))
         {
             _logger.LogDebug("Found section '{SectionName}', looking for category '{CategoryName}'", sectionName, categoryName);
-            
+
             // Log what's in this section
             if (section.ValueKind == JsonValueKind.Object)
             {
@@ -623,14 +539,14 @@ Please analyze this transcript and identify the best moments for each category. 
                     return true;
                 }
             }
-            
+
             // Then try to find the category within that section
             if (section.TryGetProperty(categoryName, out element))
             {
                 _logger.LogDebug("Successfully found category '{CategoryName}' in section '{SectionName}'", categoryName, sectionName);
                 return true;
             }
-                
+
             // Also try with numbered keys like "1", "2", etc.
             for (int i = 1; i <= 20; i++)
             {
@@ -645,11 +561,11 @@ Please analyze this transcript and identify the best moments for each category. 
                 }
             }
         }
-        
+
         // Also try direct access at root level (in case structure is partially flat)
         if (root.TryGetProperty(categoryName, out element))
             return true;
-            
+
         return false;
     }
 
@@ -657,13 +573,13 @@ Please analyze this transcript and identify the best moments for each category. 
     {
         // Try to identify the category by looking for key indicators in the content
         // This is a heuristic approach since OpenAI might use numbered keys
-        
+
         if (categoryElement.ValueKind == JsonValueKind.Object)
         {
             // Look for a title or description field that might contain the category name
             foreach (var property in categoryElement.EnumerateObject())
             {
-                if (property.Name.ToLower().Contains("title") || 
+                if (property.Name.ToLower().Contains("title") ||
                     property.Name.ToLower().Contains("category") ||
                     property.Name.ToLower().Contains("type"))
                 {
@@ -673,7 +589,7 @@ Please analyze this transcript and identify the best moments for each category. 
                 }
             }
         }
-        
+
         return false;
     }
 
@@ -683,7 +599,7 @@ Please analyze this transcript and identify the best moments for each category. 
         {
             if (element.ValueKind == JsonValueKind.Null)
                 return null;
-                
+
             return new CategoryWinner
             {
                 Speaker = GetStringProperty(element, "speaker") ?? "Unknown",
@@ -694,7 +610,7 @@ Please analyze this transcript and identify the best moments for each category. 
                 WhyItsGreat = GetStringProperty(element, "whyItsGreat") ?? GetStringProperty(element, "why_its_great") ?? "",
                 AudioQuality = ParseAudioQuality(GetStringProperty(element, "audioQuality") ?? GetStringProperty(element, "audio_quality")),
                 EntertainmentScore = GetIntProperty(element, "entertainmentScore") ?? GetIntProperty(element, "entertainment_score") ?? 5,
-                RunnersUp = ParseRunnersUpFromElement(element.TryGetProperty("runnersUp", out var runnersUp) ? runnersUp : 
+                RunnersUp = ParseRunnersUpFromElement(element.TryGetProperty("runnersUp", out var runnersUp) ? runnersUp :
                            element.TryGetProperty("runners_up", out var runnersUp2) ? runnersUp2 : default)
             };
         }
@@ -711,19 +627,19 @@ Please analyze this transcript and identify the best moments for each category. 
         {
             if (element.ValueKind == JsonValueKind.Null)
                 return null;
-                
+
             var entriesElement = element.TryGetProperty("entries", out var entries) ? entries : element;
-            
+
             if (entriesElement.ValueKind != JsonValueKind.Array)
                 return null;
-                
+
             var list = new TopFiveList();
             list.Entries = entriesElement.EnumerateArray()
                 .Select(ParseTopFiveEntryFromElement)
                 .Where(e => e != null)
                 .Cast<TopFiveEntry>()
                 .ToList();
-                
+
             return list.Entries.Any() ? list : null;
         }
         catch (Exception ex)
@@ -763,10 +679,10 @@ Please analyze this transcript and identify the best moments for each category. 
         try
         {
             _logger.LogDebug("ParseInitialQuestionsFromElement called with element type: {ElementType}", element.ValueKind);
-            
+
             // Handle different possible structures
             JsonElement questionsElement = element;
-            
+
             // If the element is an object, look for a questions property
             if (element.ValueKind == JsonValueKind.Object)
             {
@@ -795,7 +711,7 @@ Please analyze this transcript and identify the best moments for each category. 
                             }
                         }
                     }
-                    
+
                     if (numberedQuestions.Any())
                     {
                         _logger.LogInformation("Found {Count} numbered questions in object", numberedQuestions.Count);
@@ -803,14 +719,14 @@ Please analyze this transcript and identify the best moments for each category. 
                     }
                 }
             }
-            
-            _logger.LogDebug("Questions element type: {ElementType}, IsArray: {IsArray}", 
+
+            _logger.LogDebug("Questions element type: {ElementType}, IsArray: {IsArray}",
                 questionsElement.ValueKind, questionsElement.ValueKind == JsonValueKind.Array);
-            
+
             if (questionsElement.ValueKind != JsonValueKind.Array)
             {
                 _logger.LogWarning("Questions element is not an array, it's {ElementType}", questionsElement.ValueKind);
-                
+
                 // If it's an object, try to parse it as a single question
                 if (questionsElement.ValueKind == JsonValueKind.Object)
                 {
@@ -821,21 +737,21 @@ Please analyze this transcript and identify the best moments for each category. 
                         return new List<QuestionAnswer> { singleQuestion };
                     }
                 }
-                
+
                 return new List<QuestionAnswer>();
             }
-            
+
             var arrayLength = questionsElement.GetArrayLength();
             _logger.LogInformation("Found {Length} questions in array", arrayLength);
-                
+
             var results = questionsElement.EnumerateArray()
                 .Select(ParseQuestionAnswerFromElement)
                 .Where(qa => qa != null)
                 .Cast<QuestionAnswer>()
                 .ToList();
-                
+
             _logger.LogInformation("Successfully parsed {Count} questions", results.Count);
-            
+
             return results;
         }
         catch (Exception ex)
@@ -871,7 +787,7 @@ Please analyze this transcript and identify the best moments for each category. 
         {
             if (element.ValueKind != JsonValueKind.Array)
                 return new List<RunnerUp>();
-                
+
             return element.EnumerateArray()
                 .Select(e => new RunnerUp
                 {
@@ -892,8 +808,8 @@ Please analyze this transcript and identify the best moments for each category. 
     // Helper methods for extracting properties with fallbacks
     private string? GetStringProperty(JsonElement element, string propertyName)
     {
-        return element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String 
-            ? prop.GetString() 
+        return element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String
+            ? prop.GetString()
             : null;
     }
 
@@ -965,7 +881,7 @@ Please analyze this transcript and identify the best moments for each category. 
     private CategoryWinner? MapCategoryWinner(CategoryWinnerDto? dto)
     {
         if (dto == null) return null;
-        
+
         return new CategoryWinner
         {
             Speaker = dto.Speaker,
@@ -989,7 +905,7 @@ Please analyze this transcript and identify the best moments for each category. 
     private TopFiveList? MapTopFiveList(TopFiveListDto? dto)
     {
         if (dto == null || !dto.Entries.Any()) return null;
-        
+
         var list = new TopFiveList();
         list.Entries = dto.Entries.Select(e => new TopFiveEntry
         {
@@ -1004,7 +920,7 @@ Please analyze this transcript and identify the best moments for each category. 
             StartTimeSeconds = e.EstimatedStartEnd?.ElementAtOrDefault(0),
             EndTimeSeconds = e.EstimatedStartEnd?.ElementAtOrDefault(1)
         }).ToList();
-        
+
         return list;
     }
 
@@ -1140,7 +1056,7 @@ Please analyze this transcript and identify the best moments for each category. 
             EnergyLevel.High when spiceLevel >= 8 => "🔥 ABSOLUTE CHAOS with",
             EnergyLevel.High when spiceLevel >= 5 => "🚀 Wild energy featuring",
             EnergyLevel.High => "⚡ High-octane discussion with",
-            EnergyLevel.Medium when spiceLevel >= 5 => "🌶️ Spicy conversation featuring", 
+            EnergyLevel.Medium when spiceLevel >= 5 => "🌶️ Spicy conversation featuring",
             EnergyLevel.Medium => "💬 Solid discussion with",
             EnergyLevel.Low when spiceLevel >= 3 => "😴 Sleepy but surprisingly featured",
             EnergyLevel.Low => "🤫 Chill session with",
@@ -1181,7 +1097,7 @@ Please analyze this transcript and identify the best moments for each category. 
         try
         {
             _logger.LogInformation("Generating conversation statistics for {ParticipantCount} participants", session.ParticipantsPresent.Count);
-            
+
             // Initialize dictionaries for all participants
             foreach (var participant in session.ParticipantsPresent)
             {
@@ -1195,7 +1111,7 @@ Please analyze this transcript and identify the best moments for each category. 
             // Analyze transcripts for conversation patterns
             var transcriptFiles = session.AudioFiles.Where(f => !string.IsNullOrEmpty(f.TranscriptText)).ToList();
             _logger.LogInformation("Analyzing {FileCount} transcript files for conversation patterns", transcriptFiles.Count);
-            
+
             foreach (var audioFile in transcriptFiles)
             {
                 _logger.LogDebug("Analyzing transcript from {FileName}", audioFile.FileName);
@@ -1210,8 +1126,8 @@ Please analyze this transcript and identify the best moments for each category. 
 
                 var quietest = stats.WordCounts.OrderBy(kvp => kvp.Value).First();
                 stats.QuietestPerson = $"{quietest.Key} ({quietest.Value:N0} words)";
-                
-                _logger.LogInformation("Word counts: {WordCounts}", 
+
+                _logger.LogInformation("Word counts: {WordCounts}",
                     string.Join(", ", stats.WordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
             }
 
@@ -1241,15 +1157,15 @@ Please analyze this transcript and identify the best moments for each category. 
                 var mostProfane = stats.CurseWordCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.MostProfanePerson = $"{mostProfane.Key} ({mostProfane.Value} curse words)";
                 stats.TotalCurseWords = stats.CurseWordCounts.Values.Sum();
-                
-                _logger.LogInformation("Curse word counts: {CurseWordCounts}", 
+
+                _logger.LogInformation("Curse word counts: {CurseWordCounts}",
                     string.Join(", ", stats.CurseWordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
             }
 
             // Determine conversation tone
             var totalWords = stats.WordCounts.Values.Sum();
             var wordsPerMinute = CalculateWordsPerMinute(session, totalWords);
-            
+
             stats.ConversationTone = wordsPerMinute switch
             {
                 > 300 => "Rapid-fire chaos",
@@ -1269,7 +1185,7 @@ Please analyze this transcript and identify the best moments for each category. 
     {
         var lines = transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var processedLines = 0;
-        
+
         foreach (var line in lines)
         {
             // Skip timestamp lines and metadata
@@ -1285,15 +1201,15 @@ Please analyze this transcript and identify the best moments for each category. 
 
             // Map speaker names (handle common transcription issues)
             var speaker = MapSpeakerName(speakerPart);
-            
+
             // If speaker isn't in our participants list, try to match by similarity
             if (!participants.Contains(speaker, StringComparer.OrdinalIgnoreCase))
             {
-                var similarSpeaker = participants.FirstOrDefault(p => 
+                var similarSpeaker = participants.FirstOrDefault(p =>
                     p.Equals(speaker, StringComparison.OrdinalIgnoreCase) ||
                     p.Contains(speaker, StringComparison.OrdinalIgnoreCase) ||
                     speaker.Contains(p, StringComparison.OrdinalIgnoreCase));
-                
+
                 if (similarSpeaker != null)
                 {
                     speaker = similarSpeaker;
@@ -1304,7 +1220,7 @@ Please analyze this transcript and identify the best moments for each category. 
                     continue;
                 }
             }
-            
+
             if (!stats.WordCounts.ContainsKey(speaker))
                 continue;
 
@@ -1319,7 +1235,7 @@ Please analyze this transcript and identify the best moments for each category. 
             stats.QuestionCounts[speaker] += questionCount;
 
             // Look for interruption patterns
-            if (textPart.Contains("--") || textPart.Contains("[interrupting]") || 
+            if (textPart.Contains("--") || textPart.Contains("[interrupting]") ||
                 textPart.Contains("[talking over") || textPart.Contains("interrupts") ||
                 textPart.Contains("cuts off") || textPart.Contains("overlapping"))
             {
@@ -1328,7 +1244,7 @@ Please analyze this transcript and identify the best moments for each category. 
 
             // Look for laughter triggers - both causing and reacting
             var lowerText = textPart.ToLower();
-            if (lowerText.Contains("laugh") || lowerText.Contains("haha") || 
+            if (lowerText.Contains("laugh") || lowerText.Contains("haha") ||
                 lowerText.Contains("[laughter]") || lowerText.Contains("funny") ||
                 lowerText.Contains("lol") || lowerText.Contains("hilarious") ||
                 lowerText.Contains("joke") || lowerText.Contains("chuckle"))
@@ -1340,7 +1256,7 @@ Please analyze this transcript and identify the best moments for each category. 
             var curseWords = CountCurseWords(textPart);
             stats.CurseWordCounts[speaker] += curseWords;
         }
-        
+
         _logger.LogDebug("Processed {ProcessedLines} lines from transcript", processedLines);
     }
 
@@ -1382,8 +1298,8 @@ Please analyze this transcript and identify the best moments for each category. 
         // Common curse words and variations to detect
         var curseWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "shit", "fuck", "fucking", "fucked", "fucker", "damn", "damned", "hell", 
-            "ass", "asshole", "bitch", "bastard", "crap", "piss", "bullshit", 
+            "shit", "fuck", "fucking", "fucked", "fucker", "damn", "damned", "hell",
+            "ass", "asshole", "bitch", "bastard", "crap", "piss", "bullshit",
             "motherfucker", "son of a bitch", "goddamn", "jesus christ", "christ",
             "wtf", "omfg", "ffs", "jfc", // common abbreviations
             "dammit", "goddammit", "bloody hell", "holy shit", "what the fuck",
@@ -1391,11 +1307,11 @@ Please analyze this transcript and identify the best moments for each category. 
         };
 
         var words = text.ToLower()
-            .Split(new char[] { ' ', '.', ',', '!', '?', ';', ':', '"', '\'', '-', '(', ')', '[', ']' }, 
+            .Split(new char[] { ' ', '.', ',', '!', '?', ';', ':', '"', '\'', '-', '(', ')', '[', ']' },
                    StringSplitOptions.RemoveEmptyEntries);
 
         var count = 0;
-        
+
         // Check individual words
         foreach (var word in words)
         {
@@ -1408,10 +1324,10 @@ Please analyze this transcript and identify the best moments for each category. 
 
         // Check for multi-word phrases
         var lowerText = text.ToLower();
-        var phrases = new[] { "son of a bitch", "piece of shit", "full of shit", "holy shit", 
-                             "what the fuck", "jesus christ", "goddamn it", "bloody hell", 
+        var phrases = new[] { "son of a bitch", "piece of shit", "full of shit", "holy shit",
+                             "what the fuck", "jesus christ", "goddamn it", "bloody hell",
                              "holy fuck", "what the hell" };
-        
+
         foreach (var phrase in phrases)
         {
             var matches = System.Text.RegularExpressions.Regex.Matches(lowerText, phrase);
@@ -1552,39 +1468,39 @@ Please analyze this transcript and identify the best moments for each category. 
         {
             // Parse timestamp to find the right audio file and time
             var timestamp = _audioClipService.ParseTimestamp(winner.Timestamp);
-            
+
             // Find the best audio file for this timestamp
             var sourceFile = FindBestAudioFileForTimestamp(session, timestamp);
             if (sourceFile == null)
             {
-                _logger.LogWarning("No suitable audio file found for timestamp {Timestamp} in session {SessionId}", 
+                _logger.LogWarning("No suitable audio file found for timestamp {Timestamp} in session {SessionId}",
                     winner.Timestamp, session.Id);
                 return;
             }
 
             var clipId = $"{clipPrefix}_{Guid.NewGuid():N}";
-            
+
             // Add padding around the timestamp (3 seconds before, 5 seconds after for context)
             double startTime = Math.Max(0, timestamp.TotalSeconds - 3);
             double endTime = timestamp.TotalSeconds + 5;
 
             var clipUrl = await _audioClipService.GenerateAudioClipAsync(
-                sourceFile.FilePath, 
-                startTime, 
-                endTime, 
-                session.Id, 
+                sourceFile.FilePath,
+                startTime,
+                endTime,
+                session.Id,
                 clipId);
 
             if (!string.IsNullOrEmpty(clipUrl))
             {
                 winner.AudioClipUrl = clipUrl;
-                _logger.LogDebug("Generated clip for {ClipPrefix} at {Timestamp}: {ClipUrl}", 
+                _logger.LogDebug("Generated clip for {ClipPrefix} at {Timestamp}: {ClipUrl}",
                     clipPrefix, winner.Timestamp, clipUrl);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to generate clip for {ClipPrefix} at {Timestamp}", 
+            _logger.LogWarning(ex, "Failed to generate clip for {ClipPrefix} at {Timestamp}",
                 clipPrefix, winner.Timestamp);
         }
     }
@@ -1593,21 +1509,21 @@ Please analyze this transcript and identify the best moments for each category. 
     {
         // ALWAYS use master recording for audio clips to ensure consistency
         // The UI specifically expects clips from the master_mix file
-        var masterFile = session.AudioFiles.FirstOrDefault(f => 
-            f.IsMasterRecording && 
+        var masterFile = session.AudioFiles.FirstOrDefault(f =>
+            f.IsMasterRecording &&
             f.Duration.HasValue &&
             f.Duration.Value >= timestamp);
 
         if (masterFile != null)
         {
-            _logger.LogDebug("Using master recording {FileName} for clip at {Timestamp}", 
+            _logger.LogDebug("Using master recording {FileName} for clip at {Timestamp}",
                 masterFile.FileName, timestamp);
             return masterFile;
         }
 
         _logger.LogWarning("No master recording found or master recording too short for timestamp {Timestamp}. " +
-                          "Available files: {Files}", 
-            timestamp, 
+                          "Available files: {Files}",
+            timestamp,
             string.Join(", ", session.AudioFiles.Select(f => $"{f.FileName} (Master: {f.IsMasterRecording}, Duration: {f.Duration})")));
 
         // Only fall back to individual files if absolutely no master recording exists
@@ -1631,26 +1547,26 @@ Please analyze this transcript and identify the best moments for each category. 
 
                 var timestamp = _audioClipService.ParseTimestamp(qa.Timestamp);
                 var sourceFile = FindBestAudioFileForTimestamp(session, timestamp);
-                
+
                 if (sourceFile == null) continue;
 
                 var clipId = $"initial-q{i + 1}_{qa.Speaker.ToLower()}_{Guid.NewGuid():N}";
-                
+
                 // Add padding around the answer (2 seconds before, 8 seconds after for full context)
                 double startTime = Math.Max(0, timestamp.TotalSeconds - 2);
                 double endTime = timestamp.TotalSeconds + 8;
 
                 var clipUrl = await _audioClipService.GenerateAudioClipAsync(
-                    sourceFile.FilePath, 
-                    startTime, 
-                    endTime, 
-                    session.Id, 
+                    sourceFile.FilePath,
+                    startTime,
+                    endTime,
+                    session.Id,
                     clipId);
 
                 if (!string.IsNullOrEmpty(clipUrl))
                 {
                     qa.AudioClipUrl = clipUrl;
-                    _logger.LogDebug("Generated clip for initial question '{Question}' answered by {Speaker}: {ClipUrl}", 
+                    _logger.LogDebug("Generated clip for initial question '{Question}' answered by {Speaker}: {ClipUrl}",
                         qa.Question, qa.Speaker, clipUrl);
                 }
             }
@@ -1664,7 +1580,7 @@ Please analyze this transcript and identify the best moments for each category. 
     private void LogJsonStructure(JsonElement root, string prefix = "", int maxDepth = 3, int currentDepth = 0)
     {
         if (currentDepth >= maxDepth) return;
-        
+
         try
         {
             if (root.ValueKind == JsonValueKind.Object)
@@ -1672,7 +1588,7 @@ Please analyze this transcript and identify the best moments for each category. 
                 foreach (var property in root.EnumerateObject())
                 {
                     var currentPrefix = string.IsNullOrEmpty(prefix) ? property.Name : $"{prefix}.{property.Name}";
-                    
+
                     if (property.Value.ValueKind == JsonValueKind.Object)
                     {
                         _logger.LogDebug("JSON Structure: {Path} (Object)", currentPrefix);
@@ -1681,7 +1597,7 @@ Please analyze this transcript and identify the best moments for each category. 
                     else if (property.Value.ValueKind == JsonValueKind.Array)
                     {
                         _logger.LogDebug("JSON Structure: {Path} (Array with {Count} elements)", currentPrefix, property.Value.GetArrayLength());
-                        
+
                         // Log structure of first array element if it exists
                         if (property.Value.GetArrayLength() > 0)
                         {
@@ -1691,7 +1607,7 @@ Please analyze this transcript and identify the best moments for each category. 
                     }
                     else
                     {
-                        var valuePreview = property.Value.ValueKind == JsonValueKind.String ? 
+                        var valuePreview = property.Value.ValueKind == JsonValueKind.String ?
                             $"\"{property.Value.GetString()?.Substring(0, Math.Min(property.Value.GetString()?.Length ?? 0, 50)) ?? ""}...\"" :
                             property.Value.ToString();
                         _logger.LogDebug("JSON Structure: {Path} = {Value}", currentPrefix, valuePreview);
@@ -1782,15 +1698,15 @@ Please analyze this transcript and identify the best moments for each category. 
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
             // Serialize and save to file
-            var json = JsonSerializer.Serialize(responseData, new JsonSerializerOptions 
-            { 
+            var json = JsonSerializer.Serialize(responseData, new JsonSerializerOptions
+            {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
-            
+
             await File.WriteAllTextAsync(filePath, json);
-            
-            _logger.LogInformation("Saved OpenAI response to {FilePath} ({FileSize:N0} characters)", 
+
+            _logger.LogInformation("Saved OpenAI response to {FilePath} ({FileSize:N0} characters)",
                 filePath, json.Length);
         }
         catch (Exception ex)
@@ -1806,49 +1722,49 @@ public class OpenAIAnalysisResponse
 {
     [JsonPropertyName("Most Offensive Take")]
     public CategoryWinnerDto? MostOffensiveTake { get; set; }
-    
+
     [JsonPropertyName("Hottest Take")]
     public CategoryWinnerDto? HottestTake { get; set; }
-    
+
     [JsonPropertyName("Biggest Argument Starter")]
     public CategoryWinnerDto? BiggestArgumentStarter { get; set; }
-    
+
     [JsonPropertyName("Best Joke")]
     public CategoryWinnerDto? BestJoke { get; set; }
-    
+
     [JsonPropertyName("Best Roast")]
     public CategoryWinnerDto? BestRoast { get; set; }
-    
+
     [JsonPropertyName("Funniest Random Tangent")]
     public CategoryWinnerDto? FunniestRandomTangent { get; set; }
-    
+
     [JsonPropertyName("Most Passionate Defense")]
     public CategoryWinnerDto? MostPassionateDefense { get; set; }
-    
+
     [JsonPropertyName("Biggest Unanimous Reaction")]
     public CategoryWinnerDto? BiggestUnanimousReaction { get; set; }
-    
+
     [JsonPropertyName("Most Boring Statement")]
     public CategoryWinnerDto? MostBoringStatement { get; set; }
-    
+
     [JsonPropertyName("Best Plot Twist Revelation")]
     public CategoryWinnerDto? BestPlotTwistRevelation { get; set; }
-    
+
     [JsonPropertyName("Movie Snob Moment")]
     public CategoryWinnerDto? MovieSnobMoment { get; set; }
-    
+
     [JsonPropertyName("Guilty Pleasure Admission")]
     public CategoryWinnerDto? GuiltyPleasureAdmission { get; set; }
-    
+
     [JsonPropertyName("Quietest Person's Best Moment")]
     public CategoryWinnerDto? QuietestPersonBestMoment { get; set; }
-    
+
     [JsonPropertyName("Top 5 Funniest Sentences")]
     public TopFiveListDto? Top5FunniestSentences { get; set; }
-    
+
     [JsonPropertyName("Top 5 Most Bland Comments")]
     public TopFiveListDto? Top5MostBlandComments { get; set; }
-    
+
     [JsonPropertyName("Opening Questions & Answers")]
     public InitialQuestionsDto? OpeningQuestions { get; set; }
 }
@@ -1857,28 +1773,28 @@ public class CategoryWinnerDto
 {
     [JsonPropertyName("speaker")]
     public string Speaker { get; set; } = "Unknown";
-    
+
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = "0:00";
-    
+
     [JsonPropertyName("quote")]
     public string Quote { get; set; } = "";
-    
+
     [JsonPropertyName("setup")]
     public string Setup { get; set; } = "";
-    
+
     [JsonPropertyName("groupReaction")]
     public string GroupReaction { get; set; } = "";
-    
+
     [JsonPropertyName("whyItsGreat")]
     public string WhyItsGreat { get; set; } = "";
-    
+
     [JsonPropertyName("audioQuality")]
     public string AudioQualityString { get; set; } = "Clear";
-    
+
     [JsonPropertyName("entertainmentScore")]
     public int EntertainmentScore { get; set; } = 5;
-    
+
     [JsonPropertyName("runnersUp")]
     public List<RunnerUpDto> RunnersUp { get; set; } = new();
 }
@@ -1887,13 +1803,13 @@ public class RunnerUpDto
 {
     [JsonPropertyName("speaker")]
     public string Speaker { get; set; } = "Unknown";
-    
+
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = "0:00";
-    
+
     [JsonPropertyName("briefDescription")]
     public string BriefDescription { get; set; } = "";
-    
+
     [JsonPropertyName("place")]
     public int Place { get; set; } = 2;
 }
@@ -1908,28 +1824,28 @@ public class TopFiveEntryDto
 {
     [JsonPropertyName("rank")]
     public int Rank { get; set; }
-    
+
     [JsonPropertyName("speaker")]
     public string Speaker { get; set; } = "Unknown";
-    
+
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = "0:00";
-    
+
     [JsonPropertyName("quote")]
     public string Quote { get; set; } = "";
-    
+
     [JsonPropertyName("context")]
     public string Context { get; set; } = "";
-    
+
     [JsonPropertyName("audioQuality")]
     public string AudioQualityString { get; set; } = "Clear";
-    
+
     [JsonPropertyName("score")]
     public double Score { get; set; } = 5.0;
-    
+
     [JsonPropertyName("reasoning")]
     public string Reasoning { get; set; } = "";
-    
+
     [JsonPropertyName("estimatedStartEnd")]
     public double[]? EstimatedStartEnd { get; set; }
 }
@@ -1944,19 +1860,19 @@ public class QuestionAnswerDto
 {
     [JsonPropertyName("question")]
     public string Question { get; set; } = string.Empty;
-    
+
     [JsonPropertyName("speaker")]
     public string Speaker { get; set; } = string.Empty;
-    
+
     [JsonPropertyName("answer")]
     public string Answer { get; set; } = string.Empty;
-    
+
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = string.Empty;
-    
+
     [JsonPropertyName("entertainmentValue")]
     public int EntertainmentValue { get; set; } = 5;
-    
+
     [JsonPropertyName("estimatedStartEnd")]
     public double[]? EstimatedStartEnd { get; set; }
 }
