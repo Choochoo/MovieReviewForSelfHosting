@@ -1,5 +1,8 @@
-﻿namespace MovieReviewApp.Models
+﻿using MovieReviewApp.Attributes;
+
+namespace MovieReviewApp.Models
 {
+    [MongoCollection("SiteUpdates")]
     public class SiteUpdate
     {
         public Guid Id { get; set; } = Guid.NewGuid();

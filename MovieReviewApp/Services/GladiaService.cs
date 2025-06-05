@@ -1,8 +1,8 @@
+using MovieReviewApp.Models;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
-using MovieReviewApp.Models;
-using MovieReviewApp.Services;
-using NAudio.Wave;
+using System.Text.RegularExpressions;
 
 namespace MovieReviewApp.Services;
 
@@ -23,10 +23,13 @@ public class GladiaService
         _secretsManager = secretsManager;
         _audioOrganizer = audioOrganizer;
         _logger = logger;
-        
+
+        // Set the base URL for the HttpClient
+        _httpClient.BaseAddress = new Uri(_baseUrl);
+
         // Get API key from secrets manager directly
         _apiKey = _secretsManager.GetSecret("Gladia:ApiKey") ?? string.Empty;
-        
+
         if (!string.IsNullOrEmpty(_apiKey))
         {
             _httpClient.DefaultRequestHeaders.Add("x-gladia-key", _apiKey);
@@ -44,17 +47,17 @@ public class GladiaService
     {
         var allConfigKeys = _configuration.AsEnumerable().Where(kvp => kvp.Key.Contains("Gladia", StringComparison.OrdinalIgnoreCase));
         var secretValue = _secretsManager.GetSecret("Gladia:ApiKey");
-        
+
         _logger.LogInformation("Gladia configuration status:");
         _logger.LogInformation("  IsConfigured: {IsConfigured}", IsConfigured);
         _logger.LogInformation("  API Key present: {HasApiKey}", !string.IsNullOrEmpty(_apiKey));
         _logger.LogInformation("  API Key length: {KeyLength}", _apiKey?.Length ?? 0);
         _logger.LogInformation("  SecretsManager value length: {SecretLength}", secretValue?.Length ?? 0);
         _logger.LogInformation("  Configuration source:");
-        
+
         foreach (var configItem in allConfigKeys)
         {
-            var maskedValue = string.IsNullOrEmpty(configItem.Value) ? "[NULL]" : 
+            var maskedValue = string.IsNullOrEmpty(configItem.Value) ? "[NULL]" :
                              configItem.Value.Length > 10 ? $"{configItem.Value[..10]}..." : "[SHORT]";
             _logger.LogInformation("    Config[{Key}]: {Value}", configItem.Key, maskedValue);
         }
@@ -91,7 +94,7 @@ public class GladiaService
         try
         {
             _logger.LogInformation("Converting {InputFile} to MP3", Path.GetFileName(inputPath));
-            
+
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "ffmpeg",
@@ -104,17 +107,17 @@ public class GladiaService
 
             using var process = new System.Diagnostics.Process();
             process.StartInfo = startInfo;
-            
+
             var outputBuilder = new StringBuilder();
             var errorBuilder = new StringBuilder();
-            
+
             process.OutputDataReceived += (sender, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
             process.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
 
             process.Start();
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            
+
             await process.WaitForExitAsync();
 
             if (process.ExitCode != 0)
@@ -126,10 +129,10 @@ public class GladiaService
             var originalSize = new FileInfo(inputPath).Length;
             var compressedSize = new FileInfo(outputPath).Length;
             var compressionRatio = (double)compressedSize / originalSize;
-            
-            _logger.LogInformation("Successfully converted {InputFile} to MP3. Size: {OriginalSize:N0} → {CompressedSize:N0} bytes ({CompressionRatio:P1})", 
+
+            _logger.LogInformation("Successfully converted {InputFile} to MP3. Size: {OriginalSize:N0} → {CompressedSize:N0} bytes ({CompressionRatio:P1})",
                 Path.GetFileName(inputPath), originalSize, compressedSize, compressionRatio);
-            
+
             return outputPath;
         }
         catch (Exception ex)
@@ -143,20 +146,20 @@ public class GladiaService
     /// Phase 1: Convert all WAV files to MP3 format
     /// </summary>
     public async Task<List<(AudioFile audioFile, bool success, string? error)>> ConvertAllWavsToMp3Async(
-        List<AudioFile> audioFiles, 
+        List<AudioFile> audioFiles,
         string sessionFolderPath,
         Action<string, int, int>? progressCallback = null)
     {
         var results = new List<(AudioFile audioFile, bool success, string? error)>();
         var totalFiles = audioFiles.Count;
-        
+
         _logger.LogInformation("Starting MP3 conversion for {TotalFiles} files", totalFiles);
-        
+
         for (int i = 0; i < audioFiles.Count; i++)
         {
             var audioFile = audioFiles[i];
             progressCallback?.Invoke($"Converting {Path.GetFileName(audioFile.FilePath)}", i + 1, totalFiles);
-            
+
             try
             {
                 if (Path.GetExtension(audioFile.FilePath).ToLowerInvariant() != ".wav")
@@ -165,7 +168,7 @@ public class GladiaService
                     results.Add((audioFile, true, null));
                     continue;
                 }
-                
+
                 if (!IsFFmpegAvailable())
                 {
                     var error = "FFmpeg not available - required for WAV to MP3 conversion";
@@ -174,42 +177,68 @@ public class GladiaService
                     results.Add((audioFile, false, error));
                     continue;
                 }
-                
+
                 // Get target folder using AudioFileOrganizer
                 var targetStatus = Models.AudioProcessingStatus.PendingMp3;
                 var mp3Folder = _audioOrganizer.GetFolderForStatus(targetStatus, sessionFolderPath);
-                
+
                 var mp3FileName = Path.ChangeExtension(Path.GetFileName(audioFile.FilePath), ".mp3");
                 var mp3Path = Path.Combine(mp3Folder, mp3FileName);
-                
+
                 await ConvertToMp3Async(audioFile.FilePath, mp3Path);
-                
-                // Update audio file and move original to status folder
-                audioFile.Mp3FilePath = mp3Path;
-                audioFile.Mp3FileSize = new FileInfo(mp3Path).Length;
-                audioFile.ConvertedAt = DateTime.UtcNow;
+
+                // Update audio file with MP3 details
                 audioFile.ProcessingStatus = targetStatus;
-                
-                // Move original WAV file to status folder with cleanup
-                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
-                
+                audioFile.ConvertedAt = DateTime.UtcNow;
+
+                // Delete the original WAV file and update FilePath to point to MP3
+                var originalWavPath = audioFile.FilePath;
+                var originalWavDir = Path.GetDirectoryName(originalWavPath);
+
+                try
+                {
+                    if (File.Exists(originalWavPath))
+                    {
+                        File.Delete(originalWavPath);
+                        _logger.LogInformation("Deleted original WAV file: {FilePath}", originalWavPath);
+                    }
+
+                    // Clean up the source directory if it's now empty
+                    if (!string.IsNullOrEmpty(originalWavDir) && Directory.Exists(originalWavDir))
+                    {
+                        var remainingFiles = Directory.GetFiles(originalWavDir, "*.*", SearchOption.AllDirectories);
+                        if (remainingFiles.Length == 0)
+                        {
+                            Directory.Delete(originalWavDir, true);
+                            _logger.LogInformation("Cleaned up empty source folder: {FolderPath}", originalWavDir);
+                        }
+                    }
+                }
+                catch (Exception deleteEx)
+                {
+                    _logger.LogWarning(deleteEx, "Failed to delete original WAV file or cleanup folder: {FilePath}", originalWavPath);
+                }
+
+                // Update FilePath to point to the new MP3 file
+                audioFile.FilePath = mp3Path;
+
                 results.Add((audioFile, true, null));
-                _logger.LogInformation("Converted {FileName} to MP3: {Mp3Path}", 
+                _logger.LogInformation("Converted {FileName} to MP3: {Mp3Path}",
                     Path.GetFileName(audioFile.FilePath), mp3Path);
             }
             catch (Exception ex)
             {
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.Failed;
                 audioFile.ConversionError = ex.Message;
-                
-                // Move failed file to failed folder
-                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath);
-                
+
+                // Move failed file to failed folder with cleanup
+                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+
                 results.Add((audioFile, false, ex.Message));
                 _logger.LogError(ex, "Failed to convert {FileName} to MP3", Path.GetFileName(audioFile.FilePath));
             }
         }
-        
+
         return results;
     }
 
@@ -219,49 +248,75 @@ public class GladiaService
     public async Task<List<(AudioFile audioFile, bool success, string? error)>> UploadAllMp3sToGladiaAsync(
         List<AudioFile> audioFiles,
         string sessionFolderPath,
-        Action<string, int, int>? progressCallback = null)
+        Action<string, int, int>? progressCallback = null,
+        MovieSession? session = null,
+        Func<MovieSession, Task>? saveSessionCallback = null)
     {
         var results = new List<(AudioFile audioFile, bool success, string? error)>();
-        var mp3Files = audioFiles.Where(f => !string.IsNullOrEmpty(f.Mp3FilePath) && 
-                                           f.ProcessingStatus == Models.AudioProcessingStatus.PendingMp3).ToList();
+        // Process all MP3 files that can be reprocessed (pending, processed, or failed) and haven't been uploaded to Gladia yet
+        var mp3Files = audioFiles.Where(f => (f.ProcessingStatus == AudioProcessingStatus.PendingMp3 ||
+                                             f.ProcessingStatus == AudioProcessingStatus.ProcessedMp3 ||
+                                             f.ProcessingStatus == AudioProcessingStatus.FailedMp3) &&
+                                           string.IsNullOrEmpty(f.AudioUrl) &&
+                                           f.FilePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Log skipped files that are already uploaded
+        var alreadyUploaded = audioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.UploadedToGladia ||
+                                                  !string.IsNullOrEmpty(f.AudioUrl)).ToList();
+        if (alreadyUploaded.Any())
+        {
+            _logger.LogInformation("Skipping {SkippedCount} files already uploaded to Gladia: {FileNames}",
+                alreadyUploaded.Count, string.Join(", ", alreadyUploaded.Select(f => Path.GetFileName(f.FilePath))));
+        }
         var totalFiles = mp3Files.Count;
-        
+
         _logger.LogInformation("Starting Gladia upload for {TotalFiles} MP3 files", totalFiles);
-        
+
         for (int i = 0; i < mp3Files.Count; i++)
         {
             var audioFile = mp3Files[i];
-            progressCallback?.Invoke($"Uploading {Path.GetFileName(audioFile.Mp3FilePath!)}", i + 1, totalFiles);
-            
+            progressCallback?.Invoke($"Uploading {Path.GetFileName(audioFile.FilePath)}", i + 1, totalFiles);
+
             try
             {
-                var audioUrl = await UploadSingleFileToGladiaAsync(audioFile.Mp3FilePath!);
-                
+                var audioUrl = await UploadSingleFileToGladiaAsync(audioFile.FilePath);
+
                 // Store the audio URL for the transcription phase
                 audioFile.AudioUrl = audioUrl;
                 audioFile.UploadedAt = DateTime.UtcNow;
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.UploadedToGladia;
-                
+
+                // Save session state immediately to persist upload progress
+                if (session != null && saveSessionCallback != null)
+                {
+                    try
+                    {
+                        await saveSessionCallback(session);
+                        _logger.LogInformation("Session state saved after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
+                    }
+                    catch (Exception saveEx)
+                    {
+                        _logger.LogWarning(saveEx, "Failed to save session state after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
+                    }
+                }
+
                 results.Add((audioFile, true, null));
-                _logger.LogInformation("Uploaded {FileName} to Gladia: {AudioUrl}", 
-                    Path.GetFileName(audioFile.Mp3FilePath!), audioUrl);
+                _logger.LogInformation("Uploaded {FileName} to Gladia: {AudioUrl}",
+                    Path.GetFileName(audioFile.FilePath), audioUrl);
             }
             catch (Exception ex)
             {
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
                 audioFile.ConversionError = ex.Message;
-                
-                // Move MP3 file to failed_mp3 folder
-                if (!string.IsNullOrEmpty(audioFile.Mp3FilePath))
-                {
-                    audioFile.Mp3FilePath = await _audioOrganizer.MoveMp3FileToStatusFolder(audioFile, sessionFolderPath);
-                }
-                
+
+                // Move MP3 file to failed_mp3 folder with cleanup
+                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+
                 results.Add((audioFile, false, ex.Message));
-                _logger.LogError(ex, "Failed to upload {FileName} to Gladia", Path.GetFileName(audioFile.Mp3FilePath!));
+                _logger.LogError(ex, "Failed to upload {FileName} to Gladia", Path.GetFileName(audioFile.FilePath));
             }
         }
-        
+
         return results;
     }
 
@@ -277,7 +332,7 @@ public class GladiaService
 
         var result = transcriptText;
         var upperFileName = fileName.ToUpper();
-        
+
         // Check if this is an individual mic file (MIC1.WAV, MIC2.WAV, etc.)
         var micMatch = System.Text.RegularExpressions.Regex.Match(upperFileName, @"^MIC(\d)\.WAV$");
         if (micMatch.Success)
@@ -290,7 +345,7 @@ public class GladiaService
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\bspeaker \d+:", $"{participantName}:");
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\[Speaker \d+\]:", $"[{participantName}]:");
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\(Speaker \d+\):", $"({participantName}):");
-                
+
                 _logger.LogInformation("Mapped all speakers in {FileName} to {ParticipantName}", fileName, participantName);
             }
         }
@@ -320,7 +375,7 @@ public class GladiaService
                     result = result.Replace($"Speaker {i} :", $"{participantName}:");
                     result = result.Replace($"speaker {i}:", $"{participantName}:");
                     result = result.Replace($"speaker {i} :", $"{participantName}:");
-                    
+
                     // Also handle cases where there might be brackets or other formatting
                     result = result.Replace($"[Speaker {i}]:", $"[{participantName}]:");
                     result = result.Replace($"(Speaker {i}):", $"({participantName}):");
@@ -333,9 +388,51 @@ public class GladiaService
     }
 
     /// <summary>
-    /// Upload a single file to Gladia and return the transcript ID
+    /// Upload a single file to Gladia with retry logic and return the transcript ID
     /// </summary>
     private async Task<string> UploadSingleFileToGladiaAsync(string filePath)
+    {
+        const int maxRetries = 3;
+        const int baseDelayMs = 2000;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                _logger.LogInformation("Upload attempt {Attempt}/{MaxRetries} for {FileName}",
+                    attempt, maxRetries, Path.GetFileName(filePath));
+
+                return await UploadSingleFileToGladiaAsyncInternal(filePath);
+            }
+            catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex))
+            {
+                var delay = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
+                _logger.LogWarning("Upload attempt {Attempt} failed for {FileName}, retrying in {Delay}ms: {Error}",
+                    attempt, Path.GetFileName(filePath), delay, ex.Message);
+
+                await Task.Delay(delay);
+            }
+        }
+
+        // Final attempt without retry wrapper
+        return await UploadSingleFileToGladiaAsyncInternal(filePath);
+    }
+
+    /// <summary>
+    /// Check if an exception is retryable (network/timeout issues)
+    /// </summary>
+    private static bool IsRetryableException(Exception ex)
+    {
+        return ex is HttpRequestException ||
+               ex is TaskCanceledException ||
+               ex is SocketException ||
+               (ex is IOException && ex.Message.Contains("transport connection"));
+    }
+
+    /// <summary>
+    /// Internal upload method without retry logic
+    /// </summary>
+    private async Task<string> UploadSingleFileToGladiaAsyncInternal(string filePath)
     {
         if (!File.Exists(filePath))
         {
@@ -344,43 +441,37 @@ public class GladiaService
 
         var fileInfo = new FileInfo(filePath);
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        
-        _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia", 
+
+        _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia",
             Path.GetFileName(filePath), fileInfo.Length);
 
         using var form = new MultipartFormDataContent();
-        
-        // Create file stream with explicit buffer size for large files
+
+        // Use streaming instead of loading entire file into memory
         using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920);
-        
-        // Create a byte array to ensure the stream is fully read before sending
-        var fileBytes = new byte[fileInfo.Length];
-        await fileStream.ReadAsync(fileBytes, 0, fileBytes.Length);
-        
-        using var fileContent = new ByteArrayContent(fileBytes);
-        
+        using var fileContent = new StreamContent(fileStream);
+
         // Set appropriate content type based on file extension
         var contentType = extension switch
         {
             ".wav" => "audio/wav",
-            ".mp3" => "audio/mpeg", 
+            ".mp3" => "audio/mpeg",
             ".m4a" => "audio/mp4",
             ".aac" => "audio/aac",
             ".ogg" => "audio/ogg",
             ".flac" => "audio/flac",
             _ => "audio/mpeg"
         };
-        
-        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-        form.Add(fileContent, "audio", Path.GetFileName(filePath));
-        
-        // Add transcription configuration
-        form.Add(new StringContent("true"), "enable_speaker_diarization");
-        form.Add(new StringContent("true"), "enable_code_switching");
-        form.Add(new StringContent("en"), "language");
 
-        var response = await _httpClient.PostAsync("/upload", form);
-        
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        // Create custom filename with movie name and mic identifier
+        var customFilename = CreateCustomFilename(filePath);
+        form.Add(fileContent, "audio", customFilename);
+
+        // Note: Transcription configuration is set during the transcription request, not upload
+
+        var response = await _httpClient.PostAsync("/v2/upload", form);
+
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync();
@@ -389,22 +480,22 @@ public class GladiaService
 
         var content = await response.Content.ReadAsStringAsync();
         var uploadResult = JsonSerializer.Deserialize<UploadResponse>(content);
-        
+
         if (uploadResult?.audio_url == null)
         {
             throw new Exception($"Gladia upload response missing audio_url: {content}");
         }
 
-        _logger.LogInformation("Successfully uploaded {FileName} to Gladia with URL: {AudioUrl}", 
+        _logger.LogInformation("Successfully uploaded {FileName} to Gladia with URL: {AudioUrl}",
             Path.GetFileName(filePath), uploadResult.audio_url);
-            
+
         return uploadResult.audio_url;
     }
 
     public async Task<string> UploadFileAsync(string filePath, AudioFile? audioFile = null)
     {
         string? tempMp3Path = null;
-        
+
         try
         {
             // Validate file exists and is accessible
@@ -415,86 +506,84 @@ public class GladiaService
 
             var fileInfo = new FileInfo(filePath);
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
-            
+
             // Determine if we should convert to MP3 for better upload performance
             const long LARGE_FILE_THRESHOLD = 100 * 1024 * 1024; // 100MB
             var shouldConvert = fileInfo.Length > LARGE_FILE_THRESHOLD && extension == ".wav";
-            
+
             string actualFilePath = filePath;
-            
+
             if (shouldConvert)
             {
                 if (!IsFFmpegAvailable())
                 {
                     var errorMessage = $"File {Path.GetFileName(filePath)} is too large ({fileInfo.Length:N0} bytes > {LARGE_FILE_THRESHOLD:N0}) and requires FFmpeg for MP3 conversion. Please install FFmpeg or use smaller files.";
                     _logger.LogError(errorMessage);
-                    
+
                     if (audioFile != null)
                     {
                         audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
                         audioFile.ConversionError = "FFmpeg not available - required for large file conversion";
                     }
-                    
+
                     throw new InvalidOperationException(errorMessage);
                 }
-                
-                _logger.LogInformation("File {FileName} is {FileSize:N0} bytes (>{Threshold:N0}), converting to MP3 for faster upload", 
+
+                _logger.LogInformation("File {FileName} is {FileSize:N0} bytes (>{Threshold:N0}), converting to MP3 for faster upload",
                     Path.GetFileName(filePath), fileInfo.Length, LARGE_FILE_THRESHOLD);
-                
+
                 // Update audio file status if provided
                 if (audioFile != null)
                 {
                     audioFile.ProcessingStatus = Models.AudioProcessingStatus.PendingMp3;
                 }
-                
+
                 try
                 {
                     // Create temporary MP3 file
                     tempMp3Path = Path.ChangeExtension(Path.GetTempFileName(), ".mp3");
                     actualFilePath = await ConvertToMp3Async(filePath, tempMp3Path);
                     extension = ".mp3";
-                    
+
                     // Update audio file with MP3 details if provided
                     if (audioFile != null)
                     {
                         audioFile.ProcessingStatus = Models.AudioProcessingStatus.ProcessedMp3;
-                        audioFile.Mp3FilePath = actualFilePath;
-                        audioFile.Mp3FileSize = new FileInfo(actualFilePath).Length;
                         audioFile.ConvertedAt = DateTime.UtcNow;
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "FFmpeg conversion failed for {FileName}. Cannot upload large files without MP3 conversion.", Path.GetFileName(filePath));
-                    
+
                     // Update audio file with error if provided
                     if (audioFile != null)
                     {
                         audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
                         audioFile.ConversionError = ex.Message;
                     }
-                    
+
                     throw new InvalidOperationException($"Failed to convert {Path.GetFileName(filePath)} to MP3. Large WAV files require successful MP3 conversion.", ex);
                 }
             }
             else
             {
-                _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia", 
+                _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia",
                     Path.GetFileName(filePath), fileInfo.Length);
             }
 
             using var form = new MultipartFormDataContent();
-            
+
             // Create file stream with explicit buffer size for large files
             using var fileStream = new FileStream(actualFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920);
-            
+
             // Create a byte array to ensure the stream is fully read before sending
             var actualFileInfo = new FileInfo(actualFilePath);
             var fileBytes = new byte[actualFileInfo.Length];
             await fileStream.ReadAsync(fileBytes, 0, fileBytes.Length);
-            
+
             using var fileContent = new ByteArrayContent(fileBytes);
-            
+
             // Set appropriate content type based on file extension
             var contentType = extension switch
             {
@@ -506,34 +595,36 @@ public class GladiaService
                 ".flac" => "audio/flac",
                 _ => "audio/wav" // Default fallback
             };
-            
+
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-            form.Add(fileContent, "audio", Path.GetFileName(actualFilePath));
+            // Create custom filename with movie name and mic identifier
+            var customFilename = CreateCustomFilename(filePath);
+            form.Add(fileContent, "audio", customFilename);
 
             var response = await _httpClient.PostAsync($"{_baseUrl}/v2/upload", form);
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError("Gladia upload failed with status {StatusCode}: {ErrorContent}", 
+                _logger.LogError("Gladia upload failed with status {StatusCode}: {ErrorContent}",
                     response.StatusCode, errorContent);
                 response.EnsureSuccessStatusCode();
             }
 
             var jsonResponse = await response.Content.ReadAsStringAsync();
             var uploadResult = JsonSerializer.Deserialize<UploadResponse>(jsonResponse);
-            
+
             var audioUrl = uploadResult?.audio_url ?? throw new Exception("Failed to get upload URL from response");
-            _logger.LogInformation("Successfully uploaded {FileName} to Gladia, got URL: {AudioUrl}", 
+            _logger.LogInformation("Successfully uploaded {FileName} to Gladia, got URL: {AudioUrl}",
                 Path.GetFileName(actualFilePath), audioUrl);
-            
+
             // Update audio file status if provided
             if (audioFile != null)
             {
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.UploadedToGladia;
                 audioFile.UploadedAt = DateTime.UtcNow;
             }
-            
+
             return audioUrl;
         }
         catch (Exception ex)
@@ -559,35 +650,90 @@ public class GladiaService
         }
     }
 
-    public async Task<string> StartTranscriptionAsync(string audioUrl, bool enableSpeakerDiarization = true)
+    public async Task<string> StartTranscriptionAsync(string audioUrl, int numOfSpeakers, bool enableSpeakerDiarization = true, string? fileName = null)
     {
         try
         {
+            // Determine actual speaker count based on file type
+            int actualSpeakerCount = Math.Max(1, numOfSpeakers); // Ensure at least 1 speaker
+            bool isIndividualMic = false;
+            
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                var upperFileName = fileName.ToUpperInvariant();
+                
+                // Individual mic files have only 1 speaker
+                if (System.Text.RegularExpressions.Regex.IsMatch(upperFileName, @"^MIC\d+\.(WAV|MP3)$") ||
+                    upperFileName == "PHONE.WAV" || upperFileName == "PHONE.MP3" ||
+                    upperFileName == "SOUND_PAD.WAV" || upperFileName == "SOUNDPAD.WAV" ||
+                    upperFileName == "SOUND_PAD.MP3" || upperFileName == "SOUNDPAD.MP3" ||
+                    upperFileName == "USB.WAV" || upperFileName == "USB.MP3")
+                {
+                    actualSpeakerCount = 1;
+                    isIndividualMic = true;
+                    _logger.LogInformation("Detected individual mic file {FileName}, using 1 speaker with enhanced diarization", fileName);
+                }
+                // Mix files have multiple speakers
+                else if (upperFileName.Contains("MIX") || upperFileName.Contains("MASTER"))
+                {
+                    // Use the provided numOfSpeakers for mix files, but ensure at least 2 for mix
+                    actualSpeakerCount = Math.Max(2, numOfSpeakers);
+                    _logger.LogInformation("Detected mix file {FileName}, using {SpeakerCount} speakers", fileName, actualSpeakerCount);
+                }
+            }
+            
+            // Comprehensive request to get detailed transcription data including timestamps, emphasis, confidence, etc.
             var request = new TranscriptionRequest
             {
                 audio_url = audioUrl,
-                diarization = enableSpeakerDiarization,
-                diarization_config = new DiarizationConfig
+                diarization = enableSpeakerDiarization && !isIndividualMic,  // Disable diarization for individual mics
+                language = "en",
+                sentences = true,  // Essential for precise timing
+                subtitles = false,
+                moderation = false,
+                translation = false,
+                audio_to_llm = false,
+                display_mode = false,
+                summarization = true,  // Get AI summary and key points
+                audio_enhancer = true,  // Better audio quality for transcription
+                chapterization = true,  // Automatically divide into chapters
+                custom_spelling = false,
+                detect_language = false,  // Disabled since always English
+                name_consistency = true,  // Keep speaker names consistent
+                sentiment_analysis = true,  // Detect emotional emphasis
+                diarization_enhanced = actualSpeakerCount <= 2,  // Enhanced only for 1-2 speakers
+                punctuation_enhanced = true,  // Better readability
+                enable_code_switching = false,
+                named_entity_recognition = true,  // Identify names, places, etc.
+                speaker_reidentification = true,  // Track speakers across breaks
+                accurate_words_timestamps = true,  // Critical for matching audio clips
+                skip_channel_deduplication = false,
+                structured_data_extraction = false,
+                diarization_config = enableSpeakerDiarization && !isIndividualMic ? new DiarizationConfig
                 {
-                    number_of_speakers = 6,
-                    min_speakers = 1,
-                    max_speakers = 6
-                },
-                summarization = true,
-                sentiment_analysis = true,
-                named_entity_recognition = true,
-                chapterization = true
+                    enhanced = actualSpeakerCount <= 2,  // Enhanced only works for 1-2 speakers
+                    number_of_speakers = actualSpeakerCount,
+                    min_speakers = Math.Max(1, actualSpeakerCount - 1),
+                    max_speakers = Math.Min(8, actualSpeakerCount + 1)
+                } : null
             };
 
             var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}/v2/pre-recorded", content);
-            response.EnsureSuccessStatusCode();
+            var response = await _httpClient.PostAsync("/v2/pre-recorded", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Transcription request failed with {StatusCode}: {ErrorContent}. Request JSON: {RequestJson}",
+                    response.StatusCode, errorContent, json);
+                throw new HttpRequestException($"Transcription failed: {response.StatusCode} - {errorContent}");
+            }
 
             var jsonResponse = await response.Content.ReadAsStringAsync();
             var transcriptionResult = JsonSerializer.Deserialize<TranscriptionResponse>(jsonResponse);
-            
+
             return transcriptionResult?.id ?? throw new Exception("Failed to get transcription ID from response");
         }
         catch (Exception ex)
@@ -606,12 +752,94 @@ public class GladiaService
 
             var jsonResponse = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<TranscriptionResult>(jsonResponse, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-            
+
             return result ?? throw new Exception("Failed to deserialize transcription result");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get transcription result for ID {TranscriptionId}", transcriptionId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Saves the complete JSON transcription result to disk alongside the audio file
+    /// </summary>
+    public async Task<string> SaveTranscriptionJsonAsync(TranscriptionResult transcriptionResult, string audioFilePath, string sessionFolderPath)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(audioFilePath))
+            {
+                throw new ArgumentException("Audio file path cannot be null or empty", nameof(audioFilePath));
+            }
+
+            // Get the directory where the audio file is located
+            var audioDirectory = Path.GetDirectoryName(audioFilePath) ?? sessionFolderPath;
+
+            // Create JSON filename based on audio filename
+            var audioFileName = Path.GetFileNameWithoutExtension(audioFilePath);
+            var jsonFileName = $"{audioFileName}_transcription.json";
+            var jsonFilePath = Path.Combine(audioDirectory, jsonFileName);
+
+            // Serialize the complete transcription result with pretty formatting
+            var jsonOptions = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            };
+
+            var jsonContent = JsonSerializer.Serialize(transcriptionResult, jsonOptions);
+
+            // Write JSON file
+            await File.WriteAllTextAsync(jsonFilePath, jsonContent);
+
+            _logger.LogInformation("Saved complete transcription JSON for {AudioFile} to {JsonPath}",
+                Path.GetFileName(audioFilePath), jsonFilePath);
+
+            return jsonFilePath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save transcription JSON for {AudioFile}", audioFilePath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Enhanced transcription method that saves both the transcript text and complete JSON
+    /// </summary>
+    public async Task<(TranscriptionResult result, string jsonPath)> ProcessTranscriptionWithJsonSaveAsync(
+        string audioUrl,
+        string audioFilePath,
+        string sessionFolderPath,
+        int numOfSpeakers,
+        bool enableSpeakerDiarization = true)
+    {
+        try
+        {
+            // Start transcription with filename for proper speaker detection
+            var fileName = Path.GetFileName(audioFilePath);
+            var transcriptionId = await StartTranscriptionAsync(audioUrl, numOfSpeakers, enableSpeakerDiarization, fileName);
+            _logger.LogInformation("Started transcription {TranscriptionId} for {AudioFile}",
+                transcriptionId, fileName);
+
+            // Wait for completion
+            var result = await WaitForTranscriptionAsync(transcriptionId);
+            result.source_file_path = audioFilePath;
+
+            // Save complete JSON alongside audio file
+            var jsonPath = await SaveTranscriptionJsonAsync(result, audioFilePath, sessionFolderPath);
+
+            _logger.LogInformation("Completed transcription and saved JSON for {AudioFile}",
+                Path.GetFileName(audioFilePath));
+
+            return (result, jsonPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process transcription with JSON save for {AudioFile}", audioFilePath);
             throw;
         }
     }
@@ -625,7 +853,7 @@ public class GladiaService
         while (DateTime.UtcNow - startTime < maxWaitTime)
         {
             var result = await GetTranscriptionResultAsync(transcriptionId);
-            
+
             if (result.status == "done")
             {
                 return result;
@@ -642,13 +870,77 @@ public class GladiaService
         throw new TimeoutException($"Transcription {transcriptionId} did not complete within {maxWaitTimeMinutes} minutes");
     }
 
-    public async Task<List<TranscriptionResult>> ProcessMultipleFilesAsync(List<AudioFile> audioFiles, 
+    /// <summary>
+    /// Creates a custom filename for Gladia upload using movie name from folder path
+    /// </summary>
+    private string CreateCustomFilename(string filePath)
+    {
+        try
+        {
+            var fileName = Path.GetFileName(filePath);
+            var extension = Path.GetExtension(fileName);
+            var fileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            
+            // Get the folder path to extract movie name
+            var directoryPath = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(directoryPath))
+            {
+                return fileName; // Fallback to original filename
+            }
+            
+            // Navigate up to find the session folder (YYYY-MonthName-MovieTitle)
+            var currentDir = new DirectoryInfo(directoryPath);
+            while (currentDir != null)
+            {
+                var folderName = currentDir.Name;
+                
+                // Check if this matches the YYYY-MonthName-MovieTitle pattern
+                var monthNameMatch = Regex.Match(folderName, @"(\d{4})-([A-Za-z]+)-(.+)");
+                if (monthNameMatch.Success)
+                {
+                    var moviePart = monthNameMatch.Groups[3].Value;
+                    // Convert hyphens to spaces for movie title
+                    var movieTitle = moviePart.Replace("-", " ").Trim();
+                    
+                    // Create custom filename: MovieTitle_OriginalFilename.ext
+                    var customName = $"{movieTitle}_{fileNameWithoutExt}{extension}";
+                    _logger.LogInformation("Created custom filename for Gladia: {CustomName} (from {OriginalName})", 
+                        customName, fileName);
+                    return customName;
+                }
+                
+                currentDir = currentDir.Parent;
+            }
+            
+            // Fallback to original filename if no matching pattern found
+            _logger.LogDebug("No movie folder pattern found for {FilePath}, using original filename", filePath);
+            return fileName;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create custom filename for {FilePath}, using original", filePath);
+            return Path.GetFileName(filePath);
+        }
+    }
+
+    public async Task<List<TranscriptionResult>> ProcessMultipleFilesAsync(List<AudioFile> audioFiles,
         Dictionary<int, string>? micAssignments = null,
         Action<string, int, int>? progressCallback = null)
     {
         var results = new List<TranscriptionResult>();
         var totalFiles = audioFiles.Count;
-
+        
+        // Calculate number of speakers, ensuring at least 1
+        int numOfSpeakers = 2; // Default for when no assignments
+        if (micAssignments != null && micAssignments.Any())
+        {
+            var assignedCount = micAssignments.Values.Count(v => !string.IsNullOrWhiteSpace(v));
+            if (assignedCount > 0)
+            {
+                numOfSpeakers = assignedCount;
+            }
+        }
+        _logger.LogInformation("Processing {FileCount} files with {SpeakerCount} speakers", totalFiles, numOfSpeakers);
         for (int i = 0; i < audioFiles.Count; i++)
         {
             var audioFile = audioFiles[i];
@@ -658,38 +950,41 @@ public class GladiaService
             {
                 // Upload file (with automatic MP3 conversion if needed)
                 var audioUrl = await UploadFileAsync(audioFile.FilePath, audioFile);
-                
-                // Start transcription
-                var transcriptionId = await StartTranscriptionAsync(audioUrl);
-                
-                // Wait for completion
-                var result = await WaitForTranscriptionAsync(transcriptionId);
-                result.source_file_path = audioFile.FilePath;
-                
+
+                // Process transcription and save complete JSON
+                var sessionFolderPath = Path.GetDirectoryName(Path.GetDirectoryName(audioFile.FilePath)) ??
+                                       Path.GetDirectoryName(audioFile.FilePath) ??
+                                       Directory.GetCurrentDirectory();
+
+                var (result, jsonPath) = await ProcessTranscriptionWithJsonSaveAsync(
+                    audioUrl, audioFile.FilePath, sessionFolderPath, numOfSpeakers);
+
                 // Update audio file with transcription completion
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.TranscriptionComplete;
                 audioFile.TranscriptId = result.id;
-                
+                audioFile.JsonFilePath = jsonPath; // Store path to JSON file
+
                 // Apply speaker name mapping if available
                 var rawTranscript = result.result?.transcription?.full_transcript;
-                audioFile.TranscriptText = micAssignments != null && !string.IsNullOrEmpty(rawTranscript) 
+                audioFile.TranscriptText = micAssignments != null && !string.IsNullOrEmpty(rawTranscript)
                     ? MapSpeakerLabelsToNames(rawTranscript, micAssignments, audioFile.FileName)
                     : rawTranscript;
-                    
+
                 audioFile.ProcessedAt = DateTime.UtcNow;
-                
+
                 results.Add(result);
-                
-                _logger.LogInformation("Successfully processed file {FilePath}", audioFile.FilePath);
+
+                _logger.LogInformation("Successfully processed file {FilePath} and saved JSON to {JsonPath}",
+                    audioFile.FilePath, jsonPath);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process file {FilePath}", audioFile.FilePath);
-                
+
                 // Update audio file with failure status
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.Failed;
                 audioFile.ConversionError = ex.Message;
-                
+
                 // Add a failed result to maintain order
                 results.Add(new TranscriptionResult
                 {
@@ -767,6 +1062,9 @@ public class TranscriptionData
     public List<Speaker>? speakers { get; set; }
     public Summary? summarization { get; set; }
     public List<Chapter>? chapters { get; set; }
+    public SentimentAnalysis? sentiment_analysis { get; set; }
+    public List<NamedEntity>? named_entities { get; set; }
+    public AudioMetadata? audio_metadata { get; set; }
 }
 
 public class TranscriptionOutput
@@ -791,6 +1089,8 @@ public class Word
     public double start { get; set; }
     public double end { get; set; }
     public double confidence { get; set; }
+    public bool? emphasis { get; set; }
+    public string? sentiment { get; set; }
 }
 
 public class Speaker
@@ -817,4 +1117,41 @@ public class TranscriptionError
 {
     public string message { get; set; } = string.Empty;
     public string? code { get; set; }
+}
+
+public class SentimentAnalysis
+{
+    public string? overall_sentiment { get; set; }
+    public double overall_confidence { get; set; }
+    public List<SentimentSegment>? segments { get; set; }
+}
+
+public class SentimentSegment
+{
+    public double start { get; set; }
+    public double end { get; set; }
+    public string sentiment { get; set; } = string.Empty;
+    public double confidence { get; set; }
+    public int? speaker { get; set; }
+}
+
+public class NamedEntity
+{
+    public string text { get; set; } = string.Empty;
+    public string category { get; set; } = string.Empty;
+    public double start { get; set; }
+    public double end { get; set; }
+    public double confidence { get; set; }
+    public int? speaker { get; set; }
+}
+
+public class AudioMetadata
+{
+    public string? filename { get; set; }
+    public string? extension { get; set; }
+    public long? size { get; set; }
+    public double? audio_duration { get; set; }
+    public int? number_of_channels { get; set; }
+    public int? sample_rate { get; set; }
+    public string? format { get; set; }
 }

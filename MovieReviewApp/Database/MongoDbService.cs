@@ -1,12 +1,12 @@
-using MongoDB.Driver;
 using MongoDB.Bson;
+using MongoDB.Driver;
 using MovieReviewApp.Attributes;
+using MovieReviewApp.Enums;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
-using MovieReviewApp.Enums;
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Collections.Concurrent;
 
 namespace MovieReviewApp.Database
 {
@@ -17,18 +17,18 @@ namespace MovieReviewApp.Database
     {
         private readonly IMongoDatabase? _database;
         private readonly ILogger<MongoDbService> _logger;
-        
+
         // Cache collection names for performance
         private static readonly ConcurrentDictionary<Type, string> _collectionNameCache = new();
 
         public MongoDbService(
-            IConfiguration configuration, 
-            SecretsManager secretsManager, 
+            IConfiguration configuration,
+            SecretsManager secretsManager,
             InstanceManager instanceManager,
             ILogger<MongoDbService> logger)
         {
             _logger = logger;
-            
+
             try
             {
                 string mongoConnection = secretsManager.GetSecret("MongoDB:ConnectionString");
@@ -42,7 +42,7 @@ namespace MovieReviewApp.Database
                     var finalConnectionString = connectionBuilder.ToMongoUrl().ToString();
                     var client = new MongoClient(finalConnectionString);
                     _database = client.GetDatabase(instanceDbName);
-                    
+
                     _logger.LogInformation("MongoDB connected successfully to instance database: {DatabaseName}", instanceDbName);
                 }
                 else
@@ -66,7 +66,7 @@ namespace MovieReviewApp.Database
         private string GetCollectionName<T>()
         {
             var type = typeof(T);
-            
+
             return _collectionNameCache.GetOrAdd(type, t =>
             {
                 // Check for MongoCollection attribute
@@ -78,7 +78,7 @@ namespace MovieReviewApp.Database
 
                 // Use convention: ClassName -> ClassNames (with proper pluralization)
                 var name = t.Name;
-                
+
                 // Handle special cases for English pluralization
                 if (name.EndsWith("y") && !name.EndsWith("ay") && !name.EndsWith("ey") && !name.EndsWith("oy") && !name.EndsWith("uy"))
                 {
@@ -105,7 +105,7 @@ namespace MovieReviewApp.Database
         private IMongoCollection<T>? GetCollection<T>()
         {
             if (_database == null) return null;
-            
+
             var collectionName = GetCollectionName<T>();
             return _database.GetCollection<T>(collectionName);
         }
@@ -116,7 +116,7 @@ namespace MovieReviewApp.Database
         public IMongoCollection<T>? GetCollection<T>(CollectionType collectionType)
         {
             if (_database == null) return null;
-            
+
             return _database.GetCollection<T>(collectionType.ToString());
         }
 
@@ -142,7 +142,7 @@ namespace MovieReviewApp.Database
             if (collection == null) return default;
 
             FilterDefinition<T> filter;
-            
+
             // Handle different ID types
             if (id is Guid guidId)
             {
@@ -150,10 +150,13 @@ namespace MovieReviewApp.Database
             }
             else if (id is string stringId)
             {
-                // Try to parse as Guid first
+                // For string IDs that contain GUIDs, try both the string and parsed GUID
                 if (Guid.TryParse(stringId, out var parsedGuid))
                 {
-                    filter = Builders<T>.Filter.Eq("_id", parsedGuid);
+                    // Try both formats - string and GUID - since MongoDB might store either
+                    var stringFilter = Builders<T>.Filter.Eq("_id", stringId);
+                    var guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
+                    filter = Builders<T>.Filter.Or(stringFilter, guidFilter);
                 }
                 else
                 {
@@ -196,7 +199,7 @@ namespace MovieReviewApp.Database
         public async Task<T> InsertAsync<T>(T document)
         {
             var collection = GetCollection<T>();
-            if (collection == null) 
+            if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
             await collection.InsertOneAsync(document);
@@ -209,7 +212,7 @@ namespace MovieReviewApp.Database
         public async Task InsertManyAsync<T>(IEnumerable<T> documents)
         {
             var collection = GetCollection<T>();
-            if (collection == null) 
+            if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
             await collection.InsertManyAsync(documents);
@@ -221,7 +224,7 @@ namespace MovieReviewApp.Database
         public async Task<T> UpsertAsync<T>(T document)
         {
             var collection = GetCollection<T>();
-            if (collection == null) 
+            if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
             // Get ID value using reflection
@@ -240,7 +243,7 @@ namespace MovieReviewApp.Database
             var filter = Builders<T>.Filter.Eq("_id", idValue);
             var options = new ReplaceOptions { IsUpsert = true };
             await collection.ReplaceOneAsync(filter, document, options);
-            
+
             return document;
         }
 
@@ -248,7 +251,7 @@ namespace MovieReviewApp.Database
         /// Updates a single document matching the filter
         /// </summary>
         public async Task<bool> UpdateOneAsync<T>(
-            Expression<Func<T, bool>> filter, 
+            Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
             var collection = GetCollection<T>();
@@ -262,7 +265,7 @@ namespace MovieReviewApp.Database
         /// Updates multiple documents matching the filter
         /// </summary>
         public async Task<long> UpdateManyAsync<T>(
-            Expression<Func<T, bool>> filter, 
+            Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
             var collection = GetCollection<T>();
@@ -281,14 +284,25 @@ namespace MovieReviewApp.Database
             if (collection == null) return false;
 
             FilterDefinition<T> filter;
-            
+
             if (id is Guid guidId)
             {
                 filter = Builders<T>.Filter.Eq("_id", guidId);
             }
-            else if (id is string stringId && Guid.TryParse(stringId, out var parsedGuid))
+            else if (id is string stringId)
             {
-                filter = Builders<T>.Filter.Eq("_id", parsedGuid);
+                // For string IDs that contain GUIDs, try both the string and parsed GUID
+                if (Guid.TryParse(stringId, out var parsedGuid))
+                {
+                    // Try both formats - string and GUID - since MongoDB might store either
+                    var stringFilter = Builders<T>.Filter.Eq("_id", stringId);
+                    var guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
+                    filter = Builders<T>.Filter.Or(stringFilter, guidFilter);
+                }
+                else
+                {
+                    filter = Builders<T>.Filter.Eq("_id", stringId);
+                }
             }
             else
             {
@@ -345,7 +359,7 @@ namespace MovieReviewApp.Database
             if (collection == null) return new List<T>();
 
             var filters = new List<FilterDefinition<T>>();
-            
+
             foreach (var field in searchFields)
             {
                 var fieldName = GetFieldName(field);
@@ -353,8 +367,8 @@ namespace MovieReviewApp.Database
                 filters.Add(filter);
             }
 
-            var combinedFilter = filters.Any() 
-                ? Builders<T>.Filter.Or(filters) 
+            var combinedFilter = filters.Any()
+                ? Builders<T>.Filter.Or(filters)
                 : Builders<T>.Filter.Empty;
 
             return await collection.Find(combinedFilter).ToListAsync();
@@ -364,8 +378,8 @@ namespace MovieReviewApp.Database
         /// Gets paginated results
         /// </summary>
         public async Task<(List<T> items, long totalCount)> GetPagedAsync<T>(
-            int page, 
-            int pageSize, 
+            int page,
+            int pageSize,
             Expression<Func<T, bool>>? filter = null,
             Expression<Func<T, object>>? orderBy = null,
             bool descending = false)
@@ -373,16 +387,16 @@ namespace MovieReviewApp.Database
             var collection = GetCollection<T>();
             if (collection == null) return (new List<T>(), 0);
 
-            var query = filter == null 
-                ? collection.Find(_ => true) 
+            var query = filter == null
+                ? collection.Find(_ => true)
                 : collection.Find(filter);
 
             var totalCount = await query.CountDocumentsAsync();
 
             if (orderBy != null)
             {
-                query = descending 
-                    ? query.SortByDescending(orderBy) 
+                query = descending
+                    ? query.SortByDescending(orderBy)
                     : query.SortBy(orderBy);
             }
 
@@ -644,7 +658,7 @@ namespace MovieReviewApp.Database
         {
             var collection = GetCollection<T>(collectionName);
             if (collection == null) return default(T);
-            
+
             var filter = Builders<T>.Filter.Eq("_id", id);
             return await collection.Find(filter).FirstOrDefaultAsync();
         }
@@ -712,7 +726,7 @@ namespace MovieReviewApp.Database
             {
                 return memberExpr2.Member.Name;
             }
-            
+
             throw new ArgumentException("Invalid field expression");
         }
 

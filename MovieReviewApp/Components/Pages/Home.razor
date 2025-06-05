@@ -31,15 +31,33 @@
                         <h5 class="mb-0">Review Questions</h5>
                     </div>
                     <div class="card-body">
-                        <ol>
-                            <li>Did I like the movie?</li>
-                            <li>Am I glad I watched the movie?</li>
-                            <li>Do I think I'd ever watch it again?</li>
-                            <li>Would you ever recommend this movie?</li>
-                            <li>What was my favorite part of the movie?</li>
-                            <li>What was my least favorite part of the movie?</li>
-                            <li>What was my favorite line of the movie?</li>
-                        </ol>
+                        @if (DiscussionQuestions?.Any() == true)
+                        {
+                            <ol>
+                                @foreach (var question in DiscussionQuestions)
+                                {
+                                    <li>@question.Question</li>
+                                }
+                            </ol>
+                        }
+                        else
+                        {
+                            <ol>
+                                <li>Did I like the movie?</li>
+                                <li>Am I glad I watched the movie?</li>
+                                <li>Do I think I'd ever watch it again?</li>
+                                <li>Would you ever recommend this movie?</li>
+                                <li>What was my favorite part of the movie?</li>
+                                <li>What was my least favorite part of the movie?</li>
+                                <li>What was my favorite line of the movie?</li>
+                            </ol>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i>
+                                    These are the default questions. You can customize them in <a href="/settings">Settings</a>.
+                                </small>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>

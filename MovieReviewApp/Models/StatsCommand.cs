@@ -1,5 +1,8 @@
-﻿namespace MovieReviewApp.Models
+﻿using MovieReviewApp.Attributes;
+
+namespace MovieReviewApp.Models
 {
+    [MongoCollection("StatsCommands")]
     public class StatsCommand
     {
         public string Command { get; set; } = "";

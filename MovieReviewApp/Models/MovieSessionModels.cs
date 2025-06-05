@@ -13,12 +13,12 @@ namespace MovieReviewApp.Models
         public List<string> ParticipantsAbsent { get; set; } = [];
         public ProcessingStatus Status { get; set; } = ProcessingStatus.Pending;
         public List<AudioFile> AudioFiles { get; set; } = new();
-        public CategoryResults CategoryResults { get; set; } = new();
         public SessionStats SessionStats { get; set; } = new();
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ProcessedAt { get; set; }
         public string? ErrorMessage { get; set; }
         public Dictionary<int, string> MicAssignments { get; set; } = new();
+        public CategoryResults CategoryResults { get; set; } = new();
     }
 
     public class AudioFile
@@ -39,68 +39,7 @@ namespace MovieReviewApp.Models
         public DateTime? ConvertedAt { get; set; }
         public DateTime? UploadedAt { get; set; }
         public DateTime? ProcessedAt { get; set; }
-    }
-
-    public class CategoryResults
-    {
-        public CategoryWinner? MostOffensiveTake { get; set; }
-        public CategoryWinner? HottestTake { get; set; }
-        public CategoryWinner? BiggestArgumentStarter { get; set; }
-        public CategoryWinner? BestJoke { get; set; }
-        public CategoryWinner? BestRoast { get; set; }
-        public CategoryWinner? FunniestRandomTangent { get; set; }
-        public CategoryWinner? MostPassionateDefense { get; set; }
-        public CategoryWinner? BiggestUnanimousReaction { get; set; }
-        public CategoryWinner? MostBoringStatement { get; set; }
-        public CategoryWinner? BestPlotTwistRevelation { get; set; }
-        public CategoryWinner? MovieSnobMoment { get; set; }
-        public CategoryWinner? GuiltyPleasureAdmission { get; set; }
-        public CategoryWinner? QuietestPersonBestMoment { get; set; }
-        public TopFiveList? FunniestSentences { get; set; }
-        public TopFiveList? MostBlandComments { get; set; }
-    }
-
-    public class CategoryWinner
-    {
-        public string Speaker { get; set; } = string.Empty;
-        public string Timestamp { get; set; } = string.Empty;
-        public string Quote { get; set; } = string.Empty;
-        public string Setup { get; set; } = string.Empty;
-        public string GroupReaction { get; set; } = string.Empty;
-        public string WhyItsGreat { get; set; } = string.Empty;
-        public AudioQuality AudioQuality { get; set; } = AudioQuality.Clear;
-        public string? AudioClipUrl { get; set; }
-        public int EntertainmentScore { get; set; }
-        public List<RunnerUp> RunnersUp { get; set; } = new();
-    }
-
-    public class RunnerUp
-    {
-        public string Speaker { get; set; } = string.Empty;
-        public string Timestamp { get; set; } = string.Empty;
-        public string BriefDescription { get; set; } = string.Empty;
-        public int Place { get; set; }
-    }
-
-    public class TopFiveList
-    {
-        public List<TopFiveEntry> Entries { get; set; } = new();
-    }
-
-    public class TopFiveEntry
-    {
-        public int Rank { get; set; }
-        public string Speaker { get; set; } = string.Empty;
-        public string Timestamp { get; set; } = string.Empty;
-        public string Quote { get; set; } = string.Empty;
-        public string Context { get; set; } = string.Empty;
-        public AudioQuality AudioQuality { get; set; } = AudioQuality.Clear;
-        public string? AudioClipUrl { get; set; }
-        public double Score { get; set; }
-        public string Reasoning { get; set; } = string.Empty;
-        public string SourceAudioFile { get; set; } = string.Empty;
-        public double StartTimeSeconds { get; set; }
-        public double EndTimeSeconds { get; set; }
+        public string? JsonFilePath { get; set; }
     }
 
     public class SessionStats
@@ -111,6 +50,27 @@ namespace MovieReviewApp.Models
         public int HighlightMoments { get; set; }
         public string BestMomentsSummary { get; set; } = string.Empty;
         public string AttendancePattern { get; set; } = string.Empty;
+        
+        // Detailed conversation statistics
+        public Dictionary<string, int> WordCounts { get; set; } = new();
+        public Dictionary<string, int> QuestionCounts { get; set; } = new();
+        public Dictionary<string, int> InterruptionCounts { get; set; } = new();
+        public Dictionary<string, int> LaughterCounts { get; set; } = new();
+        public Dictionary<string, int> CurseWordCounts { get; set; } = new();
+        public string MostTalkativePerson { get; set; } = string.Empty;
+        public string QuietestPerson { get; set; } = string.Empty;
+        public string MostInquisitivePerson { get; set; } = string.Empty;
+        public string BiggestInterruptor { get; set; } = string.Empty;
+        public string FunniestPerson { get; set; } = string.Empty;
+        public string MostProfanePerson { get; set; } = string.Empty;
+        public int TotalInterruptions { get; set; }
+        public int TotalQuestions { get; set; }
+        public int TotalLaughterMoments { get; set; }
+        public int TotalCurseWords { get; set; }
+        public string ConversationTone { get; set; } = string.Empty;
+        
+        // Initial discussion questions and answers
+        public List<QuestionAnswer> InitialQuestions { get; set; } = new();
     }
 
     public enum ProcessingStatus
@@ -121,13 +81,6 @@ namespace MovieReviewApp.Models
         Analyzing,
         Complete,
         Failed
-    }
-
-    public enum AudioQuality
-    {
-        Clear,
-        Muffled,
-        BackgroundNoise
     }
 
     public enum EnergyLevel

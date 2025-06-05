@@ -140,6 +140,111 @@
     <div class="settings-section">
         <AwardSettings />
     </div>
+
+    <div class="settings-section">
+        <h3 class="section-title">Discussion Questions</h3>
+        
+        @if (DiscussionQuestions == null)
+        {
+            <p><em>Loading...</em></p>
+        }
+        else
+        {
+            <div class="questions-table">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>
+                            <th class="col-order">Order</th>
+                            <th class="col-question">Question</th>
+                            <th class="col-active">Active</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var question in DiscussionQuestions.OrderBy(q => q?.Order))
+                        {
+                            @if (question != null)
+                            {
+                                <tr class="@(question.IsActive ? "" : "inactive-question")">
+                                    <td class="col-order">
+                                        <div class="order-controls">
+                                            <span class="order-number">@question.Order</span>
+                                            <div class="order-buttons">
+                                                <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                        @onclick="async () => await MoveQuestionUp(question)"
+                                                        disabled="@(question.Order <= 1)">
+                                                    ↑
+                                                </button>
+                                                <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                        @onclick="async () => await MoveQuestionDown(question)"
+                                                        disabled="@(question.Order >= DiscussionQuestions.Count)">
+                                                    ↓
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="col-question">
+                                        @if (question.IsEditing)
+                                        {
+                                            <input type="text" @bind="question.Question" class="form-control form-control-sm" />
+                                        }
+                                        else
+                                        {
+                                            <span class="question-text">@question.Question</span>
+                                        }
+                                    </td>
+                                    <td class="col-active">
+                                        @if (question.IsEditing)
+                                        {
+                                            <input class="form-check-input" type="checkbox" @bind="question.IsActive" />
+                                        }
+                                        else
+                                        {
+                                            <span class="badge @(question.IsActive ? "bg-success" : "bg-secondary")">
+                                                @(question.IsActive ? "Active" : "Inactive")
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="col-actions">
+                                        @if (question.IsEditing)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => SaveQuestion(question)">Save</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => CancelQuestionEdit(question)">Cancel</button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => EditQuestion(question)">Edit</button>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => DeleteQuestion(question)">Delete</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        <tr class="add-row">
+                            <td class="col-order"></td>
+                            <td class="col-question">
+                                <input type="text" @bind="@NewQuestionText" class="form-control form-control-sm" placeholder="Enter new discussion question" />
+                            </td>
+                            <td class="col-active">
+                                <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
+                            </td>
+                            <td class="col-actions">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="AddQuestion">Add</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    These questions will be used on the Home page and extracted from audio transcripts during analysis.
+                    Only active questions will be displayed and analyzed.
+                </small>
+            </div>
+        }
+    </div>
 </div>
 
 <style>
@@ -265,7 +370,7 @@
     }
 
     /* Compact table styles */
-    .people-table {
+    .people-table, .questions-table {
         overflow-x: auto;
     }
 
@@ -294,6 +399,24 @@
     .col-actions {
         width: 200px;
         text-align: right;
+    }
+
+    .col-question {
+        width: auto;
+    }
+
+    .col-active {
+        width: 100px;
+        text-align: center;
+    }
+
+    .question-text {
+        font-weight: 500;
+    }
+
+    .inactive-question {
+        opacity: 0.6;
+        background-color: rgba(108, 117, 125, 0.1);
     }
 
     .order-controls {

@@ -16,6 +16,9 @@ namespace MovieReviewApp.Components.Pages
         
         [Inject]
         private NavigationManager navigationManager { get; set; } = default!;
+        
+        [Inject]
+        private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
         public List<Person>? People { get; set; }
         public DateTime? StartDate { get; set; }
         public int? TimeCount;
@@ -24,6 +27,10 @@ namespace MovieReviewApp.Components.Pages
         public bool RespectOrder = false;
         public string GroupName = "";
         public List<Setting> settings = new List<Setting>();
+        
+        public List<DiscussionQuestion>? DiscussionQuestions { get; set; }
+        public string NewQuestionText = "";
+        public bool NewQuestionIsActive = true;
         public readonly List<SelectListItem> TimePeriods = new List<SelectListItem>
         {
             new SelectListItem { Value = "Month", Text = "Month" },
@@ -32,7 +39,7 @@ namespace MovieReviewApp.Components.Pages
         };
 
 
-        protected override void OnInitialized()
+        protected override async Task OnInitializedAsync()
         {
             settings = movieReviewService.GetSettings();
             RespectOrder = false; // default value
@@ -49,6 +56,9 @@ namespace MovieReviewApp.Components.Pages
             
             People = movieReviewService.GetAllPeople(RespectOrder);
             EnsureValidOrder();
+            
+            // Load discussion questions
+            DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
         }
 
         private void EnsureValidOrder()
@@ -224,6 +234,119 @@ namespace MovieReviewApp.Components.Pages
                     People = movieReviewService.GetAllPeople(RespectOrder);
                 }
             }
+        }
+
+        // Discussion Questions Management
+        private async Task AddQuestion()
+        {
+            if (!string.IsNullOrWhiteSpace(NewQuestionText))
+            {
+                var newQuestionOrder = (DiscussionQuestions?.Count ?? 0) + 1;
+                await discussionQuestionsService.CreateQuestionAsync(NewQuestionText, newQuestionOrder, NewQuestionIsActive);
+                NewQuestionText = "";
+                NewQuestionIsActive = true;
+                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+            }
+        }
+
+        private void EditQuestion(DiscussionQuestion question)
+        {
+            if (question != null)
+                question.IsEditing = true;
+        }
+
+        private void CancelQuestionEdit(DiscussionQuestion question)
+        {
+            if (question != null)
+            {
+                question.IsEditing = false;
+                // Reload to revert changes
+                Task.Run(async () =>
+                {
+                    DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+
+        private async Task SaveQuestion(DiscussionQuestion question)
+        {
+            if (question != null)
+            {
+                await discussionQuestionsService.UpdateQuestionAsync(question);
+                question.IsEditing = false;
+                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+            }
+        }
+
+        private async Task DeleteQuestion(DiscussionQuestion question)
+        {
+            if (question != null)
+            {
+                await discussionQuestionsService.DeleteQuestionAsync(question.Id);
+                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+                await EnsureValidQuestionOrder();
+            }
+        }
+
+        private async Task MoveQuestionUp(DiscussionQuestion question)
+        {
+            if (question?.Order > 1)
+            {
+                var questionAbove = DiscussionQuestions?.FirstOrDefault(q => q.Order == question.Order - 1);
+                if (questionAbove != null)
+                {
+                    var tempOrder = questionAbove.Order;
+                    questionAbove.Order = question.Order;
+                    question.Order = tempOrder;
+
+                    await discussionQuestionsService.UpdateQuestionAsync(question);
+                    await discussionQuestionsService.UpdateQuestionAsync(questionAbove);
+
+                    DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+                }
+            }
+        }
+
+        private async Task MoveQuestionDown(DiscussionQuestion question)
+        {
+            if (question?.Order < DiscussionQuestions?.Count)
+            {
+                var questionBelow = DiscussionQuestions?.FirstOrDefault(q => q.Order == question.Order + 1);
+                if (questionBelow != null)
+                {
+                    var tempOrder = questionBelow.Order;
+                    questionBelow.Order = question.Order;
+                    question.Order = tempOrder;
+
+                    await discussionQuestionsService.UpdateQuestionAsync(question);
+                    await discussionQuestionsService.UpdateQuestionAsync(questionBelow);
+
+                    DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+                }
+            }
+        }
+
+        private async Task EnsureValidQuestionOrder()
+        {
+            if (DiscussionQuestions == null) return;
+
+            var orderedQuestions = DiscussionQuestions
+                .OrderBy(q => q.Order == 0)
+                .ThenBy(q => q.Order)
+                .ThenBy(q => q.Question)
+                .ToList();
+
+            for (int i = 0; i < orderedQuestions.Count; i++)
+            {
+                if (orderedQuestions[i].Order != i + 1)
+                {
+                    orderedQuestions[i].Order = i + 1;
+                    await discussionQuestionsService.UpdateQuestionAsync(orderedQuestions[i]);
+                }
+            }
+
+            DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
         }
     }
 }

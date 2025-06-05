@@ -97,6 +97,12 @@ builder.Services.AddSignalR(options =>
 builder.Services.AddControllers();
 
 builder.Services.AddHttpClient(); // Register HttpClient
+
+// Configure HttpClient for GladiaService with extended timeout for large file uploads
+builder.Services.AddHttpClient<GladiaService>(client =>
+{
+    client.Timeout = TimeSpan.FromHours(1); // 1 hour timeout for large uploads and processing
+});
 builder.Services.AddHttpContextAccessor();
 
 // Configure file upload size limit (10GB)
@@ -131,10 +137,14 @@ if (!instanceManager.IsFirstRun)
 
 // Register new audio processing services
 builder.Services.AddScoped<GladiaService>();
-builder.Services.AddScoped<MovieSessionAnalysisService>();
+builder.Services.AddHttpClient<MovieSessionAnalysisService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis of long sessions
+});
 builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
+builder.Services.AddScoped<DiscussionQuestionsService>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 

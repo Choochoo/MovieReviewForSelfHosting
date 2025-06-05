@@ -2,14 +2,19 @@
 @using MovieReviewApp.Services
 @using MovieReviewApp.Components.Partials
 @inject NavigationManager Navigation
+@inject MovieSessionService MovieSessionService
+@inject DiscussionQuestionsService DiscussionQuestionsService
 
-@if (Session != null)
+@if (Session != null && _questionsLoaded)
 {
     <div class="row mb-4">
         <div class="col-12">
-            <button class="btn btn-secondary" @onclick="GoToStats">
-                <i class="bi bi-arrow-left"></i> Back to Sessions
-            </button>
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-secondary" @onclick="GoToStats">
+                    <i class="bi bi-arrow-left"></i> Back to Sessions
+                </button>
+                
+            </div>
         </div>
     </div>
 
@@ -21,19 +26,11 @@
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h2 class="mb-2">@Session.MovieTitle</h2>
-                            <p class="text-muted mb-2">@Session.Date.ToString("MMMM dd, yyyy")</p>
+                            <p class="text-muted mb-2">@Session.Date.ToString("MMMM yyyy")</p>
                             <div class="d-flex gap-1 flex-wrap">
                                 @foreach (var participant in Session.ParticipantsPresent)
                                 {
                                     <span class="badge bg-primary">🎤 @participant</span>
-                                }
-                                @if (Session.ParticipantsAbsent.Any())
-                                {
-                                    <span class="text-muted ms-2">Absent:</span>
-                                    @foreach (var absent in Session.ParticipantsAbsent)
-                                    {
-                                        <span class="badge bg-secondary">😶 @absent</span>
-                                    }
                                 }
                             </div>
                         </div>
@@ -56,8 +53,9 @@
                     </div>
                     @if (!string.IsNullOrEmpty(Session.SessionStats?.BestMomentsSummary))
                     {
-                        <div class="mt-3 p-3 bg-light rounded">
-                            <p class="mb-0"><i class="bi bi-chat-quote"></i> @Session.SessionStats.BestMomentsSummary</p>
+                        <div class="mt-3 p-3 bg-primary bg-opacity-10 border border-primary border-opacity-25 rounded">
+                            <h6 class="text-primary mb-2"><i class="bi bi-chat-quote-fill"></i> Session Highlights</h6>
+                            <p class="mb-0 text-dark">@Session.SessionStats.BestMomentsSummary</p>
                         </div>
                     }
                 </div>
@@ -65,23 +63,206 @@
         </div>
     </div>
 
+    <!-- Conversation Statistics -->
+    @if (Session.SessionStats != null && !string.IsNullOrEmpty(Session.SessionStats.MostTalkativePerson))
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> Conversation Analytics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6 col-xl-2-4">
+                                <div class="stat-item">
+                                    <i class="bi bi-chat-text text-primary fs-4"></i>
+                                    <div class="ms-2">
+                                        <div class="fw-bold">Most Talkative</div>
+                                        <div class="text-muted small">@Session.SessionStats.MostTalkativePerson</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-2-4">
+                                <div class="stat-item">
+                                    <i class="bi bi-question-circle text-info fs-4"></i>
+                                    <div class="ms-2">
+                                        <div class="fw-bold">Most Inquisitive</div>
+                                        <div class="text-muted small">@Session.SessionStats.MostInquisitivePerson</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-2-4">
+                                <div class="stat-item">
+                                    <i class="bi bi-emoji-laughing text-warning fs-4"></i>
+                                    <div class="ms-2">
+                                        <div class="fw-bold">Comedy Generator</div>
+                                        <div class="text-muted small">@Session.SessionStats.FunniestPerson</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-2-4">
+                                <div class="stat-item">
+                                    <i class="bi bi-exclamation-triangle text-danger fs-4"></i>
+                                    <div class="ms-2">
+                                        <div class="fw-bold">Biggest Interruptor</div>
+                                        <div class="text-muted small">@Session.SessionStats.BiggestInterruptor</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-xl-2-4">
+                                <div class="stat-item">
+                                    <i class="bi bi-fire text-danger fs-4"></i>
+                                    <div class="ms-2">
+                                        <div class="fw-bold">Foul Mouth</div>
+                                        <div class="text-muted small">@Session.SessionStats.MostProfanePerson</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-3">
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6 col-lg-3 col-xl-2-4">
+                                <div class="text-center">
+                                    <div class="fs-4 fw-bold text-primary">@Session.SessionStats.TotalQuestions</div>
+                                    <div class="small text-muted">Total Questions</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 col-xl-2-4">
+                                <div class="text-center">
+                                    <div class="fs-4 fw-bold text-warning">@Session.SessionStats.TotalLaughterMoments</div>
+                                    <div class="small text-muted">Laugh Moments</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 col-xl-2-4">
+                                <div class="text-center">
+                                    <div class="fs-4 fw-bold text-danger">@Session.SessionStats.TotalInterruptions</div>
+                                    <div class="small text-muted">Interruptions</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6 col-lg-3 col-xl-2-4">
+                                <div class="text-center">
+                                    <div class="fs-4 fw-bold text-danger">@Session.SessionStats.TotalCurseWords</div>
+                                    <div class="small text-muted">Curse Words</div>
+                                </div>
+                            </div>
+                            <div class="col-md-12 col-xl-2-4">
+                                <div class="text-center">
+                                    <div class="fs-4 fw-bold text-info">@Session.SessionStats.ConversationTone</div>
+                                    <div class="small text-muted">Conversation Style</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Initial Discussion Questions -->
+    @if (Session.SessionStats?.InitialQuestions != null && Session.SessionStats.InitialQuestions.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-chat-left-quote-fill"></i> Opening Discussion Questions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @foreach (var qa in GetOrderedQuestions(Session.SessionStats.InitialQuestions))
+                            {
+                                <div class="col-lg-6">
+                                    <div class="question-answer-item">
+                                        <div class="question-header">
+                                            <h6 class="text-success mb-1">
+                                                <i class="bi bi-question-circle"></i> @qa.Question
+                                            </h6>
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="badge bg-primary">@qa.Speaker</span>
+                                                <small class="text-muted">@qa.Timestamp</small>
+                                            </div>
+                                        </div>
+                                        <div class="answer-content">
+                                            <p class="mb-2">"@qa.Answer"</p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="entertainment-rating">
+                                                    @for (int i = 0; i < qa.EntertainmentValue; i++)
+                                                    {
+                                                        <i class="bi bi-star-fill text-warning"></i>
+                                                    }
+                                                    @for (int i = qa.EntertainmentValue; i < 10; i++)
+                                                    {
+                                                        <i class="bi bi-star text-muted"></i>
+                                                    }
+                                                    <small class="text-muted ms-1">@qa.EntertainmentValue/10</small>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(qa.AudioClipUrl))
+                                                {
+                                                    <button class="btn btn-sm btn-outline-success" onclick="playAudioClip('@qa.AudioClipUrl')">
+                                                        <i class="bi bi-play-circle"></i> Play
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (Session.Status == ProcessingStatus.Complete && Session.CategoryResults != null)
     {
-        <!-- Category Results Grid -->
-        <div class="row g-4">
-            @RenderCategory("🏆 Best Joke", Session.CategoryResults.BestJoke)
-            @RenderCategory("🔥 Hottest Take", Session.CategoryResults.HottestTake)
-            @RenderCategory("😴 Most Boring Statement", Session.CategoryResults.MostBoringStatement)
-            @RenderCategory("🎭 Best Roast", Session.CategoryResults.BestRoast)
-            @RenderCategory("💥 Biggest Argument Starter", Session.CategoryResults.BiggestArgumentStarter)
-            @RenderCategory("🎯 Movie Snob Moment", Session.CategoryResults.MovieSnobMoment)
-            @RenderCategory("🚀 Funniest Random Tangent", Session.CategoryResults.FunniestRandomTangent)
-            @RenderCategory("💪 Most Passionate Defense", Session.CategoryResults.MostPassionateDefense)
-            @RenderCategory("🤝 Biggest Unanimous Reaction", Session.CategoryResults.BiggestUnanimousReaction)
-            @RenderCategory("😱 Best Plot Twist Revelation", Session.CategoryResults.BestPlotTwistRevelation)
-            @RenderCategory("🤔 Most Offensive Take", Session.CategoryResults.MostOffensiveTake)
-            @RenderCategory("🙈 Guilty Pleasure Admission", Session.CategoryResults.GuiltyPleasureAdmission)
-            @RenderCategory("🤐 Quietest Person's Best Moment", Session.CategoryResults.QuietestPersonBestMoment)
+        <!-- Category Results - Better organized sections -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">🎭 Comedy & Entertainment</h3>
+            </div>
+        </div>
+        <div class="row g-4 mb-5">
+            <CategoryCard Title="🏆 Best Joke" Winner="Session.CategoryResults.BestJoke" />
+            <CategoryCard Title="🎭 Best Roast" Winner="Session.CategoryResults.BestRoast" />
+            <CategoryCard Title="🚀 Funniest Random Tangent" Winner="Session.CategoryResults.FunniestRandomTangent" />
+            <CategoryCard Title="🙈 Guilty Pleasure Admission" Winner="Session.CategoryResults.GuiltyPleasureAdmission" />
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">🔥 Hot Takes & Debates</h3>
+            </div>
+        </div>
+        <div class="row g-4 mb-5">
+            <CategoryCard Title="🔥 Hottest Take" Winner="Session.CategoryResults.HottestTake" />
+            <CategoryCard Title="💥 Biggest Argument Starter" Winner="Session.CategoryResults.BiggestArgumentStarter" />
+            <CategoryCard Title="💪 Most Passionate Defense" Winner="Session.CategoryResults.MostPassionateDefense" />
+            <CategoryCard Title="🤔 Most Offensive Take" Winner="Session.CategoryResults.MostOffensiveTake" />
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">🎬 Movie Insights & Reactions</h3>
+            </div>
+        </div>
+        <div class="row g-4 mb-5">
+            <CategoryCard Title="😱 Best Plot Twist Revelation" Winner="Session.CategoryResults.BestPlotTwistRevelation" />
+            <CategoryCard Title="🎯 Movie Snob Moment" Winner="Session.CategoryResults.MovieSnobMoment" />
+            <CategoryCard Title="🤝 Biggest Unanimous Reaction" Winner="Session.CategoryResults.BiggestUnanimousReaction" />
+            <CategoryCard Title="🤐 Quietest Person's Best Moment" Winner="Session.CategoryResults.QuietestPersonBestMoment" />
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <h3 class="mb-4">😴 Low Energy Moments</h3>
+            </div>
+        </div>
+        <div class="row g-4 mb-5">
+            <CategoryCard Title="😴 Most Boring Statement" Winner="Session.CategoryResults.MostBoringStatement" />
         </div>
 
         <!-- Top 5 Lists -->
@@ -139,6 +320,21 @@
             </div>
         }
     }
+    else if (Session.Status == ProcessingStatus.Complete && Session.CategoryResults == null)
+    {
+        <div class="alert alert-warning">
+            <h5><i class="bi bi-exclamation-triangle"></i> Analysis Incomplete</h5>
+            <p>This session completed processing but analysis results are missing. This might happen if:</p>
+            <ul>
+                <li>The OpenAI analysis failed but the session was marked complete</li>
+                <li>The session used fallback analysis that didn't save properly</li>
+                <li>There was a database sync issue</li>
+            </ul>
+            <button class="btn btn-warning" @onclick="RerunAnalysis">
+                <i class="bi bi-arrow-clockwise"></i> Rerun Analysis
+            </button>
+        </div>
+    }
     else if (Session.Status == ProcessingStatus.Failed)
     {
         <div class="alert alert-danger">
@@ -155,32 +351,172 @@
         </div>
     }
 }
+else if (Session != null && !_questionsLoaded)
+{
+    <div class="text-center p-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading session details...</span>
+        </div>
+        <p class="mt-3 text-muted">Loading session details...</p>
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <h5><i class="bi bi-exclamation-triangle"></i> Session Not Found</h5>
+        <p>The requested session could not be loaded.</p>
+        <button class="btn btn-primary" @onclick="GoToStats">
+            <i class="bi bi-arrow-left"></i> Back to Sessions
+        </button>
+    </div>
+}
+
+<!-- Audio Player Modal -->
+<div class="modal fade" id="audioPlayerModal" tabindex="-1" aria-labelledby="audioPlayerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="audioPlayerModalLabel">🎧 Audio Clip Player</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <audio id="audioPlayer" controls class="w-100" preload="metadata">
+                    Your browser does not support the audio element.
+                </audio>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        Audio clips include 3 seconds before and 5 seconds after the highlight moment for context.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include audio player JavaScript -->
+<script src="~/js/audioPlayer.js"></script>
 
 <style>
     .category-card {
         transition: transform 0.2s, box-shadow 0.2s;
-        cursor: pointer;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        height: 100%;
     }
     
     .category-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
     }
     
     .winner-quote {
         font-style: italic;
+        font-size: 1.2rem;
+        line-height: 1.6;
+        color: #2c3e50;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #007bff;
+        margin: 1rem 0;
+    }
+    
+    .card-header.bg-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white;
+        border: none;
+    }
+    
+    .card-body {
+        padding: 1.5rem;
+    }
+    
+    .entertainment-score i {
         font-size: 1.1rem;
-        line-height: 1.5;
-        color: #333;
     }
     
-    .audio-controls {
-        opacity: 0;
-        transition: opacity 0.2s;
+    /* Better spacing for context sections */
+    .context-section {
+        background: #f8f9fa;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        margin: 0.5rem 0;
     }
     
-    .category-card:hover .audio-controls {
-        opacity: 1;
+    /* Section headers */
+    h3 {
+        color: #2c3e50;
+        font-weight: 600;
+        border-bottom: 2px solid #e9ecef;
+        padding-bottom: 0.5rem;
+    }
+    
+    /* Conversation statistics */
+    .stat-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+        height: 100%;
+    }
+    
+    .stat-item i {
+        flex-shrink: 0;
+    }
+    
+    /* Question and Answer styling */
+    .question-answer-item {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        height: 100%;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .question-answer-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .question-header h6 {
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+    
+    .answer-content p {
+        font-style: italic;
+        color: #495057;
+        font-size: 0.95rem;
+        line-height: 1.4;
+    }
+    
+    .entertainment-rating i {
+        font-size: 0.8rem;
+    }
+    
+    /* Custom 5-column layout for larger screens */
+    .col-xl-2-4 {
+        flex: 0 0 auto;
+        width: 20%;
+    }
+    
+    @@media (max-width: 1199.98px) {
+        .col-xl-2-4 {
+            width: 33.333333%;
+        }
+    }
+    
+    @@media (max-width: 767.98px) {
+        .col-xl-2-4 {
+            width: 50%;
+        }
     }
 </style>
 
@@ -189,133 +525,9 @@
     
     private bool showingContext = false;
     private string? playingAudioId;
+    private List<Models.DiscussionQuestion>? _configuredQuestions;
+    private bool _questionsLoaded = false;
 
-    private RenderFragment RenderCategory(string title, CategoryWinner? winner) => __builder =>
-    {
-        if (winner == null) return;
-        
-        __builder.OpenElement(0, "div");
-        __builder.AddAttribute(1, "class", "col-md-6 col-lg-4");
-        __builder.OpenElement(2, "div");
-        __builder.AddAttribute(3, "class", "card h-100 category-card");
-        __builder.OpenElement(4, "div");
-        __builder.AddAttribute(5, "class", "card-header bg-gradient");
-        __builder.OpenElement(6, "h5");
-        __builder.AddAttribute(7, "class", "mb-0");
-        __builder.AddContent(8, title);
-        __builder.CloseElement();
-        __builder.CloseElement();
-        __builder.OpenElement(9, "div");
-        __builder.AddAttribute(10, "class", "card-body");
-        __builder.OpenElement(11, "div");
-        __builder.AddAttribute(12, "class", "mb-3");
-        __builder.OpenElement(13, "div");
-        __builder.AddAttribute(14, "class", "d-flex justify-content-between align-items-start mb-2");
-        __builder.OpenElement(15, "h6");
-        __builder.AddAttribute(16, "class", "mb-0");
-        __builder.AddContent(17, winner.Speaker);
-        __builder.CloseElement();
-        __builder.OpenElement(18, "span");
-        __builder.AddAttribute(19, "class", "badge bg-secondary");
-        __builder.AddContent(20, winner.Timestamp);
-        __builder.CloseElement();
-        __builder.CloseElement();
-        __builder.OpenElement(21, "p");
-        __builder.AddAttribute(22, "class", "winner-quote");
-        __builder.AddContent(23, $"\"{winner.Quote}\"");
-        __builder.CloseElement();
-        __builder.CloseElement();
-        if (!string.IsNullOrEmpty(winner.Setup))
-        {
-            __builder.OpenElement(24, "div");
-            __builder.AddAttribute(25, "class", "mb-2");
-            __builder.OpenElement(26, "small");
-            __builder.AddAttribute(27, "class", "text-muted");
-            __builder.OpenElement(28, "strong");
-            __builder.AddContent(29, "Context:");
-            __builder.CloseElement();
-            __builder.AddContent(30, $" {winner.Setup}");
-            __builder.CloseElement();
-        }
-        __builder.OpenElement(31, "div");
-        __builder.AddAttribute(32, "class", "mb-2");
-        __builder.OpenElement(33, "small");
-        __builder.AddAttribute(34, "class", "text-muted");
-        __builder.OpenElement(35, "strong");
-        __builder.AddContent(36, "Reaction:");
-        __builder.CloseElement();
-        __builder.AddContent(37, $" {winner.GroupReaction}");
-        __builder.CloseElement();
-        __builder.CloseElement();
-        __builder.OpenElement(38, "div");
-        __builder.AddAttribute(39, "class", "mb-3");
-        __builder.OpenElement(40, "small");
-        __builder.AddAttribute(41, "class", "text-success");
-        __builder.OpenElement(42, "strong");
-        __builder.AddContent(43, "Why it's great:");
-        __builder.CloseElement();
-        __builder.AddContent(44, $" {winner.WhyItsGreat}");
-        __builder.CloseElement();
-        __builder.CloseElement();
-        __builder.OpenElement(45, "div");
-        __builder.AddAttribute(46, "class", "d-flex justify-content-between align-items-center mb-2");
-        __builder.OpenElement(47, "span");
-        __builder.AddAttribute(48, "class", "badge bg-info");
-        __builder.AddContent(49, $"{winner.AudioQuality} quality");
-        __builder.CloseElement();
-        __builder.OpenElement(50, "div");
-        __builder.AddAttribute(51, "class", "entertainment-score");
-        for (int i = 0; i < winner.EntertainmentScore; i++)
-        {
-            __builder.OpenElement(52, "i");
-            __builder.AddAttribute(53, "class", "bi bi-star-fill text-warning");
-            __builder.CloseElement();
-        }
-        for (int i = winner.EntertainmentScore; i < 10; i++)
-        {
-            __builder.OpenElement(54, "i");
-            __builder.AddAttribute(55, "class", "bi bi-star text-warning");
-            __builder.CloseElement();
-        }
-        __builder.CloseElement();
-        __builder.CloseElement();
-        if (!string.IsNullOrEmpty(winner.AudioClipUrl))
-        {
-            __builder.OpenElement(56, "div");
-            __builder.AddAttribute(57, "class", "audio-controls");
-            __builder.OpenElement(58, "button");
-            __builder.AddAttribute(59, "class", "btn btn-sm btn-primary w-100");
-            __builder.OpenElement(60, "i");
-            __builder.AddAttribute(61, "class", "bi bi-play-circle");
-            __builder.CloseElement();
-            __builder.AddContent(62, " Play Clip");
-            __builder.CloseElement();
-        }
-        if (winner.RunnersUp.Any())
-        {
-            __builder.OpenElement(63, "div");
-            __builder.AddAttribute(64, "class", "mt-3 pt-3 border-top");
-            __builder.OpenElement(65, "h6");
-            __builder.AddAttribute(66, "class", "text-muted small");
-            __builder.AddContent(67, "Runners Up:");
-            __builder.CloseElement();
-            foreach (var runnerUp in winner.RunnersUp.OrderBy(r => r.Place))
-            {
-                __builder.OpenElement(68, "div");
-                __builder.AddAttribute(69, "class", "small mb-1");
-                __builder.AddContent(70, GetPlaceEmoji(runnerUp.Place));
-                __builder.OpenElement(71, "strong");
-                __builder.AddContent(72, runnerUp.Speaker);
-                __builder.CloseElement();
-                __builder.AddContent(73, $" ({runnerUp.Timestamp}) - {runnerUp.BriefDescription}");
-                __builder.CloseElement();
-            }
-            __builder.CloseElement();
-        }
-        __builder.CloseElement();
-        __builder.CloseElement();
-        __builder.CloseElement();
-    };
 
     private string GetEnergyEmoji(EnergyLevel level) => level switch
     {
@@ -325,12 +537,72 @@
         _ => "❓"
     };
 
-    private string GetPlaceEmoji(int place) => place switch
+
+    private List<QuestionAnswer> GetOrderedQuestions(List<QuestionAnswer> questions)
     {
-        2 => "🥈",
-        3 => "🥉",
-        _ => $"{place}."
-    };
+        try
+        {
+            // Use pre-loaded configured questions to avoid async deadlock
+            if (_questionsLoaded && _configuredQuestions?.Any() == true)
+            {
+                var orderedQuestions = new List<QuestionAnswer>();
+                
+                // First, add questions in the configured order
+                foreach (var configuredQuestion in _configuredQuestions.OrderBy(q => q.Order))
+                {
+                    var questionText = configuredQuestion.Question.ToLower();
+                    var matchingQuestions = questions.Where(q => 
+                        q.Question.ToLower().Contains(questionText.Replace("my ", "").Replace("i ", "")) ||
+                        q.Question.ToLower().Contains(questionText.Replace("my ", "your ").Replace("i ", "you ")) ||
+                        SimilarQuestionMatch(q.Question.ToLower(), questionText)
+                    ).ToList();
+                    
+                    orderedQuestions.AddRange(matchingQuestions.OrderBy(q => q.Speaker));
+                }
+                
+                // Then add any remaining questions that didn't match the configured patterns
+                var remainingQuestions = questions.Except(orderedQuestions).OrderBy(q => q.Timestamp);
+                orderedQuestions.AddRange(remainingQuestions);
+                
+                return orderedQuestions;
+            }
+        }
+        catch (Exception)
+        {
+            // Fallback to timestamp ordering if there's any issue with configured questions
+        }
+        
+        // Fallback: order by timestamp if no configured questions available
+        return questions.OrderBy(q => q.Timestamp).ToList();
+    }
+
+    private bool SimilarQuestionMatch(string actualQuestion, string configuredQuestion)
+    {
+        // Remove common variations and compare core meaning
+        var normalizedActual = actualQuestion
+            .Replace("did you", "did i")
+            .Replace("do you", "do i") 
+            .Replace("would you", "would i")
+            .Replace("are you", "am i")
+            .Replace("your", "my");
+            
+        var normalizedConfigured = configuredQuestion
+            .Replace("did you", "did i")
+            .Replace("do you", "do i")
+            .Replace("would you", "would i") 
+            .Replace("are you", "am i")
+            .Replace("your", "my");
+            
+        // Check for substantial overlap
+        var actualWords = normalizedActual.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var configuredWords = normalizedConfigured.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        var commonWords = actualWords.Intersect(configuredWords).Count();
+        var minWords = Math.Min(actualWords.Length, configuredWords.Length);
+        
+        // If 60% or more words match, consider it the same question
+        return commonWords >= (minWords * 0.6);
+    }
 
     private List<string> GetHighlightReel()
     {
@@ -357,5 +629,40 @@
             .ToList();
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _configuredQuestions = await DiscussionQuestionsService.GetActiveQuestionsAsync();
+            _questionsLoaded = true;
+        }
+        catch (Exception)
+        {
+            // Fallback - questions will be null and default ordering will be used
+            _questionsLoaded = true;
+        }
+    }
+
     private void GoToStats() => Navigation.NavigateTo("/discussions/stats");
+
+    private async Task RerunAnalysis()
+    {
+        if (Session?.Id != null)
+        {
+            try
+            {
+                await MovieSessionService.RerunAnalysis(Session.Id);
+                // Reload the session to get updated data
+                Session = await MovieSessionService.GetSession(Session.Id);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // Handle error - could show a toast notification
+                Console.WriteLine($"Failed to rerun analysis: {ex.Message}");
+            }
+        }
+    }
+
+
 }

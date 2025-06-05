@@ -35,7 +35,12 @@
       "WebFetch(domain:docs.gladia.io)",
       "Bash(mv:*)",
       "Bash(dotnet add package Markdig)",
-      "WebFetch(domain:api.gladia.io)"
+      "WebFetch(domain:api.gladia.io)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg \"GetLatestMicAssignments\" -A 10 -B 2 /mnt/c/Users/Jared/source/repos/Choochoo/MovieReviewApp/MovieReviewApp/Services/MovieSessionService.cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg \"GetLatestMicAssignments\" -A 15 -B 2 /mnt/c/Users/Jared/source/repos/Choochoo/MovieReviewApp/MovieReviewApp/Services/MovieSessionService.cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg \"GetAllPeople\" -A 10 -B 2 /mnt/c/Users/Jared/source/repos/Choochoo/MovieReviewApp/MovieReviewApp/Services/MovieReviewService.cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg \"GetAllPeople.*bool\" -A 5 -B 2 /mnt/c/Users/Jared/source/repos/Choochoo/MovieReviewApp/MovieReviewApp/Services/MovieReviewService.cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"GetAllPeople.*bool\" /mnt/c/Users/Jared/source/repos/Choochoo/MovieReviewApp/MovieReviewApp/Services/MovieReviewService.cs)"
     ],
     "deny": []
   }

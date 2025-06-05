@@ -21,7 +21,7 @@ namespace MovieReviewApp.Services
         {
             _logger.LogInformation("Starting migration of existing image URLs to blob storage...");
             
-            var movieEvents = await _database.GetAllAsync<MovieEvent>(CollectionType.MovieEvents);
+            var movieEvents = await _database.GetAllAsync<MovieEvent>();
             var migratedCount = 0;
             var failedCount = 0;
 
@@ -39,8 +39,7 @@ namespace MovieReviewApp.Services
                         {
                             movieEvent.ImageId = imageId;
                             movieEvent.PosterUrl = null; // Clear the URL after successful migration
-                            await _database.ReplaceOneAsync(CollectionType.MovieEvents, 
-                                me => me.Id == movieEvent.Id, movieEvent);
+                            await _database.UpsertAsync(movieEvent);
                             
                             migratedCount++;
                             _logger.LogInformation($"Successfully migrated poster for: {movieEvent.Movie}");
@@ -66,7 +65,7 @@ namespace MovieReviewApp.Services
 
         public async Task<(int totalMovies, int withImageIds, int withUrls, int withBoth, int withNeither)> GetMigrationStatus()
         {
-            var movieEvents = await _database.GetAllAsync<MovieEvent>(CollectionType.MovieEvents);
+            var movieEvents = await _database.GetAllAsync<MovieEvent>();
             
             var totalMovies = movieEvents.Count();
             var withImageIds = movieEvents.Count(me => me.ImageId.HasValue);

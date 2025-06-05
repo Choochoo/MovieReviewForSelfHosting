@@ -5,7 +5,8 @@
 @inject MovieSessionService MovieSessionService
 
 <div class="participant-assignment">
-    <h6 class="mb-3">🎤 Assign Participants to Microphones</h6>    
+    <h6 class="mb-3">🎤 Assign Participants to Microphones</h6>
+    @* Note: Internally mic assignments are stored zero-based (0,1,2...) but displayed as 1-based (Mic 1, Mic 2, Mic 3...) *@    
     @if (isLoading)
     {
         <div class="text-center">
@@ -30,20 +31,25 @@
     else
     {
         <div class="row g-3">
-            @for (int micNumber = 1; micNumber <= people.Count(); micNumber++) // Show mics based on actual people count
-            {
-                var mic = micNumber; // Capture for closure
-                <div class="col-md-6">
-                    <div class="mb-2">
-                        <label class="form-label">Mic @mic</label>
-                        <select class="form-select" @onchange="@(e => OnMicAssignmentChanged(mic, e.Value?.ToString()))">
-                            <option value="">-- Not Assigned --</option>
-                            @foreach (var person in GetAvailablePeople(mic))
-                            {
-                                var isSelected = MicAssignments.TryGetValue(mic, out var assignedName) && assignedName == person.Name;
-                                <option value="@person.Name" selected="@isSelected">@person.Name</option>
-                            }
-                        </select>
+                @for (int i = 0; i < people.Count(); i++) // Zero-based mic numbers internally
+                {
+                    var micNumber = i; // Capture the loop variable
+                    <div class="col-md-6">
+                        <div class="mb-2">
+                            <label class="form-label">Mic @(micNumber+1)</label> @* Display as 1-based for user *@
+                            <select class="form-select" value="@(MicAssignments.TryGetValue(micNumber, out var currentAssigned) ? currentAssigned : "")" @onchange="@(e => OnMicAssignmentChanged(micNumber, e.Value?.ToString()))">
+                                <option value="">-- Not Assigned --</option>
+                                @if (people != null)
+                                {
+                                    @foreach (var person in people)
+                                    {
+                                        var isAssignedElsewhere = MicAssignments.Any(kvp => kvp.Key != micNumber && kvp.Value == person.Name);
+                                        <option value="@person.Name" disabled="@isAssignedElsewhere">
+                                            @person.Name @(isAssignedElsewhere ? "(assigned)" : "")
+                                        </option>
+                                    }
+                                }
+                            </select>
                     </div>
                 </div>
             }
@@ -128,7 +134,6 @@
     {
         if (string.IsNullOrEmpty(personName))
         {
-            // Remove assignment
             MicAssignments.Remove(micNumber);
             PresentSpeakers.Remove(micNumber);
         }
@@ -136,17 +141,16 @@
         {
             // Check if this person is already assigned to another mic
             var existingMic = MicAssignments.FirstOrDefault(kvp => kvp.Value == personName && kvp.Key != micNumber);
-            if (existingMic.Key != 0)
+            if (!existingMic.Equals(default(KeyValuePair<int, string>)))
             {
-                // Remove from previous mic
                 MicAssignments.Remove(existingMic.Key);
+                PresentSpeakers.Remove(existingMic.Key);
             }
             
-            // Assign to new mic
             MicAssignments[micNumber] = personName;
             PresentSpeakers.Add(micNumber);
         }
-
+        
         await MicAssignmentsChanged.InvokeAsync(MicAssignments);
         await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
     }
@@ -186,25 +190,4 @@
     }
 
 
-    private IEnumerable<Person> GetAvailablePeople(int currentMic)
-    {
-        if (people == null) return Enumerable.Empty<Person>();
-        
-        // Get the person currently assigned to this mic (if any)
-        var currentAssignment = MicAssignments.TryGetValue(currentMic, out var currentPerson) ? currentPerson : null;
-        
-        // Get all assigned people except the one assigned to the current mic
-        var assignedPeople = MicAssignments
-            .Where(kvp => kvp.Key != currentMic)
-            .Select(kvp => kvp.Value)
-            .ToHashSet();
-        
-        // Return people who are either:
-        // 1. Not assigned to any mic, OR
-        // 2. Currently assigned to this specific mic
-        return people
-            .Where(p => !assignedPeople.Contains(p.Name) || p.Name == currentAssignment)
-            .OrderBy(p => p.Order)
-            .ThenBy(p => p.Name);
-    }
 }

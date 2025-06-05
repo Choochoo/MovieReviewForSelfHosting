@@ -15,6 +15,9 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private MovieReviewService movieReviewService { get; set; } = default!;
 
+        [Inject]
+        private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
+
         private List<SiteUpdate> RecentUpdates { get; set; } = new();
         private bool showUpdates = true;
         public MovieEvent? CurrentEvent;
@@ -94,6 +97,10 @@ namespace MovieReviewApp.Components.Pages
         // Add new cached property for phases
         private List<Phase> _dbPhases;
         private List<Phase> DbPhases => _dbPhases ??= movieReviewService.GetAllPhases().OrderBy(p => p.StartDate).ToList();
+
+        // Add cached property for discussion questions
+        private List<DiscussionQuestion> _discussionQuestions;
+        public List<DiscussionQuestion> DiscussionQuestions => _discussionQuestions ??= GetDiscussionQuestionsAsync().Result;
 
         protected override void OnInitialized()
         {
@@ -343,6 +350,11 @@ namespace MovieReviewApp.Components.Pages
 
             Console.WriteLine("Previous phase was not an award phase");
             return null;
+        }
+
+        private async Task<List<DiscussionQuestion>> GetDiscussionQuestionsAsync()
+        {
+            return await discussionQuestionsService.GetActiveQuestionsAsync();
         }
     }
 }

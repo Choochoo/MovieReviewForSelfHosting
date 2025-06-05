@@ -20,21 +20,28 @@ public class AudioFileOrganizer
     /// </summary>
     public string GetFolderForStatus(AudioProcessingStatus status, string sessionFolderPath)
     {
-        var statusFolder = status switch
-        {
-            AudioProcessingStatus.Pending => "pending",
-            AudioProcessingStatus.PendingMp3 => "pending_mp3",
-            AudioProcessingStatus.FailedMp3 => "failed_mp3",
-            AudioProcessingStatus.ProcessedMp3 => "processed_mp3", // Completed pipeline files
-            AudioProcessingStatus.UploadedToGladia => "pending_mp3", // Still pending transcription completion
-            AudioProcessingStatus.TranscriptionComplete => "processed_mp3", // Completed files move to processed_mp3
-            AudioProcessingStatus.Failed => "failed",
-            _ => "pending"
-        };
+        var statusFolder = GetStatusFolderName(status);
 
-        // Get the root uploads directory and movie name
-        var movieName = Path.GetFileName(sessionFolderPath);
-        var rootDirectory = Path.GetDirectoryName(sessionFolderPath);
+        // Extract movie name and ensure we get the root uploads directory
+        string movieName, rootDirectory;
+        
+        // Check if sessionFolderPath already contains a status folder
+        var parentDir = Path.GetDirectoryName(sessionFolderPath);
+        var parentDirName = Path.GetFileName(parentDir)?.ToLowerInvariant();
+        
+        if (IsStatusFolder(parentDirName))
+        {
+            // sessionFolderPath is already inside a status folder (e.g., /uploads/failed/moviename/)
+            // Extract the movie name and get the true root directory
+            movieName = Path.GetFileName(sessionFolderPath);
+            rootDirectory = Path.GetDirectoryName(parentDir); // Go up two levels to get root
+        }
+        else
+        {
+            // sessionFolderPath is at the correct level (e.g., /uploads/moviename/)
+            movieName = Path.GetFileName(sessionFolderPath);
+            rootDirectory = Path.GetDirectoryName(sessionFolderPath);
+        }
         
         // Create structure: root/{status}/{moviename}/
         var folderPath = Path.Combine(rootDirectory!, statusFolder, movieName);
@@ -50,6 +57,15 @@ public class AudioFileOrganizer
     {
         try
         {
+            // Validate that MP3 files don't go back to WAV folders
+            if (!string.IsNullOrEmpty(audioFile.Mp3FilePath) && 
+                (audioFile.ProcessingStatus == AudioProcessingStatus.Pending || 
+                 audioFile.ProcessingStatus == AudioProcessingStatus.Failed))
+            {
+                _logger.LogError("Invalid state transition: MP3 file cannot go to {Status} folder", audioFile.ProcessingStatus);
+                throw new InvalidOperationException($"MP3 files cannot be moved to {audioFile.ProcessingStatus} folders");
+            }
+            
             var targetFolder = GetFolderForStatus(audioFile.ProcessingStatus, sessionFolderPath);
             var targetFilePath = Path.Combine(targetFolder, Path.GetFileName(audioFile.FilePath));
             var sourceFolder = Path.GetDirectoryName(audioFile.FilePath);
@@ -101,10 +117,22 @@ public class AudioFileOrganizer
                 targetFilePath,
                 audioFile.ProcessingStatus);
 
-            // Cleanup source directory if requested and it's a status folder
+            // Cleanup source directory if requested
             if (cleanupSource && !string.IsNullOrEmpty(sourceFolder))
             {
                 await CleanupEmptyStatusFolder(sourceFolder, sessionFolderPath);
+                
+                // Also check if we need to cleanup the root movie folder
+                var rootMovieFolder = GetRootMovieFolder(sessionFolderPath);
+                if (Directory.Exists(rootMovieFolder))
+                {
+                    var remainingFiles = Directory.GetFiles(rootMovieFolder, "*.*", SearchOption.AllDirectories);
+                    if (remainingFiles.Length == 0)
+                    {
+                        Directory.Delete(rootMovieFolder, true);
+                        _logger.LogInformation("Cleaned up empty root movie folder: {FolderPath}", rootMovieFolder);
+                    }
+                }
             }
 
             return targetFilePath;
@@ -160,10 +188,22 @@ public class AudioFileOrganizer
             _logger.LogInformation("Moved MP3 file {FileName} to {Status} folder", 
                 Path.GetFileName(audioFile.Mp3FilePath), audioFile.ProcessingStatus);
 
-            // Cleanup source directory if requested and it's a status folder
+            // Cleanup source directory if requested
             if (cleanupSource && !string.IsNullOrEmpty(sourceFolder))
             {
                 await CleanupEmptyStatusFolder(sourceFolder, sessionFolderPath);
+                
+                // Also check if we need to cleanup the root movie folder
+                var rootMovieFolder = GetRootMovieFolder(sessionFolderPath);
+                if (Directory.Exists(rootMovieFolder))
+                {
+                    var remainingFiles = Directory.GetFiles(rootMovieFolder, "*.*", SearchOption.AllDirectories);
+                    if (remainingFiles.Length == 0)
+                    {
+                        Directory.Delete(rootMovieFolder, true);
+                        _logger.LogInformation("Cleaned up empty root movie folder: {FolderPath}", rootMovieFolder);
+                    }
+                }
             }
 
             return targetFilePath;
@@ -216,6 +256,8 @@ public class AudioFileOrganizer
     {
         // Get the status folder (two levels up from file: file -> moviename -> status)
         var movieFolder = Path.GetDirectoryName(filePath);
+        if (movieFolder == null) return AudioProcessingStatus.Pending;
+        
         var statusFolder = Path.GetFileName(Path.GetDirectoryName(movieFolder))?.ToLowerInvariant();
         
         return statusFolder switch
@@ -243,11 +285,7 @@ public class AudioFileOrganizer
             
             // Check if this is a movie folder within a status directory
             var parentFolder = Path.GetFileName(Path.GetDirectoryName(folderPath))?.ToLowerInvariant();
-            var isMovieFolderInStatusDir = parentFolder switch
-            {
-                "pending" or "pending_mp3" or "failed_mp3" or "processed_mp3" or "failed" => true,
-                _ => false
-            };
+            var isMovieFolderInStatusDir = IsStatusFolder(parentFolder);
 
             // Only cleanup movie folders within status directories
             if (isMovieFolderInStatusDir && Directory.Exists(folderPath))
@@ -283,7 +321,7 @@ public class AudioFileOrganizer
     {
         try
         {
-            var statusFolders = new[] { "pending", "pending_mp3", "failed_mp3", "processed_mp3", "failed" };
+            var statusFolders = GetAllStatusFolderNames();
             var violations = new List<string>();
             var rootDirectory = Path.GetDirectoryName(sessionFolderPath);
             var movieName = Path.GetFileName(sessionFolderPath);
@@ -322,6 +360,103 @@ public class AudioFileOrganizer
             _logger.LogError(ex, "Failed to validate directory structure for {SessionPath}", sessionFolderPath);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Gets the root movie folder path, removing any status folder components
+    /// Ensures we always work with the correct base path: root/{moviename}/
+    /// </summary>
+    public string GetRootMovieFolder(string currentPath)
+    {
+        // Get parent directory info
+        var parentDir = Path.GetDirectoryName(currentPath);
+        var parentDirName = Path.GetFileName(parentDir)?.ToLowerInvariant();
+        
+        if (IsStatusFolder(parentDirName))
+        {
+            // Current path is inside a status folder, extract movie name and root
+            var movieName = Path.GetFileName(currentPath);
+            var rootDirectory = Path.GetDirectoryName(parentDir);
+            return Path.Combine(rootDirectory!, movieName);
+        }
+        
+        // Current path is already at the correct level
+        return currentPath;
+    }
+
+    /// <summary>
+    /// Validates if a status transition is allowed based on workflow rules
+    /// </summary>
+    public bool IsValidStatusTransition(AudioProcessingStatus currentStatus, AudioProcessingStatus newStatus, bool isMP3)
+    {
+        // MP3 files can only be in MP3 folders
+        if (isMP3 && (newStatus == AudioProcessingStatus.Pending || newStatus == AudioProcessingStatus.Failed))
+        {
+            return false;
+        }
+
+        // WAV files can only be in WAV folders
+        if (!isMP3 && (newStatus == AudioProcessingStatus.PendingMp3 || 
+                       newStatus == AudioProcessingStatus.FailedMp3 || 
+                       newStatus == AudioProcessingStatus.ProcessedMp3))
+        {
+            return false;
+        }
+
+        // Valid transitions:
+        // WAV: Pending -> Failed (conversion failure)
+        // WAV: Pending -> PendingMp3 (converted to MP3)
+        // MP3: PendingMp3 -> FailedMp3 (Gladia/OpenAI failure)
+        // MP3: PendingMp3 -> ProcessedMp3 (complete success)
+        // MP3: UploadedToGladia -> ProcessedMp3 (transcription complete)
+        // MP3: UploadedToGladia -> FailedMp3 (transcription failure)
+        
+        return true;
+    }
+
+    /// <summary>
+    /// Maps AudioProcessingStatus enum to folder names
+    /// </summary>
+    private string GetStatusFolderName(AudioProcessingStatus status)
+    {
+        return status switch
+        {
+            AudioProcessingStatus.Pending => "pending",
+            AudioProcessingStatus.PendingMp3 => "pending_mp3",
+            AudioProcessingStatus.FailedMp3 => "failed_mp3",
+            AudioProcessingStatus.ProcessedMp3 => "processed_mp3",
+            AudioProcessingStatus.UploadedToGladia => "pending_mp3", // Still pending transcription
+            AudioProcessingStatus.TranscriptionComplete => "processed_mp3", // Completed files
+            AudioProcessingStatus.Failed => "failed",
+            _ => "pending"
+        };
+    }
+
+    /// <summary>
+    /// Checks if a folder name corresponds to a status folder
+    /// </summary>
+    private bool IsStatusFolder(string? folderName)
+    {
+        if (string.IsNullOrEmpty(folderName)) return false;
+        
+        // Get all possible folder names from the enum
+        var allStatusFolders = Enum.GetValues<AudioProcessingStatus>()
+            .Select(status => GetStatusFolderName(status))
+            .Distinct();
+        
+        return allStatusFolders.Contains(folderName);
+    }
+
+    /// <summary>
+    /// Gets all status folder names based on the AudioProcessingStatus enum
+    /// </summary>
+    private string[] GetAllStatusFolderNames()
+    {
+        // Get unique folder names from all enum values
+        return Enum.GetValues<AudioProcessingStatus>()
+            .Select(status => GetStatusFolderName(status))
+            .Distinct()
+            .ToArray();
     }
 
     private void EnsureFolderExists(string folderPath)

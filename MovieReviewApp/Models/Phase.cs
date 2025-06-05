@@ -1,8 +1,10 @@
 ﻿using MongoDB.Bson.Serialization.Attributes;
+using MovieReviewApp.Attributes;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Models
 {
+    [MongoCollection("Phases")]
     public class Phase
     {
         public Guid Id { get; set; } = Guid.NewGuid();

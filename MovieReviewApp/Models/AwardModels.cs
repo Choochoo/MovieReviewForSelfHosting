@@ -1,6 +1,8 @@
-﻿namespace MovieReviewApp.Models
-{
+﻿using MovieReviewApp.Attributes;
 
+namespace MovieReviewApp.Models
+{
+    [MongoCollection("AwardEvents")]
     public class AwardEvent : BaseModel
     {
         public DateTime StartDate { get; set; }
@@ -8,6 +10,7 @@
         public List<Guid> Questions { get; set; } = new();
     }
 
+    [MongoCollection("AwardQuestions")]
     public class AwardQuestion : BaseModel
     {
         public string Question { get; set; }
@@ -15,6 +18,7 @@
         public bool IsActive { get; set; }
     }
 
+    [MongoCollection("AwardVotes")]
     public class AwardVote : BaseModel
     {
         public Guid AwardEventId { get; set; }

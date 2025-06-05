@@ -15,6 +15,34 @@
             </div>
         </div>
 
+        <!-- Admin Actions -->
+        <div class="row mb-2">
+            <div class="col-12">
+                @if (showAdminActions)
+                {
+                    <div class="alert alert-warning d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-tools"></i> Admin Actions</span>
+                        <div>
+                            <button class="btn btn-sm btn-warning me-2" @onclick="FixStuckSessions" disabled="@isFixingStuck">
+                                @if (isFixingStuck)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                Fix Stuck Sessions
+                            </button>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => showAdminActions = false">Hide</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-secondary mb-2" @onclick="() => showAdminActions = true">
+                        <i class="bi bi-tools"></i> Admin
+                    </button>
+                }
+            </div>
+        </div>
+
         <!-- Filter Bar -->
         <div class="row mb-4">
             <div class="col-md-6">
@@ -72,15 +100,22 @@
                                 <!-- Participant Avatars -->
                                 <div class="mb-3">
                                     <div class="d-flex gap-1 flex-wrap">
-                                        @foreach (var participant in session.ParticipantsPresent)
+                                        @foreach (var participant in GetRealParticipants(session.ParticipantsPresent))
                                         {
-                                            <span class="badge bg-primary">🎤 @participant</span>
+                                            <span class="badge bg-primary">@participant</span>
                                         }
-                                        @foreach (var absent in session.ParticipantsAbsent)
+                                        @if (GetRealParticipants(session.ParticipantsPresent).Count == 0)
                                         {
-                                            <span class="badge bg-secondary" style="opacity: 0.5;">😶 @absent</span>
+                                            <span class="badge bg-info">@session.ParticipantsPresent.Count participants</span>
                                         }
                                     </div>
+                                </div>
+
+                                <!-- Transcription Progress -->
+                                <div class="mb-3">
+                                    <small class="text-muted">
+                                        <i class="bi bi-file-earmark-text"></i> @GetTranscriptCount(session) transcripts complete
+                                    </small>
                                 </div>
 
                                 @if (session.Status == ProcessingStatus.Complete && session.SessionStats != null)
@@ -106,7 +141,7 @@
                                         <div class="spinner-border spinner-border-sm" role="status">
                                             <span class="visually-hidden">Processing...</span>
                                         </div>
-                                        <p class="mb-0 mt-2">Processing...</p>
+                                        <p class="mb-0 mt-2">@GetProcessingStatusText(session.Status)</p>
                                     </div>
                                 }
                                 else if (session.Status == ProcessingStatus.Failed)
@@ -117,16 +152,18 @@
                                 }
                             </div>
                             <div class="card-footer bg-transparent">
-                                <button class="btn btn-sm @(session.Status == ProcessingStatus.Complete ? "btn-primary" : "btn-secondary") w-100">
-                                    @if (session.Status == ProcessingStatus.Complete)
-                                    {
-                                        <i class="bi bi-bar-chart"></i> <span>View Analysis</span>
-                                    }
-                                    else
-                                    {
+                                @if (session.Status == ProcessingStatus.Complete)
+                                {
+                                    <button class="btn btn-sm btn-primary w-100" @onclick="() => ViewSession(session.Id)">
+                                        <i class="bi bi-bar-chart"></i> <span>View Details</span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-secondary w-100" @onclick="() => ViewSession(session.Id)">
                                         <i class="bi bi-info-circle"></i> <span>View Details</span>
-                                    }
-                                </button>
+                                    </button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -176,6 +213,8 @@
     private string searchTerm = string.Empty;
     private string sortBy = "newest";
     private string filterStatus = "all";
+    private bool showAdminActions = false;
+    private bool isFixingStuck = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -210,6 +249,11 @@
     private async Task LoadSession(string sessionId)
     {
         selectedSession = await MovieSessionService.GetSession(sessionId);
+    }
+
+    private void ViewSession(string sessionId)
+    {
+        Navigation.NavigateTo($"/discussions/session/{sessionId}");
     }
 
     private List<MovieSession> GetFilteredSessions()
@@ -253,11 +297,6 @@
         return filtered.ToList();
     }
 
-    private void ViewSession(string sessionId)
-    {
-        Navigation.NavigateTo($"/discussions/session/{sessionId}");
-    }
-
     private string GetEnergyEmoji(EnergyLevel level) => level switch
     {
         EnergyLevel.High => "🔥",
@@ -265,4 +304,52 @@
         EnergyLevel.Low => "😴",
         _ => "❓"
     };
+
+    private int GetTranscriptCount(MovieSession session)
+    {
+        return session.AudioFiles?.Count(f => !string.IsNullOrEmpty(f.TranscriptText)) ?? 0;
+    }
+
+    private string GetProcessingStatusText(ProcessingStatus status) => status switch
+    {
+        ProcessingStatus.Validating => "Validating files...",
+        ProcessingStatus.Transcribing => "Transcribing audio...",
+        ProcessingStatus.Analyzing => "Analyzing content...",
+        _ => "Processing..."
+    };
+
+    private List<string> GetRealParticipants(List<string> participants)
+    {
+        // Filter out generic "Mic X" names and return only real participant names
+        return participants.Where(p => !p.StartsWith("Mic ", StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private async Task FixStuckSessions()
+    {
+        try
+        {
+            isFixingStuck = true;
+            StateHasChanged();
+
+            var fixedCount = await MovieSessionService.FixStuckAnalyzingSessions();
+            
+            // Reload sessions to reflect changes
+            await LoadAllSessions();
+            
+            if (fixedCount > 0)
+            {
+                // You could add a toast notification here
+                // For now, just log success
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error - could show a toast notification
+        }
+        finally
+        {
+            isFixingStuck = false;
+            StateHasChanged();
+        }
+    }
 }

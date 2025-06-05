@@ -138,13 +138,12 @@
                         <div class="col-md-6">
                             <h6>Individual Microphone Files:</h6>
                             <ul>
-                                @for (int i = 1; i <= presentSpeakers.Count; i++)
+                                @foreach (var mic in presentSpeakers.OrderBy(x => x))
                                 {
-                                    var mic = i;
                                     var participantName = micAssignments.TryGetValue(mic, out var name) 
                                         ? name 
-                                        : MovieSessionService.GetParticipantName(mic);
-                                    <li><code>MIC@(mic).WAV</code> - @participantName</li>
+                                        : MovieSessionService.GetParticipantName(mic + 1); // Display as 1-based but store as 0-based
+                                    <li><code>MIC@(mic + 1).WAV</code> - @participantName</li>
                                 }
                                 <li><code>PHONE.WAV</code> - Phone audio input</li>
                                 <li><code>SOUND_PAD.WAV</code> - Sound effects/clips</li>
@@ -291,14 +290,15 @@
     {
         var upperName = fileName.ToUpper();
         
-        // Check for MIC1-6 pattern
+        // Check for MIC1-6 pattern (file names are 1-based, but we store assignments as 0-based)
         var micMatch = Regex.Match(upperName, @"^MIC(\d)\.WAV$");
         if (micMatch.Success)
         {
-            var micNum = int.Parse(micMatch.Groups[1].Value);
-            var participantName = micAssignments.TryGetValue(micNum, out var name) 
+            var micFileNum = int.Parse(micMatch.Groups[1].Value); // 1-based from file
+            var micAssignmentNum = micFileNum - 1; // Convert to 0-based for assignment lookup
+            var participantName = micAssignments.TryGetValue(micAssignmentNum, out var name) 
                 ? name 
-                : MovieSessionService.GetParticipantName(micNum);
+                : MovieSessionService.GetParticipantName(micFileNum); // Display uses 1-based
             return $"🎤 {participantName}";
         }
         
@@ -314,14 +314,15 @@
             return "🔊 Sound Pad";
         }
         
-        // Check for legacy speaker files
+        // Check for legacy speaker files (1-based file naming)
         var speakerMatch = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
         if (speakerMatch.Success)
         {
-            var speakerNum = int.Parse(speakerMatch.Groups[1].Value);
-            var participantName = micAssignments.TryGetValue(speakerNum, out var name) 
+            var speakerFileNum = int.Parse(speakerMatch.Groups[1].Value); // 1-based from file
+            var speakerAssignmentNum = speakerFileNum - 1; // Convert to 0-based for assignment lookup
+            var participantName = micAssignments.TryGetValue(speakerAssignmentNum, out var name) 
                 ? name 
-                : MovieSessionService.GetParticipantName(speakerNum);
+                : MovieSessionService.GetParticipantName(speakerFileNum); // Display uses 1-based
             return $"🎤 {participantName}";
         }
         

@@ -1,31 +1,61 @@
 using MovieReviewApp.Models;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace MovieReviewApp.Services;
 
 public class MovieSessionAnalysisService
 {
+    // Maximum transcript size to prevent OpenAI timeouts - balanced for 20-min processing
+    private const int MAX_TRANSCRIPT_SIZE = 60000; // Balanced limit for longer timeout window
+    
+    // Truncation warning message
+    private const string TRUNCATION_WARNING = "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH - ANALYSIS BASED ON FIRST {0:N0} CHARACTERS FOR OPTIMAL PROCESSING]";
+    
     private readonly HttpClient _httpClient;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MovieSessionAnalysisService> _logger;
+    private readonly SecretsManager _secretsManager;
+    private readonly AudioClipService _audioClipService;
+    private readonly DiscussionQuestionsService _discussionQuestionsService;
     private readonly string _openAiApiKey;
 
-    public MovieSessionAnalysisService(HttpClient httpClient, IConfiguration configuration, ILogger<MovieSessionAnalysisService> logger)
+    public MovieSessionAnalysisService(HttpClient httpClient, IConfiguration configuration, SecretsManager secretsManager, AudioClipService audioClipService, DiscussionQuestionsService discussionQuestionsService, ILogger<MovieSessionAnalysisService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
+        _secretsManager = secretsManager;
+        _audioClipService = audioClipService;
+        _discussionQuestionsService = discussionQuestionsService;
         _logger = logger;
-        _openAiApiKey = _configuration["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI API key not found in configuration");
         
-        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_openAiApiKey}");
+        // Get API key from secrets manager
+        _openAiApiKey = _secretsManager.GetSecret("OpenAI:ApiKey") ?? string.Empty;
+        
+        if (!string.IsNullOrEmpty(_openAiApiKey))
+        {
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_openAiApiKey}");
+            _logger.LogInformation("OpenAI service initialized with API key");
+        }
+        else
+        {
+            _logger.LogWarning("OpenAI service initialized without API key - analysis will be disabled");
+        }
     }
+
+    public bool IsConfigured => !string.IsNullOrEmpty(_openAiApiKey);
 
     public async Task<CategoryResults> AnalyzeSessionAsync(MovieSession session)
     {
         try
         {
+            if (!IsConfigured)
+            {
+                throw new InvalidOperationException("OpenAI API key not configured - cannot perform analysis");
+            }
+
             // Combine all transcripts with speaker information
             var combinedTranscript = BuildCombinedTranscript(session);
 
@@ -35,13 +65,23 @@ public class MovieSessionAnalysisService
             }
 
             // Create the analysis prompt based on processaudio.md specifications
-            var analysisPrompt = CreateAnalysisPrompt(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
+            var analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
+
+            // Log prompt size before sending to OpenAI
+            _logger.LogInformation("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars", 
+                analysisPrompt.Length, combinedTranscript.Length);
 
             // Call OpenAI to analyze the transcript
             var analysisResult = await CallOpenAIForAnalysis(analysisPrompt);
 
+            // Save OpenAI response to movie session folder
+            await SaveOpenAIResponseAsync(session, analysisPrompt, analysisResult);
+
             // Parse the AI response into CategoryResults
             var categoryResults = ParseAnalysisResult(analysisResult);
+
+            // Generate audio clips for highlights
+            await GenerateAudioClipsAsync(session, categoryResults);
 
             _logger.LogInformation("Successfully analyzed session {SessionId} for movie {MovieTitle}", session.Id, session.MovieTitle);
 
@@ -58,74 +98,231 @@ public class MovieSessionAnalysisService
     {
         var transcriptBuilder = new StringBuilder();
 
-        // Group utterances by timestamp if we have detailed transcription data
-        // For now, we'll work with the basic transcript text
-        foreach (var audioFile in session.AudioFiles.Where(f => !string.IsNullOrEmpty(f.TranscriptText)))
-        {
-            var speakerLabel = audioFile.SpeakerNumber.HasValue ? $"Speaker{audioFile.SpeakerNumber}" : "Unknown Speaker";
+        // Add session context (this stays the same size)
+        transcriptBuilder.AppendLine("=== TRANSCRIPT ANALYSIS CONTEXT ===");
+        transcriptBuilder.AppendLine($"Movie: {session.MovieTitle}");
+        transcriptBuilder.AppendLine($"Date: {session.Date:yyyy-MM-dd}");
+        transcriptBuilder.AppendLine($"Participants: {string.Join(", ", session.ParticipantsPresent)}");
+        transcriptBuilder.AppendLine();
 
-            if (audioFile.IsMasterRecording)
+        // Get master recording and individual files
+        var masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText));
+        var individualFiles = session.AudioFiles.Where(f => !f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+
+        // Calculate available space for transcripts (reserve space for context and instructions)
+        var contextSize = transcriptBuilder.Length;
+        var maxTranscriptSpace = MAX_TRANSCRIPT_SIZE - contextSize - 2000; // Reserve 2K for instructions and truncation warnings
+
+        // Strategy: Prioritize master recording to avoid duplication, fall back to individual mics if needed
+        if (masterFile != null)
+        {
+            // Use master recording as primary source since it captures the full conversation
+            _logger.LogInformation("Using master recording for analysis (size: {Size} chars)", masterFile.TranscriptText.Length);
+            
+            transcriptBuilder.AppendLine("=== MASTER RECORDING (Full Group Conversation) ===");
+            transcriptBuilder.AppendLine("⚠️  IMPORTANT: Use ONLY timestamps from this master recording for audio clips!");
+            transcriptBuilder.AppendLine("This captures everyone talking together with natural overlaps and interruptions.");
+            transcriptBuilder.AppendLine("All audio clips will be generated from this file, so timestamps must match this timeline.");
+            transcriptBuilder.AppendLine();
+            
+            var masterTranscript = masterFile.TranscriptText;
+            if (masterTranscript.Length > maxTranscriptSpace)
             {
-                transcriptBuilder.AppendLine("=== MASTER RECORDING ===");
-                transcriptBuilder.AppendLine(audioFile.TranscriptText);
-                transcriptBuilder.AppendLine();
+                // Smart truncation: keep beginning and end, skip middle
+                var keepSize = maxTranscriptSpace - 500; // Reserve space for truncation message
+                var beginningSize = (int)(keepSize * 0.6); // 60% from beginning
+                var endingSize = keepSize - beginningSize; // 40% from end
+                
+                var beginning = masterTranscript.Substring(0, beginningSize);
+                var ending = masterTranscript.Substring(masterTranscript.Length - endingSize);
+                
+                masterTranscript = beginning + 
+                    $"\n\n[TRANSCRIPT TRUNCATED - SHOWING FIRST {beginningSize:N0} AND LAST {endingSize:N0} CHARACTERS]\n" +
+                    "[MIDDLE SECTION REMOVED FOR SIZE - FOCUS ON OPENING QUESTIONS AND KEY MOMENTS]\n\n" + 
+                    ending;
+                
+                _logger.LogWarning("Master recording smart-truncated from {Original} to {Truncated} characters (beginning + end)", 
+                    masterFile.TranscriptText.Length, masterTranscript.Length);
             }
-            else
+            
+            transcriptBuilder.AppendLine(masterTranscript);
+            transcriptBuilder.AppendLine();
+            transcriptBuilder.AppendLine("=== END MASTER RECORDING ===");
+        }
+        else if (individualFiles.Any())
+        {
+            // Fall back to individual mics only if no master recording available
+            _logger.LogInformation("No master recording available, using {Count} individual mic recordings", individualFiles.Count);
+            
+            transcriptBuilder.AppendLine("=== INDIVIDUAL MIC RECORDINGS ===");
+            transcriptBuilder.AppendLine("⚠️  WARNING: Do NOT use timestamps from individual mics for audio clips!");
+            transcriptBuilder.AppendLine("These capture individual speakers clearly but timestamps may not align with master recording.");
+            transcriptBuilder.AppendLine("Use these ONLY for speaker identification and quote verification.");
+            transcriptBuilder.AppendLine();
+            
+            var remainingSpace = maxTranscriptSpace;
+            var filesAdded = 0;
+            
+            foreach (var audioFile in individualFiles.OrderBy(f => f.SpeakerNumber ?? 99))
             {
-                transcriptBuilder.AppendLine($"=== {speakerLabel} INDIVIDUAL MIC ===");
-                transcriptBuilder.AppendLine(audioFile.TranscriptText);
+                var speakerLabel = audioFile.SpeakerNumber.HasValue ? $"Speaker {audioFile.SpeakerNumber}" : "Unknown Speaker";
+                var fileName = Path.GetFileNameWithoutExtension(audioFile.FilePath);
+                var headerSize = $"--- {speakerLabel} ({fileName}) ---\n".Length;
+                
+                if (headerSize + 500 > remainingSpace) // Need at least 500 chars for meaningful content
+                {
+                    _logger.LogWarning("Stopping at {FilesAdded} individual files due to size limits", filesAdded);
+                    transcriptBuilder.AppendLine($"\n[ADDITIONAL {individualFiles.Count - filesAdded} INDIVIDUAL MIC FILES SKIPPED DUE TO SIZE LIMITS]");
+                    break;
+                }
+                
+                transcriptBuilder.AppendLine($"--- {speakerLabel} ({fileName}) ---");
+                remainingSpace -= headerSize;
+                
+                var transcript = audioFile.TranscriptText;
+                if (transcript.Length > remainingSpace)
+                {
+                    transcript = transcript.Substring(0, Math.Max(0, remainingSpace - 100));
+                    transcript += "\n[TRUNCATED]";
+                    _logger.LogWarning("Individual file {FileName} truncated from {Original} to {Truncated} characters",
+                        fileName, audioFile.TranscriptText.Length, transcript.Length);
+                }
+                
+                transcriptBuilder.AppendLine(transcript);
                 transcriptBuilder.AppendLine();
+                remainingSpace -= transcript.Length + 2; // +2 for newlines
+                filesAdded++;
             }
         }
+        else
+        {
+            transcriptBuilder.AppendLine("=== NO TRANSCRIPT CONTENT AVAILABLE ===");
+            _logger.LogWarning("No transcript content found for session {SessionId}", session.Id);
+        }
 
-        return transcriptBuilder.ToString();
+        var finalTranscript = transcriptBuilder.ToString();
+        _logger.LogInformation("Final combined transcript size: {Size} characters (max: {Max})", 
+            finalTranscript.Length, MAX_TRANSCRIPT_SIZE);
+            
+        return finalTranscript;
     }
 
-    private string CreateAnalysisPrompt(string movieTitle, DateTime sessionDate, List<string> participants, string transcript)
+    private async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime sessionDate, List<string> participants, string transcript)
     {
         var participantsList = string.Join(", ", participants);
 
         return $@"
-You are analyzing a movie discussion group's recorded conversation for entertainment value. This is a group of friends discussing the movie ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}.
+You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
 
-Participants present: {participantsList}
+## PARTICIPANTS:
+The following people were present for this discussion. These are their CORRECT names - please use these exact spellings when identifying speakers:
 
-Your task is to identify the most entertaining moments across these specific categories. Each category is designed to capture different aspects of group dynamics and entertainment value.
+{participantsList}
+
+**IMPORTANT**: When transcription software identifies speakers as ""Speaker1"", ""Speaker2"", etc. or misspells names like ""Gary"" or ""Carrie"" (when it should be ""Keri""), try to match them to the correct names above based on context and voice patterns. Use the exact spellings provided.
+
+**CRITICAL NAME MATCHING RULES**:
+1. ONLY use the EXACT names from the participants list above
+2. Do NOT use variations or misspellings (e.g., if participant is ""Lacey"", NEVER use ""Lacy"")
+3. Common transcription errors to correct:
+   - ""Carrie"" or ""Gary"" or ""Kerry"" → correct to ""Keri"" (if Keri is in participants)
+   - ""Jerry"" or ""Jeremy"" → correct to ""Jeremiah"" (if Jeremiah is in participants)
+   - ""Lacy"" → correct to ""Lacey"" (if Lacey is in participants)
+   - Generic ""Speaker1"", ""Speaker2"" → match to actual participant names
+4. If unsure about speaker identity, check individual mic recordings at the same timestamp
+
+## IMPORTANT TRANSCRIPT CONTEXT:
+The transcript below contains multiple audio sources from the SAME conversation:
+- All recordings happened simultaneously during one discussion
+- Individual mic files show clearer speech from specific people
+- Master/mix recordings show the full group dynamic with overlaps
+- When timestamps align, people are responding to each other in real-time
+- Use ALL sources together to understand the complete conversation flow
+
+**CRITICAL: TIMESTAMP REQUIREMENTS FOR AUDIO CLIPS**:
+- ALL timestamps MUST be relative to the MASTER RECORDING (master_mix file)
+- When identifying moments for audio clips, verify the timestamp exists in the master recording
+- If you find a moment in an individual mic file, find the corresponding timestamp in the master recording
+- Audio clips will ONLY be generated from the master recording file
+- Do NOT use individual mic timestamps directly - they may not align with master recording
+
+**FOR VERIFICATION**: If you're unsure about who said something, cross-reference the same timestamp across different audio sources. The individual mic recordings often have clearer attribution than the master recording.
+
+## YOUR MISSION:
+Find the most ENTERTAINING moments - the edgier, the better! Look for moments that made people gasp, laugh uncontrollably, or get fired up. These are real friends talking honestly, so capture their authentic, unfiltered reactions.
 
 ## ANALYSIS CATEGORIES:
 
-### CONTROVERSIAL & DEBATE CATEGORIES
-1. **Most Offensive Take** - Statements about representation, politics, social issues that sparked pushback
-2. **Hottest Take** - Unpopular opinions against consensus (loving hated movies, hating beloved ones)
-3. **Biggest Argument Starter** - Comments leading to extended back-and-forth, raised voices
+### CONTROVERSIAL & SPICY TAKES
+1. **Most Offensive Take** - The comment that made everyone go ""WHOA!"" - inappropriate jokes, savage observations, or statements that crossed lines
+2. **Hottest Take** - The most controversial opinion that divided the room - defending terrible movies, trashing beloved ones, or contrarian viewpoints
+3. **Biggest Argument Starter** - The comment that started actual drama, raised voices, or passionate disagreements
 
-### HUMOR & ENTERTAINMENT CATEGORIES  
-4. **Best Joke** - Intentional humor with clear positive reactions
-5. **Best Roast** - Clever, harsh movie criticism that's more funny than mean
-6. **Funniest Random Tangent** - Off-topic conversations that became hilarious
+### PEAK COMEDY GOLD  
+4. **Best Joke** - The line that had everyone dying laughing - crude humor, perfect timing, or unexpected punchlines
+5. **Best Roast** - The most brutal, savage takedown of the movie, actors, or each other - mean but hilarious
+6. **Funniest Random Tangent** - When the conversation went completely off the rails in the best possible way
 
-### REACTION & DYNAMICS CATEGORIES
-7. **Most Passionate Defense** - Strong emotional defense of unpopular opinions
-8. **Biggest Unanimous Reaction** - Moments where everyone had the same strong response
-9. **Most Boring Statement** - Comments that killed conversation energy
-10. **Best Plot Twist Revelation** - Surprising movie insights others missed
+### GROUP DYNAMICS & REACTIONS
+7. **Most Passionate Defense** - Someone getting genuinely heated defending their position - emotional, intense, maybe a little unhinged
+8. **Biggest Unanimous Reaction** - When EVERYONE had the same ""WTF"" moment - collective outrage, disgust, or shock
+9. **Most Boring Statement** - The comment that sucked all energy from the room - painfully bland or obvious
+10. **Best Plot Twist Revelation** - The ""WAIT WHAT"" moment when someone dropped knowledge that blew minds
 
-### INDIVIDUAL PERSONALITY CATEGORIES
-11. **Movie Snob Moment** - Overly academic/pretentious analysis
-12. **Guilty Pleasure Admission** - Confessing enjoyment of something group thinks is bad
-13. **Quietest Person's Best Moment** - Usually quiet member making standout comment
+### PERSONALITY MOMENTS
+11. **Movie Snob Moment** - Peak pretentious film bro behavior - overthinking, name-dropping, or being insufferably intellectual
+12. **Guilty Pleasure Admission** - Someone confessing they actually enjoyed something embarrassing - the shame is palpable
+13. **Quietest Person's Best Moment** - When the quiet one finally spoke up and dropped a bomb
 
 ### TOP 5 LISTS
-14. **Top 5 Funniest Sentences** - Individual sentences that are genuinely hilarious
-15. **Top 5 Most Bland Comments** - The most boring, energy-killing statements
+14. **Top 5 Funniest Sentences** - The most quotable, shareable, laugh-out-loud lines
+15. **Top 5 Most Bland Comments** - The most soul-crushingly boring statements
+
+### INITIAL DISCUSSION QUESTIONS
+16. **Opening Questions & Answers** - Extract the standard discussion questions asked at the beginning and each person's answers
+
+### CONVERSATION ANALYTICS
+17. **Speaking Statistics** - Count approximate words spoken by each person for ""Most Talkative"" and ""Quietest Person""
+18. **Question Patterns** - Count questions asked by each person to identify ""Most Inquisitive""
+19. **Interruption Tracking** - Note instances of people talking over each other or interrupting
+20. **Laughter Analysis** - Track moments that caused laughter to identify ""Funniest Person""
+21. **Profanity Count** - Count curse words used by each person for ""Foul Mouth"" rankings
+
+## WHAT TO LOOK FOR:
+- **Inappropriate humor** that friends share when they think no one's listening
+- **Savage roasts** and brutal honesty about movies, actors, or each other  
+- **Moments of chaos** where everyone's talking over each other or reacting strongly
+- **Uncomfortable truths** and opinions that make people squirm
+- **Perfect comedic timing** and unexpected punchlines
+- **Raw emotional reactions** - genuine anger, excitement, disgust, or shock
+- **Inside jokes** and callback references that show group dynamics
+- **Cringe moments** that are painful but hilarious in hindsight
+
+## CRITICAL VERIFICATION REQUIREMENTS:
+
+**VERIFY EVERY QUOTE**: Before attributing any quote to someone, double-check that it makes logical sense:
+- Would this person really say this about themselves? (e.g., ""Dave: I have to pick a movie with a midget everytime for Dave"" is WRONG - Dave wouldn't refer to himself in third person)
+- Does the quote match the speaker's voice/perspective throughout the conversation?
+- Look at the actual transcript context around that timestamp - is the attribution correct?
+- If something seems off, check nearby lines or other audio sources for the real speaker
+
+**RED FLAGS TO WATCH FOR**:
+- Someone referring to themselves in third person (""John said John likes movies"" = WRONG)
+- Quotes that contradict how someone has been speaking throughout
+- Attributions that don't match the conversational flow
+- Misplaced pronouns (""I"" vs ""he/she"" confusion)
 
 ## INSTRUCTIONS:
 
-1. **Speaker Consistency**: Remember that Speaker1-6 represent consistent people across sessions
-2. **Context Matters**: Include setup that led to the moment
-3. **Group Reactions**: Note how others responded (laughter, disagreement, etc.)
-4. **Entertainment Value**: Focus on replay value and what makes it funny/interesting
-5. **Timestamps**: Extract or estimate timestamps when possible
+1. **Go for the GOLD**: Prioritize moments that are genuinely shocking, hilarious, or memorable
+2. **Embrace the Chaos**: Look for unfiltered, authentic reactions - not polite movie discussion  
+3. **Context is King**: Capture what made each moment land so hard
+4. **No Sanitizing**: These are friends being real - capture their authentic voices and reactions
+5. **Entertainment First**: If it's not replay-worthy, it's not worth including
+6. **Shock Value**: The more ""I can't believe they said that"" the better
+7. **Quotability**: Look for lines people will repeat and reference later
+8. **Speaker Names**: ALWAYS use the correct participant names listed above. If unsure, use context clues from the conversation to match speakers to the right names.
+9. **VERIFY ATTRIBUTION**: Double-check every quote makes sense coming from that specific person before including it.
 
 ## RESPONSE FORMAT:
 
@@ -133,11 +330,41 @@ Respond with a JSON object containing each category. For regular categories (1-1
 
 For Top 5 lists (14-15), return an object with an ""entries"" array. Each entry should have: rank (1-5), speaker, timestamp, quote, context, audioQuality, score (1-10), reasoning, and estimated start/end times in seconds from the beginning of that audio file.
 
+For Initial Discussion Questions (16), return an object with a ""questions"" array. Each question should have: question (the actual question asked), speaker (who answered), answer (their response), timestamp, entertainmentValue (1-10), estimatedStartEnd array for audio clipping.
+
+**SPECIFIC OPENING QUESTIONS TO EXTRACT**:
+The group answers these discussion questions at the start of every session. Find each person's individual answers:
+
+{await GetFormattedDiscussionQuestionsAsync()}
+
+**CRITICAL DISCUSSION QUESTION RULES**:
+1. **ONE ANSWER PER PERSON PER QUESTION**: Each participant answers each question EXACTLY ONCE
+2. **NO DUPLICATES**: If you see ""Lacey"" answering the same question twice, you've made an error - check timestamps and context
+3. **VERIFY SPEAKER**: Cross-reference individual mic recordings to confirm who's actually speaking
+4. **ROUND-ROBIN FORMAT**: The group typically goes around with each person answering in turn
+5. **CHECK LOGIC**: If you have 4 participants and 4 questions, you should have exactly 16 total answers (4 people × 4 questions)
+
+**HOW TO VERIFY SPEAKERS FOR QUESTIONS**:
+- Look at the individual mic recordings at the same timestamp
+- The person whose individual mic has the clearest audio is the speaker
+- Listen for pronouns: ""I liked it"" vs ""She liked it"" tells you who's speaking
+- Check the flow: participants usually answer in a consistent order
+
+Look for these questions being asked/answered early in the discussion (usually first 15-20 minutes). Extract each person's individual answers to create a complete picture of everyone's initial thoughts before the deeper discussion begins.
+
 If a category has no clear moments, use null for that category.
 
 ## TRANSCRIPT TO ANALYZE:
 
 {transcript}
+
+## FINAL VALIDATION CHECKLIST:
+Before submitting your response, verify:
+1. ✓ All speaker names match EXACTLY with the participants list (no ""Lacy"" if it's ""Lacey"")
+2. ✓ No person answers the same discussion question twice
+3. ✓ All quotes make logical sense from the attributed speaker (no third-person self-references)
+4. ✓ Discussion questions have one answer per person per question
+5. ✓ Speaker attributions have been cross-checked with individual mic recordings where possible
 
 Please analyze this transcript and identify the best moments for each category. Focus on entertainment value and what would be fun to revisit later.";
     }
@@ -146,13 +373,13 @@ Please analyze this transcript and identify the best moments for each category. 
     {
         var requestBody = new
         {
-            model = "gpt-4",
+            model = "gpt-4o-mini",
             messages = new[]
             {
-                new { role = "system", content = "You are an expert at analyzing group conversations for entertainment value. You understand humor, group dynamics, and what makes moments memorable." },
+                new { role = "system", content = "You are an expert at finding the most entertaining, edgy, and memorable moments in friend group conversations. You understand that real friends can be crude, inappropriate, and brutally honest with each other - and that's what makes it entertaining. You're not looking for polite discussion, you're hunting for moments that make people laugh, gasp, or get fired up. Capture the unfiltered authenticity of friends being themselves." },
                 new { role = "user", content = prompt }
             },
-            max_tokens = 4000,
+            max_tokens = 8000,
             temperature = 0.7
         };
 
@@ -177,113 +404,621 @@ Please analyze this transcript and identify the best moments for each category. 
             var jsonMatch = Regex.Match(analysisResult, @"\{[\s\S]*\}", RegexOptions.Multiline);
             var jsonContent = jsonMatch.Success ? jsonMatch.Value : analysisResult;
 
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
+            _logger.LogDebug("Parsing analysis result JSON: {JsonContent}", jsonContent.Substring(0, Math.Min(jsonContent.Length, 500)));
 
-            var analysisData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent, options);
-
-            var categoryResults = new CategoryResults();
-
-            // Map each category from the AI response
-            categoryResults.BestJoke = ParseCategoryWinner(analysisData, "bestJoke");
-            categoryResults.HottestTake = ParseCategoryWinner(analysisData, "hottestTake");
-            categoryResults.BiggestArgumentStarter = ParseCategoryWinner(analysisData, "biggestArgumentStarter");
-            categoryResults.BestRoast = ParseCategoryWinner(analysisData, "bestRoast");
-            categoryResults.FunniestRandomTangent = ParseCategoryWinner(analysisData, "funniestRandomTangent");
-            categoryResults.MostPassionateDefense = ParseCategoryWinner(analysisData, "mostPassionateDefense");
-            categoryResults.BiggestUnanimousReaction = ParseCategoryWinner(analysisData, "biggestUnanimousReaction");
-            categoryResults.MostBoringStatement = ParseCategoryWinner(analysisData, "mostBoringStatement");
-            categoryResults.BestPlotTwistRevelation = ParseCategoryWinner(analysisData, "bestPlotTwistRevelation");
-            categoryResults.MovieSnobMoment = ParseCategoryWinner(analysisData, "movieSnobMoment");
-            categoryResults.GuiltyPleasureAdmission = ParseCategoryWinner(analysisData, "guiltyPleasureAdmission");
-            categoryResults.QuietestPersonBestMoment = ParseCategoryWinner(analysisData, "quietestPersonBestMoment");
-            categoryResults.MostOffensiveTake = ParseCategoryWinner(analysisData, "mostOffensiveTake");
+            // Try to parse as nested structure first, then fall back to flat structure
+            var categoryResults = TryParseNestedStructure(jsonContent) ?? TryParseFlatStructure(jsonContent);
             
-            // Parse Top 5 lists
-            categoryResults.FunniestSentences = ParseTopFiveList(analysisData, "funniestSentences");
-            categoryResults.MostBlandComments = ParseTopFiveList(analysisData, "mostBlandComments");
+            if (categoryResults == null)
+            {
+                _logger.LogError("Failed to deserialize analysis data in both nested and flat formats");
+                return new CategoryResults();
+            }
+            
+            // Fix speaker name mappings
+            ApplySpeakerNameMappings(categoryResults);
 
             return categoryResults;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to parse analysis result: {Result}", analysisResult);
-
-            // Return empty results rather than failing completely
             return new CategoryResults();
         }
     }
 
-    private CategoryWinner? ParseCategoryWinner(Dictionary<string, object> data, string categoryKey)
+    private CategoryResults? TryParseNestedStructure(string jsonContent)
     {
         try
         {
-            if (!data.ContainsKey(categoryKey) || data[categoryKey] == null)
-                return null;
-
-            var categoryData = JsonSerializer.Deserialize<Dictionary<string, object>>(data[categoryKey].ToString()!);
-            if (categoryData == null) return null;
-
-            var winner = new CategoryWinner
+            _logger.LogDebug("Attempting to parse nested JSON structure");
+            
+            var jsonDoc = JsonDocument.Parse(jsonContent);
+            var root = jsonDoc.RootElement;
+            
+            // Log the top-level sections found
+            var topLevelSections = root.EnumerateObject().Select(p => p.Name).ToList();
+            _logger.LogInformation("Found top-level JSON sections: {Sections}", string.Join(", ", topLevelSections));
+            
+            // Log detailed structure for debugging
+            LogJsonStructure(root);
+            
+            var categoryResults = new CategoryResults();
+            
+            // Parse CONTROVERSIAL & SPICY TAKES section
+            if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Most Offensive Take", out var mostOffensive))
+                categoryResults.MostOffensiveTake = ParseCategoryWinnerFromElement(mostOffensive);
+            
+            if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Hottest Take", out var hottestTake))
+                categoryResults.HottestTake = ParseCategoryWinnerFromElement(hottestTake);
+            
+            if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Biggest Argument Starter", out var biggestArg))
+                categoryResults.BiggestArgumentStarter = ParseCategoryWinnerFromElement(biggestArg);
+            
+            // Parse PEAK COMEDY GOLD section
+            if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Best Joke", out var bestJoke))
+                categoryResults.BestJoke = ParseCategoryWinnerFromElement(bestJoke);
+            
+            if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Best Roast", out var bestRoast))
+                categoryResults.BestRoast = ParseCategoryWinnerFromElement(bestRoast);
+            
+            if (TryGetNestedCategory(root, "PEAK COMEDY GOLD", "Funniest Random Tangent", out var funniestTangent))
+                categoryResults.FunniestRandomTangent = ParseCategoryWinnerFromElement(funniestTangent);
+            
+            // Parse GROUP DYNAMICS & REACTIONS section
+            if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Most Passionate Defense", out var passionateDefense))
+                categoryResults.MostPassionateDefense = ParseCategoryWinnerFromElement(passionateDefense);
+            
+            if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Biggest Unanimous Reaction", out var unanimousReaction))
+                categoryResults.BiggestUnanimousReaction = ParseCategoryWinnerFromElement(unanimousReaction);
+            
+            if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Most Boring Statement", out var boringStatement))
+                categoryResults.MostBoringStatement = ParseCategoryWinnerFromElement(boringStatement);
+            
+            if (TryGetNestedCategory(root, "GROUP DYNAMICS & REACTIONS", "Best Plot Twist Revelation", out var plotTwist))
+                categoryResults.BestPlotTwistRevelation = ParseCategoryWinnerFromElement(plotTwist);
+            
+            // Parse PERSONALITY MOMENTS section
+            if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Movie Snob Moment", out var movieSnob))
+                categoryResults.MovieSnobMoment = ParseCategoryWinnerFromElement(movieSnob);
+            
+            if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Guilty Pleasure Admission", out var guiltyPleasure))
+                categoryResults.GuiltyPleasureAdmission = ParseCategoryWinnerFromElement(guiltyPleasure);
+            
+            if (TryGetNestedCategory(root, "PERSONALITY MOMENTS", "Quietest Person's Best Moment", out var quietestPerson))
+                categoryResults.QuietestPersonBestMoment = ParseCategoryWinnerFromElement(quietestPerson);
+            
+            // Parse TOP 5 LISTS section
+            if (TryGetNestedCategory(root, "TOP 5 LISTS", "Top 5 Funniest Sentences", out var funniest) ||
+                TryGetNestedCategory(root, "TOP 5 LISTS", "Funniest Sentences", out funniest))
+                categoryResults.FunniestSentences = ParseTopFiveListFromElement(funniest);
+            
+            if (TryGetNestedCategory(root, "TOP 5 LISTS", "Top 5 Most Bland Comments", out var bland) ||
+                TryGetNestedCategory(root, "TOP 5 LISTS", "Most Bland Comments", out bland))
+                categoryResults.MostBlandComments = ParseTopFiveListFromElement(bland);
+            
+            // Parse INITIAL DISCUSSION QUESTIONS section
+            if (TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "questions", out var questions) ||
+                TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "Opening Questions & Answers", out questions) ||
+                TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "Questions", out questions))
             {
-                Speaker = GetStringValue(categoryData, "speaker") ?? "Unknown",
-                Timestamp = GetStringValue(categoryData, "timestamp") ?? "0:00",
-                Quote = GetStringValue(categoryData, "quote") ?? "",
-                Setup = GetStringValue(categoryData, "setup") ?? "",
-                GroupReaction = GetStringValue(categoryData, "groupReaction") ?? "",
-                WhyItsGreat = GetStringValue(categoryData, "whyItsGreat") ?? "",
-                AudioQuality = ParseAudioQuality(GetStringValue(categoryData, "audioQuality")),
-                EntertainmentScore = GetIntValue(categoryData, "entertainmentScore") ?? 5
-            };
-
-            // Parse runners up if available
-            if (categoryData.ContainsKey("runnersUp") && categoryData["runnersUp"] != null)
+                _logger.LogInformation("Found INITIAL DISCUSSION QUESTIONS with 'questions' property");
+                var parsedQuestions = ParseInitialQuestionsFromElement(questions);
+                _logger.LogInformation("Parsed {Count} initial questions", parsedQuestions?.Count ?? 0);
+                categoryResults.InitialQuestions = parsedQuestions;
+            }
+            else if (root.TryGetProperty("INITIAL DISCUSSION QUESTIONS", out var discussionSection))
             {
-                try
+                // Try parsing the entire section if individual questions property isn't found
+                _logger.LogInformation("Found INITIAL DISCUSSION QUESTIONS section, parsing entire section");
+                var parsedQuestions = ParseInitialQuestionsFromElement(discussionSection);
+                _logger.LogInformation("Parsed {Count} initial questions from section", parsedQuestions?.Count ?? 0);
+                categoryResults.InitialQuestions = parsedQuestions;
+            }
+            else
+            {
+                _logger.LogWarning("INITIAL DISCUSSION QUESTIONS section not found in JSON");
+                
+                // Try to find it with different casing or at root level
+                foreach (var property in root.EnumerateObject())
                 {
-                    var runnersUpArray = JsonSerializer.Deserialize<JsonElement[]>(categoryData["runnersUp"].ToString()!);
-                    if (runnersUpArray != null)
+                    if (property.Name.Contains("Initial", StringComparison.OrdinalIgnoreCase) && 
+                        property.Name.Contains("Question", StringComparison.OrdinalIgnoreCase))
                     {
-                        winner.RunnersUp = runnersUpArray.Select(ru => new RunnerUp
-                        {
-                            Speaker = ru.TryGetProperty("speaker", out var speaker) ? speaker.GetString() ?? "Unknown" : "Unknown",
-                            Timestamp = ru.TryGetProperty("timestamp", out var timestamp) ? timestamp.GetString() ?? "0:00" : "0:00",
-                            BriefDescription = ru.TryGetProperty("briefDescription", out var desc) ? desc.GetString() ?? "" : "",
-                            Place = ru.TryGetProperty("place", out var place) ? place.GetInt32() : 2
-                        }).ToList();
+                        _logger.LogInformation("Found questions section with name: {PropertyName}", property.Name);
+                        var parsedQuestions = ParseInitialQuestionsFromElement(property.Value);
+                        _logger.LogInformation("Parsed {Count} initial questions from {PropertyName}", parsedQuestions?.Count ?? 0, property.Name);
+                        categoryResults.InitialQuestions = parsedQuestions;
+                        break;
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to parse runners up for category {Category}", categoryKey);
-                }
             }
-
-            return winner;
+            
+            // Log summary of what was parsed
+            var parsedCategories = new List<string>();
+            if (categoryResults.MostOffensiveTake != null) parsedCategories.Add("MostOffensiveTake");
+            if (categoryResults.HottestTake != null) parsedCategories.Add("HottestTake");
+            if (categoryResults.BiggestArgumentStarter != null) parsedCategories.Add("BiggestArgumentStarter");
+            if (categoryResults.BestJoke != null) parsedCategories.Add("BestJoke");
+            if (categoryResults.BestRoast != null) parsedCategories.Add("BestRoast");
+            if (categoryResults.FunniestRandomTangent != null) parsedCategories.Add("FunniestRandomTangent");
+            if (categoryResults.MostPassionateDefense != null) parsedCategories.Add("MostPassionateDefense");
+            if (categoryResults.BiggestUnanimousReaction != null) parsedCategories.Add("BiggestUnanimousReaction");
+            if (categoryResults.MostBoringStatement != null) parsedCategories.Add("MostBoringStatement");
+            if (categoryResults.BestPlotTwistRevelation != null) parsedCategories.Add("BestPlotTwistRevelation");
+            if (categoryResults.MovieSnobMoment != null) parsedCategories.Add("MovieSnobMoment");
+            if (categoryResults.GuiltyPleasureAdmission != null) parsedCategories.Add("GuiltyPleasureAdmission");
+            if (categoryResults.QuietestPersonBestMoment != null) parsedCategories.Add("QuietestPersonBestMoment");
+            if (categoryResults.FunniestSentences != null) parsedCategories.Add("FunniestSentences");
+            if (categoryResults.MostBlandComments != null) parsedCategories.Add("MostBlandComments");
+            if (categoryResults.InitialQuestions != null && categoryResults.InitialQuestions.Any()) parsedCategories.Add("InitialQuestions");
+            
+            _logger.LogInformation("Successfully parsed nested JSON structure. Categories found: {Categories}", string.Join(", ", parsedCategories));
+            return categoryResults;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to parse category {Category}", categoryKey);
+            _logger.LogWarning(ex, "Failed to parse nested structure, will try flat structure");
             return null;
         }
     }
 
-    private string? GetStringValue(Dictionary<string, object> dict, string key)
+    private CategoryResults? TryParseFlatStructure(string jsonContent)
     {
-        return dict.ContainsKey(key) ? dict[key]?.ToString() : null;
+        try
+        {
+            _logger.LogDebug("Attempting to parse flat JSON structure");
+            
+            // Simply deserialize to the strongly typed model
+            var response = JsonSerializer.Deserialize<OpenAIAnalysisResponse>(jsonContent);
+            
+            if (response == null)
+            {
+                _logger.LogError("Failed to deserialize flat analysis data - result was null");
+                return null;
+            }
+
+            // Map from DTO to your domain model
+            var categoryResults = MapToCategoryResults(response);
+            
+            // Extract initial questions to session stats (will be set later)
+            if (response.OpeningQuestions != null)
+            {
+                // This will be handled in the session service when creating/updating the session
+                categoryResults.InitialQuestions = MapInitialQuestions(response.OpeningQuestions);
+            }
+            
+            _logger.LogInformation("Successfully parsed flat JSON structure");
+            return categoryResults;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse flat structure as well");
+            return null;
+        }
     }
 
-    private int? GetIntValue(Dictionary<string, object> dict, string key)
+    private bool TryGetNestedCategory(JsonElement root, string sectionName, string categoryName, out JsonElement element)
     {
-        if (!dict.ContainsKey(key) || dict[key] == null) return null;
+        element = default;
+        
+        // Try to find the section first
+        if (root.TryGetProperty(sectionName, out var section))
+        {
+            _logger.LogDebug("Found section '{SectionName}', looking for category '{CategoryName}'", sectionName, categoryName);
+            
+            // Log what's in this section
+            if (section.ValueKind == JsonValueKind.Object)
+            {
+                var sectionProperties = section.EnumerateObject().Select(p => p.Name).ToList();
+                _logger.LogDebug("Section '{SectionName}' contains: {Properties}", sectionName, string.Join(", ", sectionProperties));
+            }
+            else if (section.ValueKind == JsonValueKind.Array)
+            {
+                _logger.LogDebug("Section '{SectionName}' is an array with {Count} elements", sectionName, section.GetArrayLength());
+                // If the section itself is an array and we're looking for "questions", return it
+                if (categoryName.Equals("questions", StringComparison.OrdinalIgnoreCase))
+                {
+                    element = section;
+                    return true;
+                }
+            }
+            
+            // Then try to find the category within that section
+            if (section.TryGetProperty(categoryName, out element))
+            {
+                _logger.LogDebug("Successfully found category '{CategoryName}' in section '{SectionName}'", categoryName, sectionName);
+                return true;
+            }
+                
+            // Also try with numbered keys like "1", "2", etc.
+            for (int i = 1; i <= 20; i++)
+            {
+                if (section.TryGetProperty(i.ToString(), out var numberedCategory))
+                {
+                    // Check if this category matches what we're looking for by examining its content
+                    if (IsCategoryMatch(numberedCategory, categoryName))
+                    {
+                        element = numberedCategory;
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        // Also try direct access at root level (in case structure is partially flat)
+        if (root.TryGetProperty(categoryName, out element))
+            return true;
+            
+        return false;
+    }
 
-        if (int.TryParse(dict[key].ToString(), out var intValue))
-            return intValue;
+    private bool IsCategoryMatch(JsonElement categoryElement, string expectedCategoryName)
+    {
+        // Try to identify the category by looking for key indicators in the content
+        // This is a heuristic approach since OpenAI might use numbered keys
+        
+        if (categoryElement.ValueKind == JsonValueKind.Object)
+        {
+            // Look for a title or description field that might contain the category name
+            foreach (var property in categoryElement.EnumerateObject())
+            {
+                if (property.Name.ToLower().Contains("title") || 
+                    property.Name.ToLower().Contains("category") ||
+                    property.Name.ToLower().Contains("type"))
+                {
+                    var value = property.Value.GetString() ?? "";
+                    if (value.Contains(expectedCategoryName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+        }
+        
+        return false;
+    }
 
+    private CategoryWinner? ParseCategoryWinnerFromElement(JsonElement element)
+    {
+        try
+        {
+            if (element.ValueKind == JsonValueKind.Null)
+                return null;
+                
+            return new CategoryWinner
+            {
+                Speaker = GetStringProperty(element, "speaker") ?? "Unknown",
+                Timestamp = GetStringProperty(element, "timestamp") ?? "0:00",
+                Quote = GetStringProperty(element, "quote") ?? "",
+                Setup = GetStringProperty(element, "setup") ?? "",
+                GroupReaction = GetStringProperty(element, "groupReaction") ?? GetStringProperty(element, "group_reaction") ?? "",
+                WhyItsGreat = GetStringProperty(element, "whyItsGreat") ?? GetStringProperty(element, "why_its_great") ?? "",
+                AudioQuality = ParseAudioQuality(GetStringProperty(element, "audioQuality") ?? GetStringProperty(element, "audio_quality")),
+                EntertainmentScore = GetIntProperty(element, "entertainmentScore") ?? GetIntProperty(element, "entertainment_score") ?? 5,
+                RunnersUp = ParseRunnersUpFromElement(element.TryGetProperty("runnersUp", out var runnersUp) ? runnersUp : 
+                           element.TryGetProperty("runners_up", out var runnersUp2) ? runnersUp2 : default)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse category winner from element");
+            return null;
+        }
+    }
+
+    private TopFiveList? ParseTopFiveListFromElement(JsonElement element)
+    {
+        try
+        {
+            if (element.ValueKind == JsonValueKind.Null)
+                return null;
+                
+            var entriesElement = element.TryGetProperty("entries", out var entries) ? entries : element;
+            
+            if (entriesElement.ValueKind != JsonValueKind.Array)
+                return null;
+                
+            var list = new TopFiveList();
+            list.Entries = entriesElement.EnumerateArray()
+                .Select(ParseTopFiveEntryFromElement)
+                .Where(e => e != null)
+                .Cast<TopFiveEntry>()
+                .ToList();
+                
+            return list.Entries.Any() ? list : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse top five list from element");
+            return null;
+        }
+    }
+
+    private TopFiveEntry? ParseTopFiveEntryFromElement(JsonElement element)
+    {
+        try
+        {
+            return new TopFiveEntry
+            {
+                Rank = GetIntProperty(element, "rank") ?? 1,
+                Speaker = GetStringProperty(element, "speaker") ?? "Unknown",
+                Timestamp = GetStringProperty(element, "timestamp") ?? "0:00",
+                Quote = GetStringProperty(element, "quote") ?? "",
+                Context = GetStringProperty(element, "context") ?? "",
+                AudioQuality = ParseAudioQuality(GetStringProperty(element, "audioQuality") ?? GetStringProperty(element, "audio_quality")),
+                Score = GetDoubleProperty(element, "score") ?? 5.0,
+                Reasoning = GetStringProperty(element, "reasoning") ?? "",
+                StartTimeSeconds = GetDoubleArrayProperty(element, "estimatedStartEnd")?.ElementAtOrDefault(0),
+                EndTimeSeconds = GetDoubleArrayProperty(element, "estimatedStartEnd")?.ElementAtOrDefault(1)
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse top five entry from element");
+            return null;
+        }
+    }
+
+    private List<QuestionAnswer> ParseInitialQuestionsFromElement(JsonElement element)
+    {
+        try
+        {
+            _logger.LogDebug("ParseInitialQuestionsFromElement called with element type: {ElementType}", element.ValueKind);
+            
+            // Handle different possible structures
+            JsonElement questionsElement = element;
+            
+            // If the element is an object, look for a questions property
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                if (element.TryGetProperty("questions", out var questions))
+                {
+                    questionsElement = questions;
+                    _logger.LogDebug("Found 'questions' property");
+                }
+                else if (element.TryGetProperty("Questions", out questions))
+                {
+                    questionsElement = questions;
+                    _logger.LogDebug("Found 'Questions' property");
+                }
+                else
+                {
+                    // Check if the object directly contains numbered entries like "1", "2", etc.
+                    var numberedQuestions = new List<QuestionAnswer>();
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        if (int.TryParse(property.Name, out _))
+                        {
+                            var qa = ParseQuestionAnswerFromElement(property.Value);
+                            if (qa != null)
+                            {
+                                numberedQuestions.Add(qa);
+                            }
+                        }
+                    }
+                    
+                    if (numberedQuestions.Any())
+                    {
+                        _logger.LogInformation("Found {Count} numbered questions in object", numberedQuestions.Count);
+                        return numberedQuestions;
+                    }
+                }
+            }
+            
+            _logger.LogDebug("Questions element type: {ElementType}, IsArray: {IsArray}", 
+                questionsElement.ValueKind, questionsElement.ValueKind == JsonValueKind.Array);
+            
+            if (questionsElement.ValueKind != JsonValueKind.Array)
+            {
+                _logger.LogWarning("Questions element is not an array, it's {ElementType}", questionsElement.ValueKind);
+                
+                // If it's an object, try to parse it as a single question
+                if (questionsElement.ValueKind == JsonValueKind.Object)
+                {
+                    var singleQuestion = ParseQuestionAnswerFromElement(questionsElement);
+                    if (singleQuestion != null)
+                    {
+                        _logger.LogInformation("Parsed single question from object");
+                        return new List<QuestionAnswer> { singleQuestion };
+                    }
+                }
+                
+                return new List<QuestionAnswer>();
+            }
+            
+            var arrayLength = questionsElement.GetArrayLength();
+            _logger.LogInformation("Found {Length} questions in array", arrayLength);
+                
+            var results = questionsElement.EnumerateArray()
+                .Select(ParseQuestionAnswerFromElement)
+                .Where(qa => qa != null)
+                .Cast<QuestionAnswer>()
+                .ToList();
+                
+            _logger.LogInformation("Successfully parsed {Count} questions", results.Count);
+            
+            return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse initial questions from element");
+            return new List<QuestionAnswer>();
+        }
+    }
+
+    private QuestionAnswer? ParseQuestionAnswerFromElement(JsonElement element)
+    {
+        try
+        {
+            return new QuestionAnswer
+            {
+                Question = GetStringProperty(element, "question") ?? "",
+                Speaker = GetStringProperty(element, "speaker") ?? "",
+                Answer = GetStringProperty(element, "answer") ?? "",
+                Timestamp = GetStringProperty(element, "timestamp") ?? "",
+                EntertainmentValue = GetIntProperty(element, "entertainmentValue") ?? GetIntProperty(element, "entertainment_value") ?? 5
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse question answer from element");
+            return null;
+        }
+    }
+
+    private List<RunnerUp> ParseRunnersUpFromElement(JsonElement element)
+    {
+        try
+        {
+            if (element.ValueKind != JsonValueKind.Array)
+                return new List<RunnerUp>();
+                
+            return element.EnumerateArray()
+                .Select(e => new RunnerUp
+                {
+                    Speaker = GetStringProperty(e, "speaker") ?? "Unknown",
+                    Timestamp = GetStringProperty(e, "timestamp") ?? "0:00",
+                    BriefDescription = GetStringProperty(e, "briefDescription") ?? GetStringProperty(e, "brief_description") ?? "",
+                    Place = GetIntProperty(e, "place") ?? 2
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse runners up from element");
+            return new List<RunnerUp>();
+        }
+    }
+
+    // Helper methods for extracting properties with fallbacks
+    private string? GetStringProperty(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.String 
+            ? prop.GetString() 
+            : null;
+    }
+
+    private int? GetIntProperty(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var prop))
+        {
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var intValue))
+                return intValue;
+            if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out var parsedInt))
+                return parsedInt;
+        }
         return null;
+    }
+
+    private double? GetDoubleProperty(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var prop))
+        {
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetDouble(out var doubleValue))
+                return doubleValue;
+            if (prop.ValueKind == JsonValueKind.String && double.TryParse(prop.GetString(), out var parsedDouble))
+                return parsedDouble;
+        }
+        return null;
+    }
+
+    private double[]? GetDoubleArrayProperty(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.Array)
+        {
+            try
+            {
+                return prop.EnumerateArray()
+                    .Where(e => e.ValueKind == JsonValueKind.Number)
+                    .Select(e => e.GetDouble())
+                    .ToArray();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private CategoryResults MapToCategoryResults(OpenAIAnalysisResponse response)
+    {
+        return new CategoryResults
+        {
+            MostOffensiveTake = MapCategoryWinner(response.MostOffensiveTake),
+            HottestTake = MapCategoryWinner(response.HottestTake),
+            BiggestArgumentStarter = MapCategoryWinner(response.BiggestArgumentStarter),
+            BestJoke = MapCategoryWinner(response.BestJoke),
+            BestRoast = MapCategoryWinner(response.BestRoast),
+            FunniestRandomTangent = MapCategoryWinner(response.FunniestRandomTangent),
+            MostPassionateDefense = MapCategoryWinner(response.MostPassionateDefense),
+            BiggestUnanimousReaction = MapCategoryWinner(response.BiggestUnanimousReaction),
+            MostBoringStatement = MapCategoryWinner(response.MostBoringStatement),
+            BestPlotTwistRevelation = MapCategoryWinner(response.BestPlotTwistRevelation),
+            MovieSnobMoment = MapCategoryWinner(response.MovieSnobMoment),
+            GuiltyPleasureAdmission = MapCategoryWinner(response.GuiltyPleasureAdmission),
+            QuietestPersonBestMoment = MapCategoryWinner(response.QuietestPersonBestMoment),
+            FunniestSentences = MapTopFiveList(response.Top5FunniestSentences),
+            MostBlandComments = MapTopFiveList(response.Top5MostBlandComments)
+        };
+    }
+
+    private CategoryWinner? MapCategoryWinner(CategoryWinnerDto? dto)
+    {
+        if (dto == null) return null;
+        
+        return new CategoryWinner
+        {
+            Speaker = dto.Speaker,
+            Timestamp = dto.Timestamp,
+            Quote = dto.Quote,
+            Setup = dto.Setup,
+            GroupReaction = dto.GroupReaction,
+            WhyItsGreat = dto.WhyItsGreat,
+            AudioQuality = ParseAudioQuality(dto.AudioQualityString),
+            EntertainmentScore = dto.EntertainmentScore,
+            RunnersUp = dto.RunnersUp.Select(r => new RunnerUp
+            {
+                Speaker = r.Speaker,
+                Timestamp = r.Timestamp,
+                BriefDescription = r.BriefDescription,
+                Place = r.Place
+            }).ToList()
+        };
+    }
+
+    private TopFiveList? MapTopFiveList(TopFiveListDto? dto)
+    {
+        if (dto == null || !dto.Entries.Any()) return null;
+        
+        var list = new TopFiveList();
+        list.Entries = dto.Entries.Select(e => new TopFiveEntry
+        {
+            Rank = e.Rank,
+            Speaker = e.Speaker,
+            Timestamp = e.Timestamp,
+            Quote = e.Quote,
+            Context = e.Context,
+            AudioQuality = ParseAudioQuality(e.AudioQualityString),
+            Score = e.Score,
+            Reasoning = e.Reasoning,
+            StartTimeSeconds = e.EstimatedStartEnd?.ElementAtOrDefault(0),
+            EndTimeSeconds = e.EstimatedStartEnd?.ElementAtOrDefault(1)
+        }).ToList();
+        
+        return list;
+    }
+
+    private List<QuestionAnswer> MapInitialQuestions(InitialQuestionsDto dto)
+    {
+        return dto.Questions.Select(q => new QuestionAnswer
+        {
+            Question = q.Question,
+            Speaker = q.Speaker,
+            Answer = q.Answer,
+            Timestamp = q.Timestamp,
+            EntertainmentValue = q.EntertainmentValue,
+            AudioClipUrl = "" // Will be generated later if needed
+        }).ToList();
     }
 
     private AudioQuality ParseAudioQuality(string? quality)
@@ -295,50 +1030,6 @@ Please analyze this transcript and identify the best moments for each category. 
             "background noise" or "backgroundnoise" => AudioQuality.BackgroundNoise,
             _ => AudioQuality.Clear
         };
-    }
-
-    private TopFiveList? ParseTopFiveList(Dictionary<string, object> data, string categoryKey)
-    {
-        try
-        {
-            if (!data.ContainsKey(categoryKey) || data[categoryKey] == null)
-                return null;
-
-            var categoryData = JsonSerializer.Deserialize<Dictionary<string, object>>(data[categoryKey].ToString()!);
-            if (categoryData == null || !categoryData.ContainsKey("entries") || categoryData["entries"] == null)
-                return null;
-
-            var entriesArray = JsonSerializer.Deserialize<JsonElement[]>(categoryData["entries"].ToString()!);
-            if (entriesArray == null) return null;
-
-            var topFive = new TopFiveList();
-            
-            foreach (var entryElement in entriesArray.Take(5))
-            {
-                var entry = new TopFiveEntry
-                {
-                    Rank = entryElement.TryGetProperty("rank", out var rank) ? rank.GetInt32() : 0,
-                    Speaker = entryElement.TryGetProperty("speaker", out var speaker) ? speaker.GetString() ?? "Unknown" : "Unknown",
-                    Timestamp = entryElement.TryGetProperty("timestamp", out var timestamp) ? timestamp.GetString() ?? "0:00" : "0:00",
-                    Quote = entryElement.TryGetProperty("quote", out var quote) ? quote.GetString() ?? "" : "",
-                    Context = entryElement.TryGetProperty("context", out var context) ? context.GetString() ?? "" : "",
-                    AudioQuality = ParseAudioQuality(entryElement.TryGetProperty("audioQuality", out var aq) ? aq.GetString() : null),
-                    Score = entryElement.TryGetProperty("score", out var score) ? score.GetDouble() : 5.0,
-                    Reasoning = entryElement.TryGetProperty("reasoning", out var reasoning) ? reasoning.GetString() ?? "" : "",
-                    StartTimeSeconds = entryElement.TryGetProperty("startTimeSeconds", out var start) ? start.GetDouble() : 0,
-                    EndTimeSeconds = entryElement.TryGetProperty("endTimeSeconds", out var end) ? end.GetDouble() : 0
-                };
-
-                topFive.Entries.Add(entry);
-            }
-
-            return topFive.Entries.Any() ? topFive : null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse top five list for category {Category}", categoryKey);
-            return null;
-        }
     }
 
     public SessionStats GenerateSessionStats(MovieSession session, CategoryResults categoryResults)
@@ -360,6 +1051,13 @@ Please analyze this transcript and identify the best moments for each category. 
             >= 5 => EnergyLevel.Medium,
             _ => EnergyLevel.Low
         };
+
+        // Generate detailed conversation statistics
+        GenerateConversationStatistics(session, stats);
+
+        // Transfer initial questions from category results to session stats
+        _logger.LogInformation("Transferring {Count} initial questions from CategoryResults to SessionStats", categoryResults.InitialQuestions?.Count ?? 0);
+        stats.InitialQuestions = categoryResults.InitialQuestions;
 
         stats.BestMomentsSummary = GenerateBestMomentsSummary(categoryResults, stats.EnergyLevel);
 
@@ -427,28 +1125,840 @@ Please analyze this transcript and identify the best moments for each category. 
     private string GenerateBestMomentsSummary(CategoryResults results, EnergyLevel energyLevel)
     {
         var highlights = new List<string>();
+        var spiceLevel = 0;
 
-        if (results.BestJoke != null) highlights.Add("great comedy moments");
-        if (results.BiggestArgumentStarter != null) highlights.Add("passionate debates");
-        if (results.HottestTake != null) highlights.Add("controversial opinions");
-        if (results.BestRoast != null) highlights.Add("savage roasts");
-        if (results.FunniestRandomTangent != null) highlights.Add("hilarious tangents");
+        if (results.BestJoke != null) { highlights.Add("comedy gold"); spiceLevel++; }
+        if (results.BiggestArgumentStarter != null) { highlights.Add("heated drama"); spiceLevel += 2; }
+        if (results.HottestTake != null) { highlights.Add("controversial hot takes"); spiceLevel += 2; }
+        if (results.BestRoast != null) { highlights.Add("brutal roasts"); spiceLevel += 2; }
+        if (results.FunniestRandomTangent != null) { highlights.Add("chaotic tangents"); spiceLevel++; }
+        if (results.MostOffensiveTake != null) { highlights.Add("offensive commentary"); spiceLevel += 3; }
+        if (results.MostPassionateDefense != null) { highlights.Add("passionate rants"); spiceLevel += 2; }
 
         var energyDescription = energyLevel switch
         {
-            EnergyLevel.High => "High energy session with",
-            EnergyLevel.Medium => "Good discussion featuring",
-            EnergyLevel.Low => "Quieter session with some",
-            _ => "Session featuring"
+            EnergyLevel.High when spiceLevel >= 8 => "🔥 ABSOLUTE CHAOS with",
+            EnergyLevel.High when spiceLevel >= 5 => "🚀 Wild energy featuring",
+            EnergyLevel.High => "⚡ High-octane discussion with",
+            EnergyLevel.Medium when spiceLevel >= 5 => "🌶️ Spicy conversation featuring", 
+            EnergyLevel.Medium => "💬 Solid discussion with",
+            EnergyLevel.Low when spiceLevel >= 3 => "😴 Sleepy but surprisingly featured",
+            EnergyLevel.Low => "🤫 Chill session with",
+            _ => "📝 Discussion featuring"
         };
 
         if (highlights.Any())
         {
-            return $"{energyDescription} {string.Join(", ", highlights)}.";
+            var joinedHighlights = highlights.Count switch
+            {
+                1 => highlights[0],
+                2 => $"{highlights[0]} and {highlights[1]}",
+                >= 3 => $"{string.Join(", ", highlights.Take(highlights.Count - 1))}, and {highlights.Last()}"
+            };
+
+            var enthusiasm = spiceLevel switch
+            {
+                >= 10 => " This one's going in the hall of fame! 🏆",
+                >= 7 => " Definitely replay worthy! 🎬",
+                >= 4 => " Some solid entertainment value here. 👌",
+                _ => ""
+            };
+
+            return $"{energyDescription} {joinedHighlights}.{enthusiasm}";
         }
 
-        return "Session analysis complete with various discussion points identified.";
+        return energyLevel switch
+        {
+            EnergyLevel.High => "🤷‍♂️ High energy but surprisingly wholesome discussion. Weird.",
+            EnergyLevel.Medium => "📚 Civilized movie discussion. How refreshing... and boring.",
+            EnergyLevel.Low => "😴 Sleepy session. Someone check for pulses.",
+            _ => "🎬 Standard movie chat. Nothing to see here."
+        };
     }
+
+    private void GenerateConversationStatistics(MovieSession session, SessionStats stats)
+    {
+        try
+        {
+            _logger.LogInformation("Generating conversation statistics for {ParticipantCount} participants", session.ParticipantsPresent.Count);
+            
+            // Initialize dictionaries for all participants
+            foreach (var participant in session.ParticipantsPresent)
+            {
+                stats.WordCounts[participant] = 0;
+                stats.QuestionCounts[participant] = 0;
+                stats.InterruptionCounts[participant] = 0;
+                stats.LaughterCounts[participant] = 0;
+                stats.CurseWordCounts[participant] = 0;
+            }
+
+            // Analyze transcripts for conversation patterns
+            var transcriptFiles = session.AudioFiles.Where(f => !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+            _logger.LogInformation("Analyzing {FileCount} transcript files for conversation patterns", transcriptFiles.Count);
+            
+            foreach (var audioFile in transcriptFiles)
+            {
+                _logger.LogDebug("Analyzing transcript from {FileName}", audioFile.FileName);
+                AnalyzeTranscriptForStats(audioFile.TranscriptText, stats, session.ParticipantsPresent);
+            }
+
+            // Calculate summary statistics
+            if (stats.WordCounts.Any())
+            {
+                var mostTalkative = stats.WordCounts.OrderByDescending(kvp => kvp.Value).First();
+                stats.MostTalkativePerson = $"{mostTalkative.Key} ({mostTalkative.Value:N0} words)";
+
+                var quietest = stats.WordCounts.OrderBy(kvp => kvp.Value).First();
+                stats.QuietestPerson = $"{quietest.Key} ({quietest.Value:N0} words)";
+                
+                _logger.LogInformation("Word counts: {WordCounts}", 
+                    string.Join(", ", stats.WordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
+            }
+
+            if (stats.QuestionCounts.Any())
+            {
+                var mostInquisitive = stats.QuestionCounts.OrderByDescending(kvp => kvp.Value).First();
+                stats.MostInquisitivePerson = $"{mostInquisitive.Key} ({mostInquisitive.Value} questions)";
+                stats.TotalQuestions = stats.QuestionCounts.Values.Sum();
+            }
+
+            if (stats.InterruptionCounts.Any())
+            {
+                var biggestInterruptor = stats.InterruptionCounts.OrderByDescending(kvp => kvp.Value).First();
+                stats.BiggestInterruptor = $"{biggestInterruptor.Key} ({biggestInterruptor.Value} interruptions)";
+                stats.TotalInterruptions = stats.InterruptionCounts.Values.Sum();
+            }
+
+            if (stats.LaughterCounts.Any())
+            {
+                var funniest = stats.LaughterCounts.OrderByDescending(kvp => kvp.Value).First();
+                stats.FunniestPerson = $"{funniest.Key} ({funniest.Value} laughs triggered)";
+                stats.TotalLaughterMoments = stats.LaughterCounts.Values.Sum();
+            }
+
+            if (stats.CurseWordCounts.Any())
+            {
+                var mostProfane = stats.CurseWordCounts.OrderByDescending(kvp => kvp.Value).First();
+                stats.MostProfanePerson = $"{mostProfane.Key} ({mostProfane.Value} curse words)";
+                stats.TotalCurseWords = stats.CurseWordCounts.Values.Sum();
+                
+                _logger.LogInformation("Curse word counts: {CurseWordCounts}", 
+                    string.Join(", ", stats.CurseWordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
+            }
+
+            // Determine conversation tone
+            var totalWords = stats.WordCounts.Values.Sum();
+            var wordsPerMinute = CalculateWordsPerMinute(session, totalWords);
+            
+            stats.ConversationTone = wordsPerMinute switch
+            {
+                > 300 => "Rapid-fire chaos",
+                > 200 => "Animated discussion",
+                > 150 => "Steady conversation",
+                > 100 => "Relaxed chat",
+                _ => "Contemplative silence"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate conversation statistics for session {SessionId}", session.Id);
+        }
+    }
+
+    private void AnalyzeTranscriptForStats(string transcript, SessionStats stats, List<string> participants)
+    {
+        var lines = transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var processedLines = 0;
+        
+        foreach (var line in lines)
+        {
+            // Skip timestamp lines and metadata
+            if (line.Contains("[") || line.Contains("===") || line.Trim().Length < 10)
+                continue;
+
+            // Try to identify speaker from line format "Name: text" or "Speaker1: text"
+            var colonIndex = line.IndexOf(':');
+            if (colonIndex == -1) continue;
+
+            var speakerPart = line.Substring(0, colonIndex).Trim();
+            var textPart = line.Substring(colonIndex + 1).Trim();
+
+            // Map speaker names (handle common transcription issues)
+            var speaker = MapSpeakerName(speakerPart);
+            
+            // If speaker isn't in our participants list, try to match by similarity
+            if (!participants.Contains(speaker, StringComparer.OrdinalIgnoreCase))
+            {
+                var similarSpeaker = participants.FirstOrDefault(p => 
+                    p.Equals(speaker, StringComparison.OrdinalIgnoreCase) ||
+                    p.Contains(speaker, StringComparison.OrdinalIgnoreCase) ||
+                    speaker.Contains(p, StringComparison.OrdinalIgnoreCase));
+                
+                if (similarSpeaker != null)
+                {
+                    speaker = similarSpeaker;
+                }
+                else
+                {
+                    _logger.LogDebug("Unknown speaker '{Speaker}' not matching any participant", speaker);
+                    continue;
+                }
+            }
+            
+            if (!stats.WordCounts.ContainsKey(speaker))
+                continue;
+
+            processedLines++;
+
+            // Count words
+            var words = textPart.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            stats.WordCounts[speaker] += words.Length;
+
+            // Count questions
+            var questionCount = textPart.Count(c => c == '?');
+            stats.QuestionCounts[speaker] += questionCount;
+
+            // Look for interruption patterns
+            if (textPart.Contains("--") || textPart.Contains("[interrupting]") || 
+                textPart.Contains("[talking over") || textPart.Contains("interrupts") ||
+                textPart.Contains("cuts off") || textPart.Contains("overlapping"))
+            {
+                stats.InterruptionCounts[speaker]++;
+            }
+
+            // Look for laughter triggers - both causing and reacting
+            var lowerText = textPart.ToLower();
+            if (lowerText.Contains("laugh") || lowerText.Contains("haha") || 
+                lowerText.Contains("[laughter]") || lowerText.Contains("funny") ||
+                lowerText.Contains("lol") || lowerText.Contains("hilarious") ||
+                lowerText.Contains("joke") || lowerText.Contains("chuckle"))
+            {
+                stats.LaughterCounts[speaker]++;
+            }
+
+            // Count curse words
+            var curseWords = CountCurseWords(textPart);
+            stats.CurseWordCounts[speaker] += curseWords;
+        }
+        
+        _logger.LogDebug("Processed {ProcessedLines} lines from transcript", processedLines);
+    }
+
+    private string MapSpeakerName(string rawSpeaker)
+    {
+        // Handle common transcription patterns
+        var nameMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Carrie", "Keri" },
+            { "Gary", "Keri" },
+            { "Kerry", "Keri" },
+            { "Jerry", "Jeremiah" },
+            { "Jeremy", "Jeremiah" },
+            { "Lacy", "Lacey" },
+            { "Speaker1", "Unknown" },
+            { "Speaker2", "Unknown" },
+            { "Speaker3", "Unknown" },
+            { "Speaker4", "Unknown" },
+            { "Speaker5", "Unknown" },
+            { "Speaker6", "Unknown" }
+        };
+
+        return nameMapping.TryGetValue(rawSpeaker, out var mapped) ? mapped : rawSpeaker;
+    }
+
+    private double CalculateWordsPerMinute(MovieSession session, int totalWords)
+    {
+        var maxDuration = session.AudioFiles
+            .Where(f => f.Duration.HasValue)
+            .Select(f => f.Duration!.Value.TotalMinutes)
+            .DefaultIfEmpty(1)
+            .Max();
+
+        return totalWords / Math.Max(maxDuration, 1);
+    }
+
+    private int CountCurseWords(string text)
+    {
+        // Common curse words and variations to detect
+        var curseWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "shit", "fuck", "fucking", "fucked", "fucker", "damn", "damned", "hell", 
+            "ass", "asshole", "bitch", "bastard", "crap", "piss", "bullshit", 
+            "motherfucker", "son of a bitch", "goddamn", "jesus christ", "christ",
+            "wtf", "omfg", "ffs", "jfc", // common abbreviations
+            "dammit", "goddammit", "bloody hell", "holy shit", "what the fuck",
+            "piece of shit", "full of shit", "no shit", "holy fuck"
+        };
+
+        var words = text.ToLower()
+            .Split(new char[] { ' ', '.', ',', '!', '?', ';', ':', '"', '\'', '-', '(', ')', '[', ']' }, 
+                   StringSplitOptions.RemoveEmptyEntries);
+
+        var count = 0;
+        
+        // Check individual words
+        foreach (var word in words)
+        {
+            var cleanWord = word.Trim();
+            if (curseWords.Contains(cleanWord))
+            {
+                count++;
+            }
+        }
+
+        // Check for multi-word phrases
+        var lowerText = text.ToLower();
+        var phrases = new[] { "son of a bitch", "piece of shit", "full of shit", "holy shit", 
+                             "what the fuck", "jesus christ", "goddamn it", "bloody hell", 
+                             "holy fuck", "what the hell" };
+        
+        foreach (var phrase in phrases)
+        {
+            var matches = System.Text.RegularExpressions.Regex.Matches(lowerText, phrase);
+            count += matches.Count;
+        }
+
+        return count;
+    }
+
+    private void ApplySpeakerNameMappings(CategoryResults categoryResults)
+    {
+        // Apply speaker name corrections
+        var nameMapping = new Dictionary<string, string>
+        {
+            { "Carrie", "Keri" },
+            { "Gary", "Keri" },
+            { "Kerry", "Keri" },
+            { "Jerry", "Jeremiah" },
+            { "Jeremy", "Jeremiah" },
+            { "Lacy", "Lacey" }
+        };
+
+        // Helper method to fix speaker names
+        string FixSpeakerName(string? speaker)
+        {
+            if (string.IsNullOrEmpty(speaker)) return speaker ?? "";
+            return nameMapping.TryGetValue(speaker, out var correctedName) ? correctedName : speaker;
+        }
+
+        // Fix category winners
+        if (categoryResults.BestJoke != null) categoryResults.BestJoke.Speaker = FixSpeakerName(categoryResults.BestJoke.Speaker);
+        if (categoryResults.HottestTake != null) categoryResults.HottestTake.Speaker = FixSpeakerName(categoryResults.HottestTake.Speaker);
+        if (categoryResults.BiggestArgumentStarter != null) categoryResults.BiggestArgumentStarter.Speaker = FixSpeakerName(categoryResults.BiggestArgumentStarter.Speaker);
+        if (categoryResults.BestRoast != null) categoryResults.BestRoast.Speaker = FixSpeakerName(categoryResults.BestRoast.Speaker);
+        if (categoryResults.FunniestRandomTangent != null) categoryResults.FunniestRandomTangent.Speaker = FixSpeakerName(categoryResults.FunniestRandomTangent.Speaker);
+        if (categoryResults.MostPassionateDefense != null) categoryResults.MostPassionateDefense.Speaker = FixSpeakerName(categoryResults.MostPassionateDefense.Speaker);
+        if (categoryResults.BiggestUnanimousReaction != null) categoryResults.BiggestUnanimousReaction.Speaker = FixSpeakerName(categoryResults.BiggestUnanimousReaction.Speaker);
+        if (categoryResults.MostBoringStatement != null) categoryResults.MostBoringStatement.Speaker = FixSpeakerName(categoryResults.MostBoringStatement.Speaker);
+        if (categoryResults.BestPlotTwistRevelation != null) categoryResults.BestPlotTwistRevelation.Speaker = FixSpeakerName(categoryResults.BestPlotTwistRevelation.Speaker);
+        if (categoryResults.MovieSnobMoment != null) categoryResults.MovieSnobMoment.Speaker = FixSpeakerName(categoryResults.MovieSnobMoment.Speaker);
+        if (categoryResults.GuiltyPleasureAdmission != null) categoryResults.GuiltyPleasureAdmission.Speaker = FixSpeakerName(categoryResults.GuiltyPleasureAdmission.Speaker);
+        if (categoryResults.QuietestPersonBestMoment != null) categoryResults.QuietestPersonBestMoment.Speaker = FixSpeakerName(categoryResults.QuietestPersonBestMoment.Speaker);
+        if (categoryResults.MostOffensiveTake != null) categoryResults.MostOffensiveTake.Speaker = FixSpeakerName(categoryResults.MostOffensiveTake.Speaker);
+
+        // Fix Top 5 lists
+        if (categoryResults.FunniestSentences?.Entries != null)
+        {
+            foreach (var entry in categoryResults.FunniestSentences.Entries)
+            {
+                entry.Speaker = FixSpeakerName(entry.Speaker);
+            }
+        }
+
+        if (categoryResults.MostBlandComments?.Entries != null)
+        {
+            foreach (var entry in categoryResults.MostBlandComments.Entries)
+            {
+                entry.Speaker = FixSpeakerName(entry.Speaker);
+            }
+        }
+
+        // Fix runners up in all categories
+        void FixRunnersUp(CategoryWinner? winner)
+        {
+            if (winner?.RunnersUp != null)
+            {
+                foreach (var runnerUp in winner.RunnersUp)
+                {
+                    runnerUp.Speaker = FixSpeakerName(runnerUp.Speaker);
+                }
+            }
+        }
+
+        FixRunnersUp(categoryResults.BestJoke);
+        FixRunnersUp(categoryResults.HottestTake);
+        FixRunnersUp(categoryResults.BiggestArgumentStarter);
+        FixRunnersUp(categoryResults.BestRoast);
+        FixRunnersUp(categoryResults.FunniestRandomTangent);
+        FixRunnersUp(categoryResults.MostPassionateDefense);
+        FixRunnersUp(categoryResults.BiggestUnanimousReaction);
+        FixRunnersUp(categoryResults.MostBoringStatement);
+        FixRunnersUp(categoryResults.BestPlotTwistRevelation);
+        FixRunnersUp(categoryResults.MovieSnobMoment);
+        FixRunnersUp(categoryResults.GuiltyPleasureAdmission);
+        FixRunnersUp(categoryResults.QuietestPersonBestMoment);
+        FixRunnersUp(categoryResults.MostOffensiveTake);
+    }
+
+    private async Task GenerateAudioClipsAsync(MovieSession session, CategoryResults categoryResults)
+    {
+        try
+        {
+            _logger.LogInformation("Starting audio clip generation for session {SessionId}", session.Id);
+
+            // Generate clips for category winners that have timestamps
+            await GenerateClipForCategoryWinner(session, categoryResults.BestJoke, "best-joke");
+            await GenerateClipForCategoryWinner(session, categoryResults.HottestTake, "hottest-take");
+            await GenerateClipForCategoryWinner(session, categoryResults.BestRoast, "best-roast");
+            await GenerateClipForCategoryWinner(session, categoryResults.BiggestArgumentStarter, "biggest-argument");
+            await GenerateClipForCategoryWinner(session, categoryResults.FunniestRandomTangent, "funniest-tangent");
+            await GenerateClipForCategoryWinner(session, categoryResults.MostPassionateDefense, "passionate-defense");
+            await GenerateClipForCategoryWinner(session, categoryResults.BiggestUnanimousReaction, "unanimous-reaction");
+            await GenerateClipForCategoryWinner(session, categoryResults.BestPlotTwistRevelation, "plot-twist");
+            await GenerateClipForCategoryWinner(session, categoryResults.MostOffensiveTake, "offensive-take");
+            await GenerateClipForCategoryWinner(session, categoryResults.GuiltyPleasureAdmission, "guilty-pleasure");
+            await GenerateClipForCategoryWinner(session, categoryResults.QuietestPersonBestMoment, "quietest-person");
+            await GenerateClipForCategoryWinner(session, categoryResults.MovieSnobMoment, "movie-snob");
+
+            // Generate clips for Top 5 lists
+            if (categoryResults.FunniestSentences != null)
+            {
+                await _audioClipService.GenerateClipsForTopFiveAsync(session, categoryResults.FunniestSentences);
+            }
+
+            if (categoryResults.MostBlandComments != null)
+            {
+                await _audioClipService.GenerateClipsForTopFiveAsync(session, categoryResults.MostBlandComments);
+            }
+
+            // Generate clips for initial questions
+            await GenerateClipsForInitialQuestions(session, categoryResults.InitialQuestions);
+
+            _logger.LogInformation("Completed audio clip generation for session {SessionId}", session.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate audio clips for session {SessionId}", session.Id);
+            // Don't throw - clip generation is optional and shouldn't fail the analysis
+        }
+    }
+
+    private async Task GenerateClipForCategoryWinner(MovieSession session, CategoryWinner? winner, string clipPrefix)
+    {
+        if (winner == null || string.IsNullOrEmpty(winner.Timestamp))
+            return;
+
+        try
+        {
+            // Parse timestamp to find the right audio file and time
+            var timestamp = _audioClipService.ParseTimestamp(winner.Timestamp);
+            
+            // Find the best audio file for this timestamp
+            var sourceFile = FindBestAudioFileForTimestamp(session, timestamp);
+            if (sourceFile == null)
+            {
+                _logger.LogWarning("No suitable audio file found for timestamp {Timestamp} in session {SessionId}", 
+                    winner.Timestamp, session.Id);
+                return;
+            }
+
+            var clipId = $"{clipPrefix}_{Guid.NewGuid():N}";
+            
+            // Add padding around the timestamp (3 seconds before, 5 seconds after for context)
+            double startTime = Math.Max(0, timestamp.TotalSeconds - 3);
+            double endTime = timestamp.TotalSeconds + 5;
+
+            var clipUrl = await _audioClipService.GenerateAudioClipAsync(
+                sourceFile.FilePath, 
+                startTime, 
+                endTime, 
+                session.Id, 
+                clipId);
+
+            if (!string.IsNullOrEmpty(clipUrl))
+            {
+                winner.AudioClipUrl = clipUrl;
+                _logger.LogDebug("Generated clip for {ClipPrefix} at {Timestamp}: {ClipUrl}", 
+                    clipPrefix, winner.Timestamp, clipUrl);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate clip for {ClipPrefix} at {Timestamp}", 
+                clipPrefix, winner.Timestamp);
+        }
+    }
+
+    private AudioFile? FindBestAudioFileForTimestamp(MovieSession session, TimeSpan timestamp)
+    {
+        // ALWAYS use master recording for audio clips to ensure consistency
+        // The UI specifically expects clips from the master_mix file
+        var masterFile = session.AudioFiles.FirstOrDefault(f => 
+            f.IsMasterRecording && 
+            f.Duration.HasValue &&
+            f.Duration.Value >= timestamp);
+
+        if (masterFile != null)
+        {
+            _logger.LogDebug("Using master recording {FileName} for clip at {Timestamp}", 
+                masterFile.FileName, timestamp);
+            return masterFile;
+        }
+
+        _logger.LogWarning("No master recording found or master recording too short for timestamp {Timestamp}. " +
+                          "Available files: {Files}", 
+            timestamp, 
+            string.Join(", ", session.AudioFiles.Select(f => $"{f.FileName} (Master: {f.IsMasterRecording}, Duration: {f.Duration})")));
+
+        // Only fall back to individual files if absolutely no master recording exists
+        // This should be rare since we typically have a master_mix file
+        return session.AudioFiles
+            .Where(f => f.Duration.HasValue && f.Duration.Value >= timestamp)
+            .OrderByDescending(f => f.Duration)
+            .FirstOrDefault();
+    }
+
+    private async Task GenerateClipsForInitialQuestions(MovieSession session, List<QuestionAnswer> questions)
+    {
+        if (!questions.Any()) return;
+
+        try
+        {
+            for (int i = 0; i < questions.Count; i++)
+            {
+                var qa = questions[i];
+                if (string.IsNullOrEmpty(qa.Timestamp)) continue;
+
+                var timestamp = _audioClipService.ParseTimestamp(qa.Timestamp);
+                var sourceFile = FindBestAudioFileForTimestamp(session, timestamp);
+                
+                if (sourceFile == null) continue;
+
+                var clipId = $"initial-q{i + 1}_{qa.Speaker.ToLower()}_{Guid.NewGuid():N}";
+                
+                // Add padding around the answer (2 seconds before, 8 seconds after for full context)
+                double startTime = Math.Max(0, timestamp.TotalSeconds - 2);
+                double endTime = timestamp.TotalSeconds + 8;
+
+                var clipUrl = await _audioClipService.GenerateAudioClipAsync(
+                    sourceFile.FilePath, 
+                    startTime, 
+                    endTime, 
+                    session.Id, 
+                    clipId);
+
+                if (!string.IsNullOrEmpty(clipUrl))
+                {
+                    qa.AudioClipUrl = clipUrl;
+                    _logger.LogDebug("Generated clip for initial question '{Question}' answered by {Speaker}: {ClipUrl}", 
+                        qa.Question, qa.Speaker, clipUrl);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate clips for initial questions in session {SessionId}", session.Id);
+        }
+    }
+
+    private void LogJsonStructure(JsonElement root, string prefix = "", int maxDepth = 3, int currentDepth = 0)
+    {
+        if (currentDepth >= maxDepth) return;
+        
+        try
+        {
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    var currentPrefix = string.IsNullOrEmpty(prefix) ? property.Name : $"{prefix}.{property.Name}";
+                    
+                    if (property.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        _logger.LogDebug("JSON Structure: {Path} (Object)", currentPrefix);
+                        LogJsonStructure(property.Value, currentPrefix, maxDepth, currentDepth + 1);
+                    }
+                    else if (property.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        _logger.LogDebug("JSON Structure: {Path} (Array with {Count} elements)", currentPrefix, property.Value.GetArrayLength());
+                        
+                        // Log structure of first array element if it exists
+                        if (property.Value.GetArrayLength() > 0)
+                        {
+                            var firstElement = property.Value.EnumerateArray().First();
+                            LogJsonStructure(firstElement, $"{currentPrefix}[0]", maxDepth, currentDepth + 1);
+                        }
+                    }
+                    else
+                    {
+                        var valuePreview = property.Value.ValueKind == JsonValueKind.String ? 
+                            $"\"{property.Value.GetString()?.Substring(0, Math.Min(property.Value.GetString()?.Length ?? 0, 50)) ?? ""}...\"" :
+                            property.Value.ToString();
+                        _logger.LogDebug("JSON Structure: {Path} = {Value}", currentPrefix, valuePreview);
+                    }
+                }
+            }
+            else if (root.ValueKind == JsonValueKind.Array)
+            {
+                _logger.LogDebug("JSON Structure: {Path} (Array with {Count} elements)", prefix, root.GetArrayLength());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to log JSON structure at {Path}", prefix);
+        }
+    }
+
+    private async Task<string> GetFormattedDiscussionQuestionsAsync()
+    {
+        try
+        {
+            var questions = await _discussionQuestionsService.GetActiveQuestionsAsync();
+            if (!questions.Any())
+            {
+                // Fallback to default questions if none configured
+                return @"1. ""Did I like the movie?"" (or similar variations like ""Did you like it?"")
+2. ""Am I glad I watched the movie?"" (or ""Are you glad you watched it?"")
+3. ""Do I think I'd ever watch it again?"" (or ""Would you watch it again?"")
+4. ""Would you ever recommend this movie?"" (or ""Would you recommend it?"")
+5. ""What was my favorite part of the movie?"" (or ""What was your favorite part?"")
+6. ""What was my least favorite part of the movie?"" (or ""What was your least favorite part?"")
+7. ""What was my favorite line of the movie?"" (or ""What was your favorite line?"")";
+            }
+
+            var formattedQuestions = questions
+                .Select((q, index) => $"{index + 1}. \"\"{q.Question}\"\" (or similar variations)")
+                .ToList();
+
+            return string.Join("\n", formattedQuestions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get discussion questions for prompt, using defaults");
+            // Fallback to default questions
+            return @"1. ""Did I like the movie?"" (or similar variations like ""Did you like it?"")
+2. ""Am I glad I watched the movie?"" (or ""Are you glad you watched it?"")
+3. ""Do I think I'd ever watch it again?"" (or ""Would you watch it again?"")
+4. ""Would you ever recommend this movie?"" (or ""Would you recommend it?"")
+5. ""What was my favorite part of the movie?"" (or ""What was your favorite part?"")
+6. ""What was my least favorite part of the movie?"" (or ""What was your least favorite part?"")
+7. ""What was my favorite line of the movie?"" (or ""What was your favorite line?"")";
+        }
+    }
+
+    private async Task SaveOpenAIResponseAsync(MovieSession session, string prompt, string response)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(session.FolderPath))
+            {
+                _logger.LogWarning("Cannot save OpenAI response - session folder path is empty for session {SessionId}", session.Id);
+                return;
+            }
+
+            // Create the response data structure
+            var responseData = new
+            {
+                SessionId = session.Id,
+                MovieTitle = session.MovieTitle,
+                Date = session.Date,
+                ParticipantsPresent = session.ParticipantsPresent,
+                ProcessedAt = DateTime.UtcNow,
+                PromptSize = prompt.Length,
+                ResponseSize = response.Length,
+                Prompt = prompt,
+                Response = response,
+                Model = "gpt-4o-mini",
+                Timeout = "20 minutes",
+                MaxTranscriptSize = MAX_TRANSCRIPT_SIZE
+            };
+
+            // Create filename with timestamp
+            var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            var fileName = $"openai_analysis_{timestamp}.json";
+            var filePath = Path.Combine(session.FolderPath, fileName);
+
+            // Ensure directory exists
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+            // Serialize and save to file
+            var json = JsonSerializer.Serialize(responseData, new JsonSerializerOptions 
+            { 
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            
+            await File.WriteAllTextAsync(filePath, json);
+            
+            _logger.LogInformation("Saved OpenAI response to {FilePath} ({FileSize:N0} characters)", 
+                filePath, json.Length);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save OpenAI response for session {SessionId}", session.Id);
+            // Don't throw - this is optional functionality and shouldn't break the analysis
+        }
+    }
+}
+
+// DTO for OpenAI analysis response structure
+public class OpenAIAnalysisResponse
+{
+    [JsonPropertyName("Most Offensive Take")]
+    public CategoryWinnerDto? MostOffensiveTake { get; set; }
+    
+    [JsonPropertyName("Hottest Take")]
+    public CategoryWinnerDto? HottestTake { get; set; }
+    
+    [JsonPropertyName("Biggest Argument Starter")]
+    public CategoryWinnerDto? BiggestArgumentStarter { get; set; }
+    
+    [JsonPropertyName("Best Joke")]
+    public CategoryWinnerDto? BestJoke { get; set; }
+    
+    [JsonPropertyName("Best Roast")]
+    public CategoryWinnerDto? BestRoast { get; set; }
+    
+    [JsonPropertyName("Funniest Random Tangent")]
+    public CategoryWinnerDto? FunniestRandomTangent { get; set; }
+    
+    [JsonPropertyName("Most Passionate Defense")]
+    public CategoryWinnerDto? MostPassionateDefense { get; set; }
+    
+    [JsonPropertyName("Biggest Unanimous Reaction")]
+    public CategoryWinnerDto? BiggestUnanimousReaction { get; set; }
+    
+    [JsonPropertyName("Most Boring Statement")]
+    public CategoryWinnerDto? MostBoringStatement { get; set; }
+    
+    [JsonPropertyName("Best Plot Twist Revelation")]
+    public CategoryWinnerDto? BestPlotTwistRevelation { get; set; }
+    
+    [JsonPropertyName("Movie Snob Moment")]
+    public CategoryWinnerDto? MovieSnobMoment { get; set; }
+    
+    [JsonPropertyName("Guilty Pleasure Admission")]
+    public CategoryWinnerDto? GuiltyPleasureAdmission { get; set; }
+    
+    [JsonPropertyName("Quietest Person's Best Moment")]
+    public CategoryWinnerDto? QuietestPersonBestMoment { get; set; }
+    
+    [JsonPropertyName("Top 5 Funniest Sentences")]
+    public TopFiveListDto? Top5FunniestSentences { get; set; }
+    
+    [JsonPropertyName("Top 5 Most Bland Comments")]
+    public TopFiveListDto? Top5MostBlandComments { get; set; }
+    
+    [JsonPropertyName("Opening Questions & Answers")]
+    public InitialQuestionsDto? OpeningQuestions { get; set; }
+}
+
+public class CategoryWinnerDto
+{
+    [JsonPropertyName("speaker")]
+    public string Speaker { get; set; } = "Unknown";
+    
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = "0:00";
+    
+    [JsonPropertyName("quote")]
+    public string Quote { get; set; } = "";
+    
+    [JsonPropertyName("setup")]
+    public string Setup { get; set; } = "";
+    
+    [JsonPropertyName("groupReaction")]
+    public string GroupReaction { get; set; } = "";
+    
+    [JsonPropertyName("whyItsGreat")]
+    public string WhyItsGreat { get; set; } = "";
+    
+    [JsonPropertyName("audioQuality")]
+    public string AudioQualityString { get; set; } = "Clear";
+    
+    [JsonPropertyName("entertainmentScore")]
+    public int EntertainmentScore { get; set; } = 5;
+    
+    [JsonPropertyName("runnersUp")]
+    public List<RunnerUpDto> RunnersUp { get; set; } = new();
+}
+
+public class RunnerUpDto
+{
+    [JsonPropertyName("speaker")]
+    public string Speaker { get; set; } = "Unknown";
+    
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = "0:00";
+    
+    [JsonPropertyName("briefDescription")]
+    public string BriefDescription { get; set; } = "";
+    
+    [JsonPropertyName("place")]
+    public int Place { get; set; } = 2;
+}
+
+public class TopFiveListDto
+{
+    [JsonPropertyName("entries")]
+    public List<TopFiveEntryDto> Entries { get; set; } = new();
+}
+
+public class TopFiveEntryDto
+{
+    [JsonPropertyName("rank")]
+    public int Rank { get; set; }
+    
+    [JsonPropertyName("speaker")]
+    public string Speaker { get; set; } = "Unknown";
+    
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = "0:00";
+    
+    [JsonPropertyName("quote")]
+    public string Quote { get; set; } = "";
+    
+    [JsonPropertyName("context")]
+    public string Context { get; set; } = "";
+    
+    [JsonPropertyName("audioQuality")]
+    public string AudioQualityString { get; set; } = "Clear";
+    
+    [JsonPropertyName("score")]
+    public double Score { get; set; } = 5.0;
+    
+    [JsonPropertyName("reasoning")]
+    public string Reasoning { get; set; } = "";
+    
+    [JsonPropertyName("estimatedStartEnd")]
+    public double[]? EstimatedStartEnd { get; set; }
+}
+
+public class InitialQuestionsDto
+{
+    [JsonPropertyName("questions")]
+    public List<QuestionAnswerDto> Questions { get; set; } = new();
+}
+
+public class QuestionAnswerDto
+{
+    [JsonPropertyName("question")]
+    public string Question { get; set; } = string.Empty;
+    
+    [JsonPropertyName("speaker")]
+    public string Speaker { get; set; } = string.Empty;
+    
+    [JsonPropertyName("answer")]
+    public string Answer { get; set; } = string.Empty;
+    
+    [JsonPropertyName("timestamp")]
+    public string Timestamp { get; set; } = string.Empty;
+    
+    [JsonPropertyName("entertainmentValue")]
+    public int EntertainmentValue { get; set; } = 5;
+    
+    [JsonPropertyName("estimatedStartEnd")]
+    public double[]? EstimatedStartEnd { get; set; }
 }
 
 // DTO for OpenAI API response

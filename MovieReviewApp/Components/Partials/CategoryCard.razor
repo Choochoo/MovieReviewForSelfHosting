@@ -1,0 +1,91 @@
+@using MovieReviewApp.Models
+
+@if (Winner != null)
+{
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100 category-card">
+            <div class="card-header bg-gradient">
+                <h5 class="mb-0">@Title</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0">@Winner.Speaker</h6>
+                        <span class="badge bg-secondary">@Winner.Timestamp</span>
+                    </div>
+                    <p class="winner-quote">"@Winner.Quote"</p>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(Winner.Setup))
+                {
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <strong>Context:</strong> @Winner.Setup
+                        </small>
+                    </div>
+                }
+                
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <strong>Reaction:</strong> @Winner.GroupReaction
+                    </small>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-success">
+                        <strong>Why it's great:</strong> @Winner.WhyItsGreat
+                    </small>
+                </div>
+                
+                <div class="d-flex justify-content-end align-items-center mb-3">
+                    <div class="entertainment-score">
+                        @for (int i = 0; i < Winner.EntertainmentScore; i++)
+                        {
+                            <i class="bi bi-star-fill text-warning me-1"></i>
+                        }
+                        @for (int i = Winner.EntertainmentScore; i < 10; i++)
+                        {
+                            <i class="bi bi-star text-muted me-1"></i>
+                        }
+                        <small class="text-muted ms-2">@Winner.EntertainmentScore/10</small>
+                    </div>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(Winner.AudioClipUrl))
+                {
+                    <div class="mt-3">
+                        <button class="btn btn-success w-100" onclick="playAudioClip('@Winner.AudioClipUrl')">
+                            <i class="bi bi-play-circle-fill me-2"></i>🎧 Play Audio Clip
+                        </button>
+                    </div>
+                }
+                
+                @if (Winner.RunnersUp.Any())
+                {
+                    <div class="mt-3 pt-3 border-top">
+                        <h6 class="text-muted small">Runners Up:</h6>
+                        @foreach (var runnerUp in Winner.RunnersUp.OrderBy(r => r.Place))
+                        {
+                            <div class="small mb-1">
+                                @GetPlaceEmoji(runnerUp.Place)
+                                <strong>@runnerUp.Speaker</strong> (@runnerUp.Timestamp) - @runnerUp.BriefDescription
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public CategoryWinner? Winner { get; set; }
+
+    private string GetPlaceEmoji(int place) => place switch
+    {
+        2 => "🥈",
+        3 => "🥉",
+        _ => $"{place}."
+    };
+}

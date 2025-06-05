@@ -1,5 +1,5 @@
-using NAudio.Wave;
 using MovieReviewApp.Models;
+using NAudio.Wave;
 
 namespace MovieReviewApp.Services;
 
@@ -44,7 +44,7 @@ public class AudioClipService
                     // In future, could add MP3 encoding here
                     var finalOutputPath = Path.ChangeExtension(outputPath, ".wav");
                     File.Move(tempWavPath, finalOutputPath);
-                    
+
                     // Return relative URL path
                     return $"/clips/{sessionId}/{Path.GetFileName(finalOutputPath)}";
                 }
@@ -62,7 +62,7 @@ public class AudioClipService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate audio clip from {SourcePath} ({Start}-{End})", 
+            _logger.LogError(ex, "Failed to generate audio clip from {SourcePath} ({Start}-{End})",
                 sourceAudioPath, startTimeSeconds, endTimeSeconds);
             return null;
         }
@@ -73,30 +73,30 @@ public class AudioClipService
         await Task.Run(() =>
         {
             using var reader = new AudioFileReader(inputPath);
-            
+
             var startPosition = (long)(startSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
             var endPosition = (long)(endSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
-            
+
             // Ensure positions are within bounds
             startPosition = Math.Max(0, Math.Min(startPosition, reader.Length));
             endPosition = Math.Max(startPosition, Math.Min(endPosition, reader.Length));
-            
+
             var length = endPosition - startPosition;
-            
+
             reader.Position = startPosition;
-            
+
             using var writer = new WaveFileWriter(outputPath, reader.WaveFormat);
-            
+
             var buffer = new byte[reader.WaveFormat.AverageBytesPerSecond]; // 1 second buffer
             long totalBytesRead = 0;
-            
+
             while (totalBytesRead < length)
             {
                 var bytesToRead = (int)Math.Min(buffer.Length, length - totalBytesRead);
                 var bytesRead = reader.Read(buffer, 0, bytesToRead);
-                
+
                 if (bytesRead == 0) break;
-                
+
                 writer.Write(buffer, 0, bytesRead);
                 totalBytesRead += bytesRead;
             }
@@ -106,11 +106,11 @@ public class AudioClipService
     public async Task<List<string>> GenerateClipsForTopFiveAsync(MovieSession session, TopFiveList topFive)
     {
         var clipUrls = new List<string>();
-        
+
         for (int i = 0; i < topFive.Entries.Count; i++)
         {
             var entry = topFive.Entries[i];
-            
+
             // Find the source audio file
             var sourceFile = session.AudioFiles.FirstOrDefault(f => f.FileName == entry.SourceAudioFile);
             if (sourceFile == null)
@@ -120,20 +120,28 @@ public class AudioClipService
             }
 
             var clipId = $"rank{entry.Rank}_{Guid.NewGuid():N}";
-            
-            // Add some padding around the timestamp (2 seconds before, 3 seconds after)
-            var startTime = Math.Max(0, entry.StartTimeSeconds - 2);
-            var endTime = entry.EndTimeSeconds + 3;
-            
-            var clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id, clipId);
-            
-            if (!string.IsNullOrEmpty(clipUrl))
+
+            // Only generate clip if both start and end times are present
+            if (entry.StartTimeSeconds.HasValue && entry.EndTimeSeconds.HasValue)
             {
-                entry.AudioClipUrl = clipUrl;
-                clipUrls.Add(clipUrl);
+                // Add some padding around the timestamp (2 seconds before, 3 seconds after)
+                double startTime = Math.Max(0, entry.StartTimeSeconds.Value - 2);
+                double endTime = entry.EndTimeSeconds.Value + 3;
+
+                var clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id, clipId);
+
+                if (!string.IsNullOrEmpty(clipUrl))
+                {
+                    entry.AudioClipUrl = clipUrl;
+                    clipUrls.Add(clipUrl);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Start or end time is missing for entry rank {Rank} in TopFiveList.", entry.Rank);
             }
         }
-        
+
         return clipUrls;
     }
 
@@ -143,7 +151,7 @@ public class AudioClipService
         {
             // Handle formats like "1:23", "12:34", "1:23:45"
             var parts = timestamp.Split(':');
-            
+
             return parts.Length switch
             {
                 2 => new TimeSpan(0, int.Parse(parts[0]), int.Parse(parts[1])),
@@ -165,7 +173,7 @@ public class AudioClipService
             if (!Directory.Exists(clipsDir)) return;
 
             var cutoffDate = DateTime.UtcNow.AddDays(-daysOld);
-            
+
             foreach (var sessionDir in Directory.GetDirectories(clipsDir))
             {
                 var dirInfo = new DirectoryInfo(sessionDir);
