@@ -1,18 +1,30 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.Extensions.Options
 @using MovieReviewApp.Models
+@using MovieReviewApp.Services
 @inject IOptions<AppSettings> AppSettings
+@inject NavigationManager Navigation
+@inject SecretsManager SecretsManager
 
-<div class="page">
-    <div class="sidebar @(AppSettings.Value.IsFamilyFriendly ? "sidebar-family" : "sidebar-general")">
-        <NavMenu />
+@if (IsFirstRunSetup)
+{
+    <div class="page-no-sidebar">
+        @Body
     </div>
-    <main>
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+}
+else
+{
+    <div class="page">
+        <div class="sidebar @(AppSettings.Value.IsFamilyFriendly ? "sidebar-family" : "sidebar-general")">
+            <NavMenu />
+        </div>
+        <main>
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+    </div>
+}
 <div id="blazor-error-ui">
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
@@ -45,6 +57,11 @@
         width: calc(100% - 250px);
     }
 
+    .page-no-sidebar {
+        width: 100%;
+        min-height: 100vh;
+    }
+
     @@media (max-width: 768px) {
         .page {
             flex-direction: column;
@@ -62,3 +79,7 @@
         }
     }
 </style>
+
+@code {
+    private bool IsFirstRunSetup => Navigation.Uri.Contains("/setup", StringComparison.OrdinalIgnoreCase) || SecretsManager.IsFirstRun;
+}

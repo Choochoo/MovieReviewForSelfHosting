@@ -206,6 +206,15 @@ For production deployment:
 3. Run the application - it will guide you through secure setup
 4. Optional: Set up reverse proxy (nginx/Apache) for HTTPS
 
+### IIS Deployment
+
+For detailed IIS deployment instructions, including how to set up multiple instances, see our comprehensive [IIS Deployment Guide](docs/IIS_DEPLOYMENT.md).
+
+Key points for IIS deployment:
+- Configure instance and port using command line arguments in web.config
+- Each instance maintains separate configuration and database
+- No port configuration needed in the UI - handled via deployment configuration
+
 ## 📝 License
 
 This project is for personal use. Please respect API terms of service for TMDB and Gladia.

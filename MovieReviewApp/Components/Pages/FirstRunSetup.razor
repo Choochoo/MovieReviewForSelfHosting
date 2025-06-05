@@ -80,6 +80,18 @@
                 </div>
 
                 <div class="setup-section">
+                    <h3>🤖 AI Analysis (Optional)</h3>
+                    <p class="section-description">For AI-powered features like transcript analysis and intelligent movie insights.</p>
+                    
+                    <div class="form-group">
+                        <label for="openaiKey">OpenAI API Key</label>
+                        <input type="password" id="openaiKey" @bind="openaiKey" class="form-control" 
+                               placeholder="sk-..." />
+                        <small class="help-text">Used for transcript analysis and AI features. <a href="https://platform.openai.com/api-keys" target="_blank">Get your key here</a></small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
                     <h3>📱 Facebook Integration (Optional)</h3>
                     <p class="section-description">Facebook Messenger URL for notifications. Leave blank to disable.</p>
                     
@@ -111,17 +123,49 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="port">Port Number</label>
-                        <input type="number" id="port" @bind="port" class="form-control" 
-                               placeholder="@currentConfig.Port" min="1000" max="65535" />
-                        <small class="help-text">Port this instance will run on (must be unique per instance)</small>
-                    </div>
-
-                    <div class="form-group">
                         <label for="description">Description (Optional)</label>
                         <input type="text" id="description" @bind="description" class="form-control" 
                                placeholder="Brief description of this instance..." />
                         <small class="help-text">Optional description to help identify this instance</small>
+                    </div>
+                </div>
+
+                <div class="setup-section">
+                    <h3>🚀 Deployment Instructions</h3>
+                    <p class="section-description">Configure port numbers using command line arguments</p>
+                    
+                    <div class="deployment-instructions">
+                        <h4>🖥️ Command Line</h4>
+                        <p>Start instances with specific ports using the --port argument:</p>
+                        <div class="code-example">
+                            <code>dotnet run --instance "Family-Movies" --port 5000</code>
+                            <code>dotnet run --instance "Work-Film-Club" --port 5001</code>
+                        </div>
+
+                        <h4>🌐 IIS Deployment</h4>
+                        <p>For IIS hosting, configure the port in web.config:</p>
+                        <div class="code-example">
+                            <code>&lt;aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll --instance MyInstance --port 5010" /&gt;</code>
+                        </div>
+
+                        <h5>Multiple IIS Instances Example:</h5>
+                        <ol class="deployment-steps">
+                            <li>Create separate IIS applications (e.g., /family, /work, /friends)</li>
+                            <li>Copy the application files to each folder</li>
+                            <li>Edit web.config in each folder with unique instance names and ports:
+                                <div class="code-example">
+                                    <code>Family: --instance "Family" --port 5000</code>
+                                    <code>Work: --instance "Work" --port 5001</code>
+                                    <code>Friends: --instance "Friends" --port 5002</code>
+                                </div>
+                            </li>
+                            <li>Configure IIS bindings to match the port numbers</li>
+                        </ol>
+                        
+                        <div class="info-note">
+                            <i class="bi bi-info-circle"></i>
+                            <span>Each instance maintains its own database, configuration, and secrets</span>
+                        </div>
                     </div>
                 </div>
 
@@ -171,7 +215,6 @@
                         <li><strong>Instance:</strong> @InstanceManager.InstanceName</li>
                         <li><strong>Display Name:</strong> @(string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName)</li>
                         <li><strong>Content Type:</strong> @contentType</li>
-                        <li><strong>Port:</strong> @port</li>
                         @if (!string.IsNullOrEmpty(description))
                         {
                             <li><strong>Description:</strong> @description</li>
@@ -450,6 +493,88 @@
         font-size: 0.8rem;
     }
 
+    .deployment-instructions {
+        background: var(--surface-hover);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+    }
+
+    .deployment-instructions h4 {
+        color: var(--accent-primary);
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 1.1rem;
+    }
+
+    .deployment-instructions h5 {
+        color: var(--text-primary);
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+    }
+
+    .deployment-instructions p {
+        color: var(--text-secondary);
+        margin-bottom: 0.75rem;
+    }
+
+    .code-example {
+        background: var(--background-primary);
+        padding: 1rem;
+        border-radius: 0.25rem;
+        border: 1px solid var(--border-color);
+        margin: 0.5rem 0 1rem 0;
+    }
+
+    .code-example code {
+        display: block;
+        color: var(--accent-primary);
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 0.25rem;
+    }
+
+    .code-example code:last-child {
+        margin-bottom: 0;
+    }
+
+    .deployment-steps {
+        margin: 1rem 0;
+        padding-left: 1.5rem;
+        color: var(--text-secondary);
+    }
+
+    .deployment-steps li {
+        margin-bottom: 0.75rem;
+        line-height: 1.6;
+    }
+
+    .deployment-steps .code-example {
+        margin-top: 0.5rem;
+        margin-left: 0;
+    }
+
+    .info-note {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(0, 217, 255, 0.1);
+        padding: 0.75rem 1rem;
+        border-radius: 0.25rem;
+        border: 1px solid rgba(0, 217, 255, 0.3);
+        margin-top: 1rem;
+        color: var(--accent-primary);
+        font-size: 0.9rem;
+    }
+
+    .info-note i {
+        font-size: 1.1rem;
+    }
+
     @@media (max-width: 768px) {
         .setup-card {
             padding: 2rem;
@@ -466,10 +591,10 @@
     private string tmdbKey = "";
     private string mongoConnection = "";
     private string gladiaKey = "";
+    private string openaiKey = "";
     private string facebookChatUrl = "";
     private string displayName = "";
     private string contentType = "General";
-    private int port = 5000;
     private string description = "";
     
     private bool isSaving = false;
@@ -490,7 +615,6 @@
         currentConfig = InstanceManager.GetInstanceConfig();
         displayName = currentConfig.DisplayName;
         contentType = currentConfig.Environment; // Map old Environment to new ContentType
-        port = currentConfig.Port;
         description = currentConfig.Description;
     }
 
@@ -535,6 +659,12 @@
                 secrets["Gladia:ApiKey"] = gladiaKey.Trim();
             }
 
+            // Add OpenAI key only if provided
+            if (!string.IsNullOrWhiteSpace(openaiKey))
+            {
+                secrets["OpenAI:ApiKey"] = openaiKey.Trim();
+            }
+
             SecretsManager.SetSecrets(secrets);
 
             // Save instance configuration
@@ -543,7 +673,7 @@
                 InstanceName = InstanceManager.InstanceName,
                 DisplayName = string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName.Trim(),
                 Environment = contentType,
-                Port = port,
+                Port = currentConfig.Port, // Keep existing port, will be set by command line
                 Description = description.Trim(),
                 CreatedDate = currentConfig.CreatedDate == default ? DateTime.UtcNow : currentConfig.CreatedDate,
                 LastUsed = DateTime.UtcNow

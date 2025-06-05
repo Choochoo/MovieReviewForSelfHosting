@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ss:*)",
+      "Bash(dotnet run:*)",
+      "Bash(whereis:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(mkdir:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(true)",
+      "Bash(rm:*)"
+    ],
+    "deny": []
+  }
+}
