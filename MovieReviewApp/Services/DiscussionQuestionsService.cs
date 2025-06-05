@@ -19,7 +19,7 @@ public class DiscussionQuestionsService
         try
         {
             var questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
-            
+
             // If no questions exist, create defaults
             if (!questions.Any())
             {
@@ -44,7 +44,7 @@ public class DiscussionQuestionsService
         try
         {
             var questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
-            
+
             // If no questions exist, create defaults
             if (!questions.Any())
             {
@@ -113,11 +113,11 @@ public class DiscussionQuestionsService
         }
     }
 
-    public async Task<bool> DeleteQuestionAsync(string id)
+    public async Task<bool> DeleteQuestionAsync(Guid id)
     {
         try
         {
-            await _mongoDbService.DeleteByIdAsync<DiscussionQuestion>(Guid.Parse(id));
+            await _mongoDbService.DeleteByIdAsync<DiscussionQuestion>(id);
             _logger.LogInformation("Deleted discussion question: {Id}", id);
             return true;
         }
@@ -141,7 +141,7 @@ public class DiscussionQuestionsService
                     await UpdateQuestionAsync(question);
                 }
             }
-            
+
             _logger.LogInformation("Reordered {Count} discussion questions", questionIds.Count);
             return true;
         }

@@ -44,7 +44,8 @@
       "Bash(dotnet run:*)",
       "Bash(dotnet clean:*)",
       "Bash(dotnet nuget locals:*)",
-      "WebFetch(domain:www.mongodb.com)"
+      "WebFetch(domain:www.mongodb.com)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg \"try|catch\" Home.razor* History.razor* Settings.razor*)"
     ],
     "deny": []
   }

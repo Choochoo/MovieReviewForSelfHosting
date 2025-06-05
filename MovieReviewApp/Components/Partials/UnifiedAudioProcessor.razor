@@ -322,7 +322,7 @@
             {
                 var session = new MovieSession
                 {
-                    Id = Guid.NewGuid().ToString(),
+                    Id = Guid.NewGuid(),
                     MovieTitle = movie.Movie ?? string.Empty,
                     Date = movie.StartDate.Date,
                     MicAssignments = new Dictionary<int, string>(micAssignments),
@@ -387,7 +387,7 @@
     {
         if (await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the session for '{session.MovieTitle}'? This action cannot be undone."))
         {
-            await MongoDbService.DeleteByIdAsync<MovieSession>(Guid.Parse(session.Id));
+            await MongoDbService.DeleteByIdAsync<MovieSession>(session.Id);
             await LoadExistingSessions();
             await InvokeAsync(StateHasChanged);
         }
@@ -490,7 +490,7 @@
         if (selectedSession != null)
         {
             // Reload session from database to get latest status
-            var updated = await MongoDbService.GetByIdAsync<MovieSession>(Guid.Parse(selectedSession.Id));
+            var updated = await MongoDbService.GetByIdAsync<MovieSession>(selectedSession.Id);
             if (updated != null)
             {
                 selectedSession = updated;

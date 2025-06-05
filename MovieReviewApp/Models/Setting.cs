@@ -3,9 +3,8 @@
 namespace MovieReviewApp.Models
 {
     [MongoCollection("Settings")]
-    public class Setting
+    public class Setting : BaseModel
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
         public required string Key { get; set; }
         public required string Value { get; set; }
     }

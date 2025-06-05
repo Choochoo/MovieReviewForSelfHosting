@@ -1,13 +1,11 @@
 ﻿using MongoDB.Bson.Serialization.Attributes;
 using MovieReviewApp.Attributes;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Models
 {
     [MongoCollection("Phases")]
-    public class Phase
+    public class Phase : BaseModel
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
         public int Number { get; set; }
         [BsonIgnore]
         public List<MovieEvent> Events { get; set; } = new List<MovieEvent>();

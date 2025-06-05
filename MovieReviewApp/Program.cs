@@ -1,9 +1,16 @@
 using Microsoft.AspNetCore.Http.Features;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using MovieReviewApp.Components;
 using MovieReviewApp.Database;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+
+// Configure MongoDB GUID serialization to match BaseModel
+BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLegacy));
+
 
 // Parse command line arguments
 CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
@@ -123,14 +130,6 @@ builder.Services.AddScoped<MessengerService>();
 builder.Services.AddScoped<ImageService>();
 builder.Services.AddScoped<MarkdownService>();
 
-// Only register stats processor if not in first-run setup (it requires database)
-if (!instanceManager.IsFirstRun)
-{
-    builder.Services.AddScoped<StatsCommandProcessorService>(provider =>
-        new StatsCommandProcessorService(
-            provider.GetRequiredService<IWebHostEnvironment>().WebRootPath,
-            provider.GetRequiredService<MovieReviewService>()));
-}
 
 // Register new audio processing services
 builder.Services.AddScoped<GladiaService>();

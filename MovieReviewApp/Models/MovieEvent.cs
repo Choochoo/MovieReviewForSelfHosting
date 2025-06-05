@@ -1,13 +1,16 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 using MovieReviewApp.Attributes;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Models
 {
     public abstract class BaseModel
     {
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid Id { get; set; } = Guid.NewGuid();
     }
-    
+
     [MongoCollection("MovieEvents")]
     public class MovieEvent : BaseModel
     {
@@ -18,6 +21,7 @@ namespace MovieReviewApp.Models
         public string? Movie { get; set; }
         public string? DownloadLink { get; set; }
         public string? PosterUrl { get; set; }
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid? ImageId { get; set; }
         public string? IMDb { get; set; }
         public string? Reasoning { get; set; }

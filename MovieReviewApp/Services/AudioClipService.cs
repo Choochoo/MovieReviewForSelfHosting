@@ -128,7 +128,7 @@ public class AudioClipService
                 double startTime = Math.Max(0, entry.StartTimeSeconds.Value - 2);
                 double endTime = entry.EndTimeSeconds.Value + 3;
 
-                var clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id, clipId);
+                var clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id.ToString(), clipId);
 
                 if (!string.IsNullOrEmpty(clipUrl))
                 {

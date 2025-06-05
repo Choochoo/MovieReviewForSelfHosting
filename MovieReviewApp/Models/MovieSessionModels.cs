@@ -3,9 +3,8 @@ using MovieReviewApp.Attributes;
 namespace MovieReviewApp.Models
 {
     [MongoCollection("MovieSessions")]
-    public class MovieSession
+    public class MovieSession : BaseModel
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
         public DateTime Date { get; set; }
         public string MovieTitle { get; set; } = string.Empty;
         public string FolderPath { get; set; } = string.Empty;
@@ -54,7 +53,7 @@ namespace MovieReviewApp.Models
         public int HighlightMoments { get; set; }
         public string BestMomentsSummary { get; set; } = string.Empty;
         public string AttendancePattern { get; set; } = string.Empty;
-        
+
         // Detailed conversation statistics
         public Dictionary<string, int> WordCounts { get; set; } = new();
         public Dictionary<string, int> QuestionCounts { get; set; } = new();
@@ -72,7 +71,7 @@ namespace MovieReviewApp.Models
         public int TotalLaughterMoments { get; set; }
         public int TotalCurseWords { get; set; }
         public string ConversationTone { get; set; } = string.Empty;
-        
+
         // Initial discussion questions and answers
         public List<QuestionAnswer> InitialQuestions { get; set; } = new();
     }

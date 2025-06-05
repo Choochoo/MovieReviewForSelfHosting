@@ -651,9 +651,9 @@ else
         {
             try
             {
-                await MovieSessionService.RerunAnalysis(Session.Id);
+                await MovieSessionService.RerunAnalysis(Session.Id.ToString());
                 // Reload the session to get updated data
-                Session = await MovieSessionService.GetSession(Session.Id);
+                Session = await MovieSessionService.GetSession(Session.Id.ToString());
                 StateHasChanged();
             }
             catch (Exception ex)

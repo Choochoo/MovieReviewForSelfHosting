@@ -104,12 +104,12 @@
                         </div>
                         <div class="card-footer bg-transparent">
                             <div class="d-flex gap-2">
-                                <button class="btn btn-primary btn-sm flex-fill" @onclick="() => ViewSession(session.Id)">
+                                <button class="btn btn-primary btn-sm flex-fill" @onclick="() => ViewSession(session.Id.ToString())">
                                     <i class="bi bi-eye"></i> View Details
                                 </button>
                                 @if (session.CategoryResults != null)
                                 {
-                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ViewHighlights(session.Id)">
+                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ViewHighlights(session.Id.ToString())">
                                         <i class="bi bi-star"></i> Highlights
                                     </button>
                                 }

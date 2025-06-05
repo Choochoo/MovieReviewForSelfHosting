@@ -79,8 +79,8 @@ namespace MovieReviewApp.Services
         public async Task<List<Person>> GetAllPeopleAsync(bool respectOrder)
         {
             var people = await _db.GetAllAsync<Person>();
-            return respectOrder 
-                ? people.OrderBy(p => p.Order).ToList() 
+            return respectOrder
+                ? people.OrderBy(p => p.Order).ToList()
                 : people.ToList();
         }
 
@@ -222,28 +222,6 @@ namespace MovieReviewApp.Services
         }
         #endregion
 
-        #region Stats Commands
-        public async Task<List<StatsCommand>> GetStatsCommandsAsync()
-        {
-            return await _db.GetAllAsync<StatsCommand>();
-        }
-
-        public List<StatsCommand> GetStatsCommands()
-        {
-            return GetStatsCommandsAsync().GetAwaiter().GetResult();
-        }
-
-        public async Task AddStatsCommandAsync(StatsCommand command)
-        {
-            await _db.InsertAsync(command);
-        }
-
-        public void AddStatsCommand(StatsCommand command)
-        {
-            AddStatsCommandAsync(command).GetAwaiter().GetResult();
-        }
-        #endregion
-
         #region Site Updates
         public async Task AddSiteUpdateAsync(string description, string? username = null)
         {
@@ -378,11 +356,11 @@ namespace MovieReviewApp.Services
         public async Task<AwardEvent?> GetCurrentOrUpcomingAwardEventAsync()
         {
             var now = DateTime.UtcNow;
-            
+
             // First try to find a currently active event
-            var activeEvent = await _db.FindOneAsync<AwardEvent>(ae => 
+            var activeEvent = await _db.FindOneAsync<AwardEvent>(ae =>
                 ae.VotingStartDate <= now && ae.VotingEndDate >= now);
-            
+
             if (activeEvent != null)
                 return activeEvent;
 
@@ -400,7 +378,7 @@ namespace MovieReviewApp.Services
         {
             var phases = await GetPhasesAsync();
             var latestPhase = phases.OrderByDescending(p => p.Number).FirstOrDefault();
-            
+
             if (latestPhase == null)
                 return false;
 
@@ -432,9 +410,9 @@ namespace MovieReviewApp.Services
 
         public async Task<bool> SubmitVoteAsync(AwardVote vote)
         {
-            var existingVote = await _db.FindOneAsync<AwardVote>(v => 
-                v.AwardEventId == vote.AwardEventId && 
-                v.QuestionId == vote.QuestionId && 
+            var existingVote = await _db.FindOneAsync<AwardVote>(v =>
+                v.AwardEventId == vote.AwardEventId &&
+                v.QuestionId == vote.QuestionId &&
                 v.VoterName == vote.VoterName &&
                 v.MovieEventId == vote.MovieEventId);
 
@@ -443,9 +421,9 @@ namespace MovieReviewApp.Services
                 return false; // Vote already exists
             }
 
-            var userVoteCount = await _db.CountAsync<AwardVote>(v => 
-                v.AwardEventId == vote.AwardEventId && 
-                v.QuestionId == vote.QuestionId && 
+            var userVoteCount = await _db.CountAsync<AwardVote>(v =>
+                v.AwardEventId == vote.AwardEventId &&
+                v.QuestionId == vote.QuestionId &&
                 v.VoterName == vote.VoterName);
 
             if (userVoteCount >= 3)
@@ -464,9 +442,9 @@ namespace MovieReviewApp.Services
 
         public async Task<bool> DeleteVoteAsync(Guid awardEventId, Guid questionId, string voterName, Guid movieEventId)
         {
-            var vote = await _db.FindOneAsync<AwardVote>(v => 
-                v.AwardEventId == awardEventId && 
-                v.QuestionId == questionId && 
+            var vote = await _db.FindOneAsync<AwardVote>(v =>
+                v.AwardEventId == awardEventId &&
+                v.QuestionId == questionId &&
                 v.VoterName == voterName &&
                 v.MovieEventId == movieEventId);
 
@@ -487,7 +465,7 @@ namespace MovieReviewApp.Services
         {
             var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId);
             long deletedCount = 0;
-            
+
             foreach (var vote in votes)
             {
                 if (await _db.DeleteByIdAsync<AwardVote>(vote.Id))
@@ -572,14 +550,15 @@ namespace MovieReviewApp.Services
         {
             var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
             var events = await GetAllMovieEventsAsync();
-            
+
             var results = votes
                 .GroupBy(v => v.MovieEventId)
-                .Select(g => {
+                .Select(g =>
+                {
                     var movieEvent = events.FirstOrDefault(e => e.Id == g.Key);
                     var movieTitle = movieEvent?.Movie ?? "Unknown Movie";
                     var voteCounts = g.GroupBy(v => v.Points).ToDictionary(pg => pg.Key, pg => pg.Count());
-                    
+
                     return new QuestionResult
                     {
                         MovieTitle = movieTitle,
@@ -704,7 +683,7 @@ namespace MovieReviewApp.Services
             var votes = await GetVotesAsync(awardEventId);
             var userVotes = votes.Where(v => v.VoterName == userName);
             var questions = await GetActiveAwardQuestionsAsync();
-            
+
             var result = new Dictionary<Guid, int>();
             foreach (var question in questions)
             {
@@ -723,7 +702,7 @@ namespace MovieReviewApp.Services
         {
             var questions = await GetActiveAwardQuestionsAsync();
             var remainingVotes = await GetRemainingVotesForUserAsync(userName, awardEventId);
-            
+
             return questions
                 .Where(q => remainingVotes.GetValueOrDefault(q.Id, 0) > 0)
                 .Select(q => (q, remainingVotes.GetValueOrDefault(q.Id, 0)))

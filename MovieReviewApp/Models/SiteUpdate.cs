@@ -3,9 +3,8 @@
 namespace MovieReviewApp.Models
 {
     [MongoCollection("SiteUpdates")]
-    public class SiteUpdate
+    public class SiteUpdate : BaseModel
     {
-        public Guid Id { get; set; } = Guid.NewGuid();
         public DateTime LastUpdateTime { get; set; }
         public DateTime Date { get; set; }
         public DateTime Timestamp { get; set; }

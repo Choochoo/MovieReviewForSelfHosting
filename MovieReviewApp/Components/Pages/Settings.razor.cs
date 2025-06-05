@@ -41,52 +41,37 @@ namespace MovieReviewApp.Components.Pages
 
         protected override async Task OnInitializedAsync()
         {
-            try
-            {
-                settings = await movieReviewService.GetSettingsAsync();
-                RespectOrder = false; // default value
-                var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
-                if (setting != null && !string.IsNullOrEmpty(setting.Value))
-                    bool.TryParse(setting.Value, out RespectOrder);
+            settings = await movieReviewService.GetSettingsAsync();
+            RespectOrder = false; // default value
+            var setting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            if (setting != null && !string.IsNullOrEmpty(setting.Value))
+                bool.TryParse(setting.Value, out RespectOrder);
 
-                // Safe parsing with defaults
-                var startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
-                if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out var parsedStartDate))
-                    StartDate = parsedStartDate;
-                else
-                    StartDate = DateTime.Now;
-
-                var timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
-                if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out var parsedTimeCount))
-                    TimeCount = parsedTimeCount;
-                else
-                    TimeCount = 1;
-
-                var timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
-                TimePeriod = timePeriodSetting?.Value ?? "Month";
-
-                // Load group name from instance config
-                var instanceConfig = instanceManager.GetInstanceConfig();
-                GroupName = instanceConfig.DisplayName;
-
-                People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
-                await EnsureValidOrder();
-
-                // Load discussion questions
-                DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error in Settings.OnInitializedAsync: {ex.Message}");
-                // Set safe defaults to prevent UI blocking
+            // Safe parsing with defaults
+            var startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
+            if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out var parsedStartDate))
+                StartDate = parsedStartDate;
+            else
                 StartDate = DateTime.Now;
+
+            var timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
+            if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out var parsedTimeCount))
+                TimeCount = parsedTimeCount;
+            else
                 TimeCount = 1;
-                TimePeriod = "Month";
-                GroupName = "Movie Group";
-                People = new List<Person>();
-                DiscussionQuestions = new List<DiscussionQuestion>();
-                settings = new List<Setting>();
-            }
+
+            var timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
+            TimePeriod = timePeriodSetting?.Value ?? "Month";
+
+            // Load group name from instance config
+            var instanceConfig = instanceManager.GetInstanceConfig();
+            GroupName = instanceConfig.DisplayName;
+
+            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+            await EnsureValidOrder();
+
+            // Load discussion questions
+            DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
         }
 
         private async Task EnsureValidOrder()

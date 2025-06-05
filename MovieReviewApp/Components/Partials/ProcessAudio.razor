@@ -161,8 +161,8 @@
                                                 @if (HasTranscripts(session))
                                                 {
                                                     <div class="d-flex gap-2 align-items-center">
-                                                        <button class="btn btn-sm btn-warning" @onclick="() => RunAnalysis(session.Id)" disabled="@IsAnalyzing">
-                                                            @if (IsAnalyzing && analyzingSessionId == session.Id)
+                                                        <button class="btn btn-sm btn-warning" @onclick="() => RunAnalysis(session.Id.ToString())" disabled="@IsAnalyzing">
+                                                            @if (IsAnalyzing && analyzingSessionId == session.Id.ToString())
                                                             {
                                                                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
                                                                 <span>Analyzing...</span>
@@ -369,7 +369,7 @@
             
             // Prepare movie session (NO database save yet)
             var session = await MovieSessionService.PrepareSessionFromFolder(folder.Path, latestAssignments);
-            queueItem.SessionId = session.Id;
+            queueItem.SessionId = session.Id.ToString();
             
             // Start processing - only saves to database after 100% success
             await MovieSessionService.ProcessSession(session, (status, progress, step) =>

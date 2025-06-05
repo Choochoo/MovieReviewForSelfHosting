@@ -1,4 +1,6 @@
-﻿using MovieReviewApp.Attributes;
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
 {
@@ -7,6 +9,7 @@ namespace MovieReviewApp.Models
     {
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public List<Guid> Questions { get; set; } = new();
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public DateTime VotingStartDate { get; set; }
@@ -17,7 +20,7 @@ namespace MovieReviewApp.Models
     [MongoCollection("AwardQuestions")]
     public class AwardQuestion : BaseModel
     {
-        public string Question { get; set; }
+        public string Question { get; set; } = string.Empty;
         public int MaxVotes { get; set; }
         public bool IsActive { get; set; }
     }
@@ -25,8 +28,11 @@ namespace MovieReviewApp.Models
     [MongoCollection("AwardVotes")]
     public class AwardVote : BaseModel
     {
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid AwardEventId { get; set; }
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid QuestionId { get; set; }
+        [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid MovieEventId { get; set; }
         public string VoterIp { get; set; }
         public string VoterName { get; set; }

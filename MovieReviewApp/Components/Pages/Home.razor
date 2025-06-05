@@ -1,8 +1,8 @@
 ﻿@page "/"
 @using MovieReviewApp.Components.Partials
 @using MovieReviewApp.Extensions
+@using MovieReviewApp.Models
 @using MovieReviewApp.Services
-@attribute [StreamRendering]
 
 <PageTitle>Movie Review</PageTitle>
 
@@ -73,17 +73,17 @@
         </div>
     }
 
-    @if (Phases?.Any() ?? false)
+    @if (Phases?.Any() == true && AwardSettings != null)
     {
         <div class="row mt-4">
             <div class="col-md-12">
                 <div class="timeline">
                     @foreach (var phase in Phases.Where(p => p.EndDate >= DateProvider.Now))
                     {
-                        var futureEvents = phase.Events.Where(x =>
+                        var futureEvents = phase.Events?.Where(x =>
                         x != CurrentEvent &&
                         x != NextEvent &&
-                        x.EndDate >= DateProvider.Now).ToList();
+                        x.EndDate >= DateProvider.Now).ToList() ?? new List<MovieEvent>();
 
                         @if (futureEvents.Any())
                         {
@@ -100,7 +100,7 @@
                         }
 
                         @if (phase.EndDate >= DateProvider.Now &&
-                       phase.Number % AwardSettings.PhasesBeforeAward == 0)
+                                        phase.Number % AwardSettings.PhasesBeforeAward == 0)
                         {
                             var nextMonth = phase.EndDate.AddDays(1);
                             var awardMonthStart = new DateTime(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, DateTimeKind.Local);

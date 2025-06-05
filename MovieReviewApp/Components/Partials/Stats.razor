@@ -91,7 +91,7 @@
                 @foreach (var session in GetFilteredSessions())
                 {
                     <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id)">
+                        <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id.ToString())">
                             <div class="card-header">
                                 <h5 class="mb-1">@session.MovieTitle</h5>
                                 <small class="text-muted">@session.Date.ToString("MMMM dd, yyyy")</small>
@@ -154,13 +154,13 @@
                             <div class="card-footer bg-transparent">
                                 @if (session.Status == ProcessingStatus.Complete)
                                 {
-                                    <button class="btn btn-sm btn-primary w-100" @onclick="() => ViewSession(session.Id)">
+                                    <button class="btn btn-sm btn-primary w-100" @onclick="() => ViewSession(session.Id.ToString())">
                                         <i class="bi bi-bar-chart"></i> <span>View Details</span>
                                     </button>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-secondary w-100" @onclick="() => ViewSession(session.Id)">
+                                    <button class="btn btn-sm btn-secondary w-100" @onclick="() => ViewSession(session.Id.ToString())">
                                         <i class="bi bi-info-circle"></i> <span>View Details</span>
                                     </button>
                                 }
@@ -230,7 +230,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(SessionId) && (selectedSession == null || selectedSession.Id != SessionId))
+        if (!string.IsNullOrEmpty(SessionId) && (selectedSession == null || selectedSession.Id.ToString() != SessionId))
         {
             await LoadSession(SessionId);
         }

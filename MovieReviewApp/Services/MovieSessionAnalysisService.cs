@@ -1488,7 +1488,7 @@ public class MovieSessionAnalysisService
                 sourceFile.FilePath,
                 startTime,
                 endTime,
-                session.Id,
+                session.Id.ToString(),
                 clipId);
 
             if (!string.IsNullOrEmpty(clipUrl))
@@ -1560,7 +1560,7 @@ public class MovieSessionAnalysisService
                     sourceFile.FilePath,
                     startTime,
                     endTime,
-                    session.Id,
+                    session.Id.ToString(),
                     clipId);
 
                 if (!string.IsNullOrEmpty(clipUrl))
