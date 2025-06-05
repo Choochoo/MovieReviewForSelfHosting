@@ -117,7 +117,7 @@ public class DiscussionQuestionsService
     {
         try
         {
-            await _mongoDbService.DeleteByIdAsync<DiscussionQuestion>(id);
+            await _mongoDbService.DeleteByIdAsync<DiscussionQuestion>(Guid.Parse(id));
             _logger.LogInformation("Deleted discussion question: {Id}", id);
             return true;
         }

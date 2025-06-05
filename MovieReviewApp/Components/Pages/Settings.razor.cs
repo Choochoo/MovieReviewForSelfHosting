@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -19,8 +20,8 @@ namespace MovieReviewApp.Components.Pages
         
         [Inject]
         private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
-        public List<Person>? People { get; set; }
-        public DateTime? StartDate { get; set; }
+        private List<Person>? People { get; set; } = new();
+        private DateTime? StartDate { get; set; }
         public int? TimeCount;
         public string? TimePeriod;
         public string NewPerson = "New Person";
@@ -28,7 +29,7 @@ namespace MovieReviewApp.Components.Pages
         public string GroupName = "";
         public List<Setting> settings = new List<Setting>();
         
-        public List<DiscussionQuestion>? DiscussionQuestions { get; set; }
+        private List<DiscussionQuestion>? DiscussionQuestions { get; set; } = new();
         public string NewQuestionText = "";
         public bool NewQuestionIsActive = true;
         public readonly List<SelectListItem> TimePeriods = new List<SelectListItem>

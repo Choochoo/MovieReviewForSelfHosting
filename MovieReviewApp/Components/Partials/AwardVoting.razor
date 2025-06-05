@@ -338,7 +338,7 @@
 
         // Get all voters and votes
         allVoters = movieReviewService.GetAllPeople(true);
-        var allVotesForEvent = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
+        var allVotesForEvent = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
         
         // Group votes by voter and count them
         voterVoteCounts = allVotesForEvent
@@ -390,18 +390,18 @@
 
     private async Task LoadUserData()
     {
-        existingUsers = await movieReviewService.GetAvailableVoters(awardEvent.Id);
+        existingUsers = await movieReviewService.GetAvailableVotersAsync(awardEvent.Id);
 
         if (!string.IsNullOrEmpty(selectedUser))
         {
-            remainingVotes = await movieReviewService.GetRemainingVotesForUser(selectedUser, awardEvent.Id);
-            var availableQuestions = await movieReviewService.GetAvailableQuestionsForUser(selectedUser, awardEvent.Id);
+            remainingVotes = await movieReviewService.GetRemainingVotesForUserAsync(selectedUser, awardEvent.Id);
+            var availableQuestions = await movieReviewService.GetAvailableQuestionsForUserAsync(selectedUser, awardEvent.Id);
             questions = availableQuestions.Select(x => x.Question).ToList();
-            allMovies = movieReviewService.GetAllMovieEvents()
-                .Where(m => m.EndDate < awardEvent.EndDate && !string.IsNullOrEmpty(m.Movie))
+            allMovies = await movieReviewService.GetAllMovieEventsAsync();
+            allMovies = allMovies.Where(m => m.EndDate < awardEvent.EndDate && !string.IsNullOrEmpty(m.Movie))
                 .ToList();
-            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
-            awardSettings = movieReviewService.GetAwardSettings();
+            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
+            awardSettings = await movieReviewService.GetAwardSettingsAsync();
             selectedMovies = questions.ToDictionary(q => q.Id, _ => Guid.Empty);
         }
     }
@@ -511,9 +511,9 @@
                 Points = points
             };
 
-        if (await movieReviewService.AddVote(vote))
+        if (await movieReviewService.AddVoteAsync(vote))
         {
-            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
+            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
             selectedMovies[questionId] = Guid.Empty;
             await LoadUserData();
             StateHasChanged();
@@ -525,10 +525,10 @@
         var confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
         if (!confirmDelete) return;
 
-        if (await movieReviewService.RemoveVote(voteId))
+        if (await movieReviewService.RemoveVoteAsync(voteId))
         {
             // Refresh votes and remaining votes
-            votes = await movieReviewService.GetVotesForAwardEvent(awardEvent.Id);
+            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
             await LoadUserData();
             StateHasChanged();
         }

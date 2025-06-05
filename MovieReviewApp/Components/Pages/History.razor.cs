@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Components;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Components.Pages
 {
@@ -13,7 +14,7 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private MarkdownService MarkdownService { get; set; } = default!;
 
-        public required List<MovieEvent> Pastevents { get; set; }
+        private List<MovieEvent> Pastevents { get; set; } = new();
 
         // New properties for theater view
         private bool isGridView = true; // Default to theater view as requested

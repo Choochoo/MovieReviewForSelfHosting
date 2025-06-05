@@ -8,6 +8,10 @@ namespace MovieReviewApp.Models
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public List<Guid> Questions { get; set; } = new();
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+        public DateTime VotingStartDate { get; set; }
+        public DateTime VotingEndDate { get; set; }
+        public int PhaseNumber { get; set; }
     }
 
     [MongoCollection("AwardQuestions")]

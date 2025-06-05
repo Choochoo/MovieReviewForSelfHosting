@@ -7,7 +7,10 @@ namespace MovieReviewApp.Models
     {
         public Guid Id { get; set; } = Guid.NewGuid();
         public DateTime LastUpdateTime { get; set; }
+        public DateTime Date { get; set; }
+        public DateTime Timestamp { get; set; }
         public string UpdateType { get; set; } // e.g., "MovieAdded", "MovieUpdated"
         public string Description { get; set; }
+        public string UpdatedBy { get; set; } = "";
     }
 }

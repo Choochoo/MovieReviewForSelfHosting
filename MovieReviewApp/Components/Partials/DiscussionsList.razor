@@ -46,7 +46,9 @@
                                     <i class="bi bi-calendar3"></i> @session.Date.ToString("MMM dd, yyyy")
                                     @if (session.ProcessedAt.HasValue)
                                     {
-                                        <br><i class="bi bi-check-circle"></i> Processed @session.ProcessedAt.Value.ToString("MMM dd")
+                                        <br />
+                                        <i class="bi bi-check-circle"></i>
+                                        <span>Complete</span>
                                     }
                                 </small>
                             </div>
@@ -216,4 +218,5 @@
         
         return summary.Substring(0, 100) + "...";
     }
+
 }

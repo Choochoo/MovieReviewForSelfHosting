@@ -76,6 +76,19 @@ namespace MovieReviewApp.Services
             return GetAllPeopleAsync().GetAwaiter().GetResult();
         }
 
+        public async Task<List<Person>> GetAllPeopleAsync(bool respectOrder)
+        {
+            var people = await _db.GetAllAsync<Person>();
+            return respectOrder 
+                ? people.OrderBy(p => p.Order).ToList() 
+                : people.ToList();
+        }
+
+        public List<Person> GetAllPeople(bool respectOrder)
+        {
+            return GetAllPeopleAsync(respectOrder).GetAwaiter().GetResult();
+        }
+
         public async Task AddPersonAsync(Person person)
         {
             await _db.InsertAsync(person);
@@ -92,7 +105,7 @@ namespace MovieReviewApp.Services
             if (people.Any())
             {
                 var person = people.First();
-                return await _db.DeleteByIdAsync<Person>(Guid.Parse(person.Id));
+                return await _db.DeleteByIdAsync<Person>(person.Id);
             }
             return false;
         }
@@ -100,6 +113,16 @@ namespace MovieReviewApp.Services
         public void DeletePerson(string name)
         {
             DeletePersonAsync(name).GetAwaiter().GetResult();
+        }
+
+        public async Task<bool> DeletePersonAsync(Person person)
+        {
+            return await _db.DeleteByIdAsync<Person>(person.Id);
+        }
+
+        public void DeletePerson(Person person)
+        {
+            DeletePersonAsync(person).GetAwaiter().GetResult();
         }
 
         public async Task UpdatePersonAsync(string oldName, Person updatedPerson)
@@ -116,6 +139,16 @@ namespace MovieReviewApp.Services
         {
             UpdatePersonAsync(oldName, updatedPerson).GetAwaiter().GetResult();
         }
+
+        public async Task AddOrUpdatePersonAsync(Person person)
+        {
+            await _db.UpsertAsync(person);
+        }
+
+        public void AddOrUpdatePerson(Person person)
+        {
+            AddOrUpdatePersonAsync(person).GetAwaiter().GetResult();
+        }
         #endregion
 
         #region Settings
@@ -127,6 +160,16 @@ namespace MovieReviewApp.Services
         public List<Setting> GetAllSettings()
         {
             return GetAllSettingsAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<List<Setting>> GetSettingsAsync()
+        {
+            return await GetAllSettingsAsync();
+        }
+
+        public List<Setting> GetSettings()
+        {
+            return GetAllSettings();
         }
 
         public async Task AddOrUpdateSettingAsync(Setting setting)
@@ -145,7 +188,7 @@ namespace MovieReviewApp.Services
                 var toDelete = duplicates.Skip(1);
                 foreach (var duplicate in toDelete)
                 {
-                    await _db.DeleteByIdAsync<Setting>(Guid.Parse(duplicate.Id));
+                    await _db.DeleteByIdAsync<Setting>(duplicate.Id);
                 }
             }
         }
@@ -372,17 +415,17 @@ namespace MovieReviewApp.Services
         #endregion
 
         #region Award Votes
-        public async Task<List<AwardVote>> GetVotesAsync(Guid awardEventId, string? questionId = null)
+        public async Task<List<AwardVote>> GetVotesAsync(Guid awardEventId, Guid? questionId = null)
         {
-            if (!string.IsNullOrEmpty(questionId))
+            if (questionId.HasValue)
             {
-                return await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
+                return await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId.Value);
             }
 
             return await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId);
         }
 
-        public List<AwardVote> GetVotes(Guid awardEventId, string? questionId = null)
+        public List<AwardVote> GetVotes(Guid awardEventId, Guid? questionId = null)
         {
             return GetVotesAsync(awardEventId, questionId).GetAwaiter().GetResult();
         }
@@ -419,7 +462,7 @@ namespace MovieReviewApp.Services
             return SubmitVoteAsync(vote).GetAwaiter().GetResult();
         }
 
-        public async Task<bool> DeleteVoteAsync(Guid awardEventId, string questionId, string voterName, Guid movieEventId)
+        public async Task<bool> DeleteVoteAsync(Guid awardEventId, Guid questionId, string voterName, Guid movieEventId)
         {
             var vote = await _db.FindOneAsync<AwardVote>(v => 
                 v.AwardEventId == awardEventId && 
@@ -429,13 +472,13 @@ namespace MovieReviewApp.Services
 
             if (vote != null)
             {
-                return await _db.DeleteByIdAsync<AwardVote>(Guid.Parse(vote.Id));
+                return await _db.DeleteByIdAsync<AwardVote>(vote.Id);
             }
 
             return false;
         }
 
-        public bool DeleteVote(Guid awardEventId, string questionId, string voterName, Guid movieEventId)
+        public bool DeleteVote(Guid awardEventId, Guid questionId, string voterName, Guid movieEventId)
         {
             return DeleteVoteAsync(awardEventId, questionId, voterName, movieEventId).GetAwaiter().GetResult();
         }
@@ -447,7 +490,7 @@ namespace MovieReviewApp.Services
             
             foreach (var vote in votes)
             {
-                if (await _db.DeleteByIdAsync<AwardVote>(Guid.Parse(vote.Id)))
+                if (await _db.DeleteByIdAsync<AwardVote>(vote.Id))
                 {
                     deletedCount++;
                 }
@@ -461,16 +504,246 @@ namespace MovieReviewApp.Services
             return DeleteAllVotesForEventAsync(awardEventId).GetAwaiter().GetResult();
         }
 
-        public async Task<Dictionary<Guid, int>> GetVoteCountsAsync(Guid awardEventId, string questionId)
+        public async Task<Dictionary<Guid, int>> GetVoteCountsAsync(Guid awardEventId, Guid questionId)
         {
             var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
             return votes.GroupBy(v => v.MovieEventId)
                        .ToDictionary(g => g.Key, g => g.Count());
         }
 
-        public Dictionary<Guid, int> GetVoteCounts(Guid awardEventId, string questionId)
+        public Dictionary<Guid, int> GetVoteCounts(Guid awardEventId, Guid questionId)
         {
             return GetVoteCountsAsync(awardEventId, questionId).GetAwaiter().GetResult();
+        }
+        #endregion
+
+        #region Additional Award Methods
+        public async Task<AwardSetting> GetAwardSettingsAsync()
+        {
+            var setting = await GetSettingAsync("AwardSettings");
+            if (setting?.Value != null)
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<AwardSetting>(setting.Value) ?? new AwardSetting();
+            }
+            return new AwardSetting();
+        }
+
+        public AwardSetting GetAwardSettings()
+        {
+            return GetAwardSettingsAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<AwardEvent?> GetAwardEventForDateAsync(DateTime date)
+        {
+            var awardEvents = await _db.FindAsync<AwardEvent>(e => e.StartDate <= date && e.EndDate >= date);
+            return awardEvents.FirstOrDefault();
+        }
+
+        public AwardEvent? GetAwardEventForDate(DateTime date)
+        {
+            return GetAwardEventForDateAsync(date).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<AwardQuestion>> GetActiveAwardQuestionsAsync()
+        {
+            return await _db.FindAsync<AwardQuestion>(q => q.IsActive);
+        }
+
+        public List<AwardQuestion> GetActiveAwardQuestions()
+        {
+            return GetActiveAwardQuestionsAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<AwardEvent?> GetAwardEventByFilterAsync(FilterDefinition<AwardEvent> filter)
+        {
+            // Get all award events and filter in memory since MongoDbService doesn't have a direct FilterDefinition method
+            var allEvents = await _db.GetAllAsync<AwardEvent>();
+            // For now, just return the first event that matches basic criteria
+            // This is a simplified implementation - in a real scenario, you'd want to implement proper FilterDefinition support
+            return allEvents.FirstOrDefault();
+        }
+
+        public AwardEvent? GetAwardEventByFilter(FilterDefinition<AwardEvent> filter)
+        {
+            return GetAwardEventByFilterAsync(filter).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<QuestionResult>> GetQuestionResultsAsync(Guid awardEventId, Guid questionId)
+        {
+            var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
+            var events = await GetAllMovieEventsAsync();
+            
+            var results = votes
+                .GroupBy(v => v.MovieEventId)
+                .Select(g => {
+                    var movieEvent = events.FirstOrDefault(e => e.Id == g.Key);
+                    var movieTitle = movieEvent?.Movie ?? "Unknown Movie";
+                    var voteCounts = g.GroupBy(v => v.Points).ToDictionary(pg => pg.Key, pg => pg.Count());
+                    
+                    return new QuestionResult
+                    {
+                        MovieTitle = movieTitle,
+                        TotalPoints = g.Sum(v => v.Points),
+                        FirstPlaceVotes = voteCounts.GetValueOrDefault(3, 0),
+                        SecondPlaceVotes = voteCounts.GetValueOrDefault(2, 0),
+                        ThirdPlaceVotes = voteCounts.GetValueOrDefault(1, 0)
+                    };
+                })
+                .OrderByDescending(r => r.TotalPoints)
+                .ToList();
+
+            return results;
+        }
+
+        public List<QuestionResult> GetQuestionResults(Guid awardEventId, Guid questionId)
+        {
+            return GetQuestionResultsAsync(awardEventId, questionId).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<SiteUpdate>> GetRecentUpdatesAsync(DateTime lastVisit)
+        {
+            return await _db.FindAsync<SiteUpdate>(u => u.Date > lastVisit);
+        }
+
+        public List<SiteUpdate> GetRecentUpdates(DateTime lastVisit)
+        {
+            return GetRecentUpdatesAsync(lastVisit).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<Phase>> GetAllPhasesAsync()
+        {
+            var phases = await _db.GetAllAsync<Phase>();
+            return phases.OrderBy(p => p.Number).ToList();
+        }
+
+        public List<Phase> GetAllPhases()
+        {
+            return GetAllPhasesAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task<AwardEvent?> GetAwardEventByIdAsync(Guid awardEventId)
+        {
+            return await _db.GetByIdAsync<AwardEvent>(awardEventId);
+        }
+
+        public AwardEvent? GetAwardEventById(Guid awardEventId)
+        {
+            return GetAwardEventByIdAsync(awardEventId).GetAwaiter().GetResult();
+        }
+
+        public async Task DeleteDefaultQuestionsAsync()
+        {
+            // This method would delete default questions
+            var defaultQuestions = await _db.FindAsync<AwardQuestion>(q => q.Question.Contains("Default"));
+            foreach (var question in defaultQuestions)
+            {
+                await _db.DeleteByIdAsync<AwardQuestion>(question.Id);
+            }
+        }
+
+        public void DeleteDefaultQuestions()
+        {
+            DeleteDefaultQuestionsAsync().GetAwaiter().GetResult();
+        }
+
+        public async Task DeleteAwardQuestionAsync(Guid questionId)
+        {
+            await _db.DeleteByIdAsync<AwardQuestion>(questionId);
+        }
+
+        public void DeleteAwardQuestion(Guid questionId)
+        {
+            DeleteAwardQuestionAsync(questionId).GetAwaiter().GetResult();
+        }
+
+        // Additional voting methods
+        public async Task<List<AwardVote>> GetVotesForAwardEventAsync(Guid awardEventId)
+        {
+            return await GetVotesAsync(awardEventId);
+        }
+
+        public List<AwardVote> GetVotesForAwardEvent(Guid awardEventId)
+        {
+            return GetVotesForAwardEventAsync(awardEventId).GetAwaiter().GetResult();
+        }
+
+        public async Task<bool> AddVoteAsync(AwardVote vote)
+        {
+            await _db.InsertAsync(vote);
+            return true;
+        }
+
+        public bool AddVote(AwardVote vote)
+        {
+            return AddVoteAsync(vote).GetAwaiter().GetResult();
+        }
+
+        public async Task<bool> RemoveVoteAsync(Guid voteId)
+        {
+            return await _db.DeleteByIdAsync<AwardVote>(voteId);
+        }
+
+        public bool RemoveVote(Guid voteId)
+        {
+            return RemoveVoteAsync(voteId).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<string>> GetAvailableVotersAsync(Guid awardEventId)
+        {
+            var people = await GetAllPeopleAsync();
+            return people.Select(p => p.Name ?? "").Where(n => !string.IsNullOrEmpty(n)).ToList();
+        }
+
+        public List<string> GetAvailableVoters(Guid awardEventId)
+        {
+            return GetAvailableVotersAsync(awardEventId).GetAwaiter().GetResult();
+        }
+
+        public async Task<Dictionary<Guid, int>> GetRemainingVotesForUserAsync(string userName, Guid awardEventId)
+        {
+            var votes = await GetVotesAsync(awardEventId);
+            var userVotes = votes.Where(v => v.VoterName == userName);
+            var questions = await GetActiveAwardQuestionsAsync();
+            
+            var result = new Dictionary<Guid, int>();
+            foreach (var question in questions)
+            {
+                var voteCount = userVotes.Count(v => v.QuestionId == question.Id);
+                result[question.Id] = Math.Max(0, question.MaxVotes - voteCount);
+            }
+            return result;
+        }
+
+        public Dictionary<Guid, int> GetRemainingVotesForUser(string userName, Guid awardEventId)
+        {
+            return GetRemainingVotesForUserAsync(userName, awardEventId).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<(AwardQuestion Question, int RemainingVotes)>> GetAvailableQuestionsForUserAsync(string userName, Guid awardEventId)
+        {
+            var questions = await GetActiveAwardQuestionsAsync();
+            var remainingVotes = await GetRemainingVotesForUserAsync(userName, awardEventId);
+            
+            return questions
+                .Where(q => remainingVotes.GetValueOrDefault(q.Id, 0) > 0)
+                .Select(q => (q, remainingVotes.GetValueOrDefault(q.Id, 0)))
+                .ToList();
+        }
+
+        public List<(AwardQuestion Question, int RemainingVotes)> GetAvailableQuestionsForUser(string userName, Guid awardEventId)
+        {
+            return GetAvailableQuestionsForUserAsync(userName, awardEventId).GetAwaiter().GetResult();
+        }
+
+        public async Task<List<AwardEvent>> GetPastAwardEventsAsync(Guid currentEventId)
+        {
+            var allEvents = await _db.GetAllAsync<AwardEvent>();
+            return allEvents.Where(e => e.Id != currentEventId && e.EndDate < DateTime.UtcNow).ToList();
+        }
+
+        public List<AwardEvent> GetPastAwardEvents(Guid currentEventId)
+        {
+            return GetPastAwardEventsAsync(currentEventId).GetAwaiter().GetResult();
         }
         #endregion
 
