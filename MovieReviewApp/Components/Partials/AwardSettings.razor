@@ -315,8 +315,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        settings = movieReviewService.GetAwardSettings();
-        questions = movieReviewService.GetActiveAwardQuestions()
+        settings = await movieReviewService.GetAwardSettingsAsync();
+        var allQuestions = await movieReviewService.GetActiveAwardQuestionsAsync();
+        questions = allQuestions
             .Where(q => q.Question != DEFAULT_QUESTION)
             .ToList();
     }
@@ -354,7 +355,7 @@
 
             // First save the AwardSettings
             var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
-            movieReviewService.AddOrUpdateSetting(new Setting
+            await movieReviewService.AddOrUpdateSettingAsync(new Setting
                 {
                     Id = Guid.NewGuid(),
                     Key = "AwardSettings",
@@ -362,12 +363,12 @@
                 });
 
             // Delete any existing default questions in the database
-            movieReviewService.DeleteDefaultQuestions();
+            await movieReviewService.DeleteDefaultQuestionsAsync();
 
             // Delete questions that were removed
             foreach (var questionId in questionsToDelete)
             {
-                movieReviewService.DeleteAwardQuestion(questionId);
+                await movieReviewService.DeleteAwardQuestionAsync(questionId);
             }
 
             // Then save each valid question
@@ -380,7 +381,7 @@
                     {
                         question.Id = Guid.NewGuid();
                     }
-                    movieReviewService.AddOrUpdateAwardQuestion(question);
+                    await movieReviewService.AddOrUpdateAwardQuestionAsync(question);
                 }
             }
 

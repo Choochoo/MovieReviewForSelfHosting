@@ -5,7 +5,7 @@ using MovieReviewApp.Services;
 
 namespace MovieReviewApp.Components.Pages
 {
-    public partial class History
+    public partial class History : ComponentBase
     {
         [Inject]
         private MovieReviewService movieReviewService { get; set; } = default!;

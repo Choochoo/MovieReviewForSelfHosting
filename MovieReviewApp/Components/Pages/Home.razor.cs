@@ -7,7 +7,7 @@ using MovieReviewApp.Services;
 
 namespace MovieReviewApp.Components.Pages
 {
-    public partial class Home
+    public partial class Home : ComponentBase
     {
         [Inject]
         private IJSRuntime JS { get; set; } = default!;
@@ -42,46 +42,37 @@ namespace MovieReviewApp.Components.Pages
 
         protected override async Task OnInitializedAsync()
         {
-            try
+            // Load all data asynchronously at initialization
+            await LoadAllDataAsync();
+
+            // Load discussion questions
+            DiscussionQuestions = await discussionQuestionsService.GetActiveQuestionsAsync();
+
+            // Check if current phase is award phase
+            var currentAwardEvent = await movieReviewService.GetAwardEventForDateAsync(DateProvider.Now);
+            IsCurrentPhaseAwardPhase = currentAwardEvent != null;
+
+            // Load award settings
+            AwardSettings = await movieReviewService.GetAwardSettingsAsync();
+
+            // Generate schedule if we have the required data
+            if (_allNames != null && _allNames.Length > 0 && _startDate.HasValue && _startDate.Value != DateTime.MinValue)
             {
-                // Load all data asynchronously at initialization
-                await LoadAllDataAsync();
-
-                // Load discussion questions
-                DiscussionQuestions = await discussionQuestionsService.GetActiveQuestionsAsync();
-
-                // Check if current phase is award phase
-                var currentAwardEvent = await movieReviewService.GetAwardEventForDateAsync(DateProvider.Now);
-                IsCurrentPhaseAwardPhase = currentAwardEvent != null;
-
-                // Load award settings
-                AwardSettings = await movieReviewService.GetAwardSettingsAsync();
-
-                // Generate schedule if we have the required data
-                if (_allNames != null && _allNames.Length > 0 && _startDate.HasValue && _startDate.Value != DateTime.MinValue)
-                {
-                    await GenerateScheduleAsync(_startDate.Value, _allNames);
-                }
-                else
-                {
-                    CurrentEvent = null;
-                    NextEvent = null;
-                }
-
-                _isInitialized = true;
+                await GenerateScheduleAsync(_startDate.Value, _allNames);
             }
-            catch (Exception ex)
+            else
             {
-                Console.WriteLine($"Error in OnInitializedAsync: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
-                throw;
+                CurrentEvent = null;
+                NextEvent = null;
             }
+
+            _isInitialized = true;
         }
 
         private async Task LoadAllDataAsync()
         {
             // Load settings
-            _settings = await movieReviewService.GetSettingsAsync();
+            _settings = await movieReviewService.GetAllSettingsAsync();
 
             // Parse start date
             var startDateSetting = _settings?.FirstOrDefault(x => x.Key == "StartDate")?.Value;
@@ -282,12 +273,6 @@ namespace MovieReviewApp.Components.Pages
                     Console.WriteLine($"Error in OnAfterRenderAsync: {ex.Message}");
                 }
             }
-        }
-
-        private async Task DismissUpdates()
-        {
-            showUpdates = false;
-            await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
         }
 
         public List<string> GetEligibleMoviesForPhase(int phaseNumber)

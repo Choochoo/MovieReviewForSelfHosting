@@ -1,4 +1,3 @@
-@* Settings.razor *@
 @page "/settings"
 @using MovieReviewApp.Components.Partials
 
@@ -58,22 +57,18 @@
     <div class="settings-section">
         <h3 class="section-title">People Management</h3>
         
-        @if (People == null)
-        {
-            <p><em>Loading...</em></p>
-        }
-        else
-        {
-            <div class="people-table">
-                <table class="table table-compact">
-                    <thead>
-                        <tr>
-                            <th class="col-order">Order</th>
-                            <th class="col-name">Name</th>
-                            <th class="col-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+        <div class="people-table">
+            <table class="table table-compact">
+                <thead>
+                    <tr>
+                        <th class="col-order">Order</th>
+                        <th class="col-name">Name</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (People != null && People.Any())
+                    {
                         @foreach (var person in People.OrderBy(p => p?.Order))
                         {
                             @if (person != null)
@@ -121,19 +116,25 @@
                                 </tr>
                             }
                         }
-                        <tr class="add-row">
-                            <td class="col-order"></td>
-                            <td class="col-name">
-                                <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
-                            </td>
-                            <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
-                            </td>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="3" class="text-center text-muted">No people added yet</td>
                         </tr>
-                    </tbody>
-                </table>
-            </div>
-        }
+                    }
+                    <tr class="add-row">
+                        <td class="col-order"></td>
+                        <td class="col-name">
+                            <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
+                        </td>
+                        <td class="col-actions">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
     
     <div class="settings-section">
@@ -143,23 +144,19 @@
     <div class="settings-section">
         <h3 class="section-title">Discussion Questions</h3>
         
-        @if (DiscussionQuestions == null)
-        {
-            <p><em>Loading...</em></p>
-        }
-        else
-        {
-            <div class="questions-table">
-                <table class="table table-compact">
-                    <thead>
-                        <tr>
-                            <th class="col-order">Order</th>
-                            <th class="col-question">Question</th>
-                            <th class="col-active">Active</th>
-                            <th class="col-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+        <div class="questions-table">
+            <table class="table table-compact">
+                <thead>
+                    <tr>
+                        <th class="col-order">Order</th>
+                        <th class="col-question">Question</th>
+                        <th class="col-active">Active</th>
+                        <th class="col-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (DiscussionQuestions != null && DiscussionQuestions.Any())
+                    {
                         @foreach (var question in DiscussionQuestions.OrderBy(q => q?.Order))
                         {
                             @if (question != null)
@@ -219,30 +216,36 @@
                                 </tr>
                             }
                         }
-                        <tr class="add-row">
-                            <td class="col-order"></td>
-                            <td class="col-question">
-                                <input type="text" @bind="@NewQuestionText" class="form-control form-control-sm" placeholder="Enter new discussion question" />
-                            </td>
-                            <td class="col-active">
-                                <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
-                            </td>
-                            <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
-                            </td>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No discussion questions added yet</td>
                         </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="mt-3">
-                <small class="text-muted">
-                    <i class="bi bi-info-circle"></i>
-                    These questions will be used on the Home page and extracted from audio transcripts during analysis.
-                    Only active questions will be displayed and analyzed.
-                </small>
-            </div>
-        }
+                    }
+                    <tr class="add-row">
+                        <td class="col-order"></td>
+                        <td class="col-question">
+                            <input type="text" @bind="@NewQuestionText" class="form-control form-control-sm" placeholder="Enter new discussion question" />
+                        </td>
+                        <td class="col-active">
+                            <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
+                        </td>
+                        <td class="col-actions">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                These questions will be used on the Home page and extracted from audio transcripts during analysis.
+                Only active questions will be displayed and analyzed.
+            </small>
+        </div>
     </div>
 </div>
 
@@ -513,10 +516,6 @@
             flex-direction: column;
             align-items: flex-start;
         }
-    }
-
-
-
 
         .col-actions {
             width: auto;

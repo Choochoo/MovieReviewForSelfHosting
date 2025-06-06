@@ -157,21 +157,6 @@ namespace MovieReviewApp.Services
             return await _db.GetAllAsync<Setting>();
         }
 
-        public List<Setting> GetAllSettings()
-        {
-            return GetAllSettingsAsync().GetAwaiter().GetResult();
-        }
-
-        public async Task<List<Setting>> GetSettingsAsync()
-        {
-            return await GetAllSettingsAsync();
-        }
-
-        public List<Setting> GetSettings()
-        {
-            return GetAllSettings();
-        }
-
         public async Task AddOrUpdateSettingAsync(Setting setting)
         {
             var existing = await _db.FindOneAsync<Setting>(s => s.Key == setting.Key);
