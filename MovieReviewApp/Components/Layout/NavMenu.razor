@@ -1,11 +1,15 @@
 ﻿@using Microsoft.Extensions.Options
 @using MovieReviewApp.Models
 @using MovieReviewApp.Services
+@using MovieReviewApp.Components.Partials
 @inject IOptions<AppSettings> AppSettings
 @inject InstanceManager InstanceManager
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">@GetTitle()</a>
+        <div class="navbar-brand-container">
+            <a class="navbar-brand" href="">@GetTitle()</a>
+            <ThemeToggle />
+        </div>
         <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
             <span class="navbar-toggler-icon"></span>
         </button>

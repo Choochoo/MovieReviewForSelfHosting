@@ -2,9 +2,11 @@
 @using Microsoft.Extensions.Options
 @using MovieReviewApp.Models
 @using MovieReviewApp.Services
+@using MovieReviewApp.Components.Partials
 @inject IOptions<AppSettings> AppSettings
 @inject NavigationManager Navigation
 @inject SecretsManager SecretsManager
+@inject ThemeService ThemeService
 
 @if (IsFirstRunSetup)
 {
@@ -82,4 +84,9 @@ else
 
 @code {
     private bool IsFirstRunSetup => Navigation.Uri.Contains("/setup", StringComparison.OrdinalIgnoreCase) || SecretsManager.IsFirstRun;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ThemeService.InitializeAsync();
+    }
 }

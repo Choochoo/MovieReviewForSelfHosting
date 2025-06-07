@@ -29,6 +29,14 @@
                     <label class="setting-label">Start Date:</label>
                     <InputDate @bind-Value="StartDate" class="form-control form-control-sm" />
                 </div>
+
+                <div class="setting-field">
+                    <label class="setting-label">Theme:</label>
+                    <InputSelect @bind-Value="SelectedTheme" class="form-control form-control-sm">
+                        <option value="dark">Dark Mode</option>
+                        <option value="light">Light Mode</option>
+                    </InputSelect>
+                </div>
                 
                 <div class="setting-field">
                     <label class="setting-label">Occurrence:</label>

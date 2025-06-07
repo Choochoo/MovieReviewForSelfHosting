@@ -28,7 +28,8 @@
       "Bash(snap list:*)",
       "Bash(rg:*)",
       "Bash(dotnet build:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(dotnet --version)"
     ],
     "deny": []
   }

@@ -20,6 +20,9 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
 
+        [Inject]
+        private ThemeService themeService { get; set; } = default!;
+
         private List<Person> People { get; set; } = new();
         private DateTime StartDate { get; set; } = DateTime.Now;
         public int TimeCount { get; set; } = 1;
@@ -28,6 +31,7 @@ namespace MovieReviewApp.Components.Pages
         public bool RespectOrder { get; set; } = false;
         public string GroupName { get; set; } = "";
         public List<Setting> settings { get; set; } = new List<Setting>();
+        public string SelectedTheme { get; set; } = "dark";
 
         private List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public string NewQuestionText { get; set; } = "";
@@ -69,6 +73,9 @@ namespace MovieReviewApp.Components.Pages
             // Load people and questions
             People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+
+            // Load current theme
+            SelectedTheme = await themeService.GetThemeAsync();
         }
 
 
@@ -126,6 +133,9 @@ namespace MovieReviewApp.Components.Pages
             await SaveOrCreateSetting("StartDate", StartDate.ToString());
             await SaveOrCreateSetting("TimeCount", TimeCount.ToString());
             await SaveOrCreateSetting("TimePeriod", TimePeriod);
+
+            // Save theme
+            await themeService.SetThemeAsync(SelectedTheme);
 
             // Refresh people list if respect order changed
             People = await movieReviewService.GetAllPeopleAsync(RespectOrder);

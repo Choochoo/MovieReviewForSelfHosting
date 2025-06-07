@@ -8,6 +8,7 @@ namespace MovieReviewApp.Services
     {
         private readonly MovieReviewService _movieReviewService;
         private readonly AppSettings _appSettings;
+        private string _currentTheme = "dark";
 
         public ThemeService(MovieReviewService movieReviewService, IOptions<AppSettings> appSettings)
         {
@@ -15,50 +16,63 @@ namespace MovieReviewApp.Services
             _appSettings = appSettings.Value;
         }
 
-        public async Task<string> GetGroupThemeAsync()
+        public event Action<string>? ThemeChanged;
+
+        public string CurrentTheme => _currentTheme;
+
+        public async Task InitializeAsync()
         {
             var setting = await _movieReviewService.GetSettingAsync("theme");
-            return setting?.Value ?? "cyberpunk";
+            _currentTheme = setting?.Value ?? "dark";
         }
 
-        public async Task SaveGroupThemeAsync(string theme)
+        public async Task<string> GetThemeAsync()
         {
-            var setting = new Setting
+            var setting = await _movieReviewService.GetSettingAsync("theme");
+            _currentTheme = setting?.Value ?? "dark";
+            return _currentTheme;
+        }
+
+        public async Task SetThemeAsync(string theme)
+        {
+            if (theme != "light" && theme != "dark")
             {
-                Key = "theme",
-                Value = theme,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _movieReviewService.AddOrUpdateSettingAsync(setting);
-        }
+                theme = "dark";
+            }
 
-        public async Task<string> GetSettingAsync(string groupId, string key)
-        {
-            var setting = await _movieReviewService.GetSettingAsync(key);
-            return setting?.Value;
-        }
+            _currentTheme = theme;
 
-        public async Task SaveSettingAsync(string groupId, string key, string value)
-        {
-            var setting = await _movieReviewService.GetSettingAsync(key);
+            var setting = await _movieReviewService.GetSettingAsync("theme");
             if (setting == null)
             {
                 setting = new Setting
                 {
-                    Key = key,
-                    Value = value,
+                    Key = "theme",
+                    Value = theme,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                await _movieReviewService.AddOrUpdateSettingAsync(setting);
             }
             else
             {
-                setting.Value = value;
+                setting.Value = theme;
                 setting.UpdatedAt = DateTime.UtcNow;
-                await _movieReviewService.AddOrUpdateSettingAsync(setting);
             }
+
+            await _movieReviewService.AddOrUpdateSettingAsync(setting);
+            ThemeChanged?.Invoke(theme);
+        }
+
+        public async Task ToggleThemeAsync()
+        {
+            var newTheme = _currentTheme == "dark" ? "light" : "dark";
+            await SetThemeAsync(newTheme);
+        }
+
+        public async Task<string> GetGroupThemeAsync()
+        {
+            var setting = await _movieReviewService.GetSettingAsync("group_theme");
+            return setting?.Value ?? "cyberpunk";
         }
     }
 } 
