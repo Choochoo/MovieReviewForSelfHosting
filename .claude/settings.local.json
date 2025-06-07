@@ -20,7 +20,15 @@
       "WebFetch(domain:docs.gladia.io)",
       "Bash(dotnet build:*)",
       "Bash(dotnet build)",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(whereis:*)",
+      "Bash(snap list:*)",
+      "Bash(rg:*)",
+      "Bash(dotnet build:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

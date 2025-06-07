@@ -754,11 +754,18 @@
             if (setting != null)
             {
                 setting.Value = groupName;
+                setting.UpdatedAt = DateTime.UtcNow;
                 await MongoDb.UpsertAsync(setting);
             }
             else
             {
-                await MongoDb.InsertAsync(new Setting { Key = "GroupName", Value = groupName });
+                await MongoDb.InsertAsync(new Setting 
+                { 
+                    Key = "GroupName", 
+                    Value = groupName,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
             }
         }
         catch (Exception ex)

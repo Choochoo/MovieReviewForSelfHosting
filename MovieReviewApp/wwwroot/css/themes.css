@@ -1,0 +1,327 @@
+/* Theme Definitions */
+:root {
+    /* Light Theme (Default) */
+    --background-primary: #ffffff;
+    --background-secondary: #f8f9fa;
+    --surface-color: #ffffff;
+    --surface-hover: #e9ecef;
+    --accent-primary: #0d6efd;
+    --accent-secondary: #6c757d;
+    --accent-tertiary: #198754;
+    --accent-purple: #6f42c1;
+    --accent-orange: #fd7e14;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --border-color: #dee2e6;
+    --border-light: #e9ecef;
+    --success-color: #198754;
+    --error-color: #dc3545;
+    --warning-color: #ffc107;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+    --shadow-glow: 0 0 20px rgba(13, 110, 253, 0.15);
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+    --background-primary: #0a0a0a;
+    --background-secondary: #141414;
+    --surface-color: #1a1a1a;
+    --surface-hover: #242424;
+    --accent-primary: #00D9FF;
+    --accent-secondary: #FF0080;
+    --accent-tertiary: #00FF88;
+    --accent-purple: #9945FF;
+    --accent-orange: #FF6B00;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B3B3B3;
+    --text-muted: #666666;
+    --border-color: #333333;
+    --border-light: #444444;
+    --success-color: #00FF88;
+    --error-color: #FF0080;
+    --warning-color: #FFB800;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.3);
+}
+
+/* Cyberpunk Theme */
+[data-theme="cyberpunk"] {
+    --background-primary: #0a0a0a;
+    --background-secondary: #141414;
+    --surface-color: #1a1a1a;
+    --surface-hover: #242424;
+    --accent-primary: #00D9FF;
+    --accent-secondary: #FF0080;
+    --accent-tertiary: #00FF88;
+    --accent-purple: #9945FF;
+    --accent-orange: #FF6B00;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B3B3B3;
+    --text-muted: #666666;
+    --border-color: #333333;
+    --border-light: #444444;
+    --success-color: #00FF88;
+    --error-color: #FF0080;
+    --warning-color: #FFB800;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.3);
+}
+
+/* Nature Theme */
+[data-theme="nature"] {
+    --background-primary: #f0f7f0;
+    --background-secondary: #e3eee3;
+    --surface-color: #ffffff;
+    --surface-hover: #e3eee3;
+    --accent-primary: #2e7d32;
+    --accent-secondary: #558b2f;
+    --accent-tertiary: #7cb342;
+    --accent-purple: #5e35b1;
+    --accent-orange: #ef6c00;
+    --text-primary: #1b5e20;
+    --text-secondary: #33691e;
+    --text-muted: #558b2f;
+    --border-color: #a5d6a7;
+    --border-light: #c8e6c9;
+    --success-color: #2e7d32;
+    --error-color: #c62828;
+    --warning-color: #f9a825;
+    --shadow-sm: 0 2px 4px rgba(46, 125, 50, 0.1);
+    --shadow-md: 0 4px 8px rgba(46, 125, 50, 0.15);
+    --shadow-lg: 0 8px 16px rgba(46, 125, 50, 0.2);
+    --shadow-glow: 0 0 20px rgba(46, 125, 50, 0.2);
+}
+
+/* Ocean Theme */
+[data-theme="ocean"] {
+    --background-primary: #e3f2fd;
+    --background-secondary: #bbdefb;
+    --surface-color: #ffffff;
+    --surface-hover: #e1f5fe;
+    --accent-primary: #0288d1;
+    --accent-secondary: #0277bd;
+    --accent-tertiary: #039be5;
+    --accent-purple: #5e35b1;
+    --accent-orange: #ef6c00;
+    --text-primary: #01579b;
+    --text-secondary: #0277bd;
+    --text-muted: #4fc3f7;
+    --border-color: #81d4fa;
+    --border-light: #b3e5fc;
+    --success-color: #00897b;
+    --error-color: #d32f2f;
+    --warning-color: #ffa000;
+    --shadow-sm: 0 2px 4px rgba(2, 136, 209, 0.1);
+    --shadow-md: 0 4px 8px rgba(2, 136, 209, 0.15);
+    --shadow-lg: 0 8px 16px rgba(2, 136, 209, 0.2);
+    --shadow-glow: 0 0 20px rgba(2, 136, 209, 0.2);
+}
+
+/* Theme Variants with Dark/Light Modes */
+
+/* Cyberpunk Dark (Default) */
+[data-theme="cyberpunk-dark"], .cyberpunk-dark {
+    --background-primary: #0a0a0a;
+    --background-secondary: #141414;
+    --surface-color: #1a1a1a;
+    --surface-hover: #242424;
+    --accent-primary: #00D9FF;
+    --accent-secondary: #FF0080;
+    --accent-tertiary: #00FF88;
+    --accent-purple: #9945FF;
+    --accent-orange: #FF6B00;
+    --text-primary: #FFFFFF;
+    --text-secondary: #B3B3B3;
+    --text-muted: #666666;
+    --border-color: #333333;
+    --border-light: #444444;
+    --success-color: #00FF88;
+    --error-color: #FF0080;
+    --warning-color: #FFB800;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.3);
+}
+
+/* Cyberpunk Light */
+[data-theme="cyberpunk-light"], .cyberpunk-light {
+    --background-primary: #f0f0f0;
+    --background-secondary: #e0e0e0;
+    --surface-color: #ffffff;
+    --surface-hover: #f5f5f5;
+    --accent-primary: #0099cc;
+    --accent-secondary: #cc0066;
+    --accent-tertiary: #00cc66;
+    --accent-purple: #7733cc;
+    --accent-orange: #cc5500;
+    --text-primary: #1a1a1a;
+    --text-secondary: #4d4d4d;
+    --text-muted: #999999;
+    --border-color: #cccccc;
+    --border-light: #e0e0e0;
+    --success-color: #00cc66;
+    --error-color: #cc0066;
+    --warning-color: #cc9900;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+    --shadow-glow: 0 0 20px rgba(0, 153, 204, 0.3);
+}
+
+/* Ocean Dark */
+[data-theme="ocean-dark"], .ocean-dark {
+    --background-primary: #0a1a2a;
+    --background-secondary: #1a2a3a;
+    --surface-color: #2a3a4a;
+    --surface-hover: #3a4a5a;
+    --accent-primary: #4fc3f7;
+    --accent-secondary: #29b6f6;
+    --accent-tertiary: #0288d1;
+    --accent-purple: #7986cb;
+    --accent-orange: #ffb74d;
+    --text-primary: #ffffff;
+    --text-secondary: #b3d9ff;
+    --text-muted: #80b3d9;
+    --border-color: #4a6a8a;
+    --border-light: #5a7a9a;
+    --success-color: #4db6ac;
+    --error-color: #e57373;
+    --warning-color: #ffb74d;
+    --shadow-sm: 0 2px 4px rgba(0, 30, 60, 0.5);
+    --shadow-md: 0 4px 8px rgba(0, 30, 60, 0.6);
+    --shadow-lg: 0 8px 16px rgba(0, 30, 60, 0.7);
+    --shadow-glow: 0 0 20px rgba(79, 195, 247, 0.3);
+}
+
+/* Ocean Light */
+[data-theme="ocean-light"], .ocean-light {
+    --background-primary: #e3f2fd;
+    --background-secondary: #bbdefb;
+    --surface-color: #ffffff;
+    --surface-hover: #e1f5fe;
+    --accent-primary: #0288d1;
+    --accent-secondary: #0277bd;
+    --accent-tertiary: #039be5;
+    --accent-purple: #5e35b1;
+    --accent-orange: #ef6c00;
+    --text-primary: #01579b;
+    --text-secondary: #0277bd;
+    --text-muted: #4fc3f7;
+    --border-color: #81d4fa;
+    --border-light: #b3e5fc;
+    --success-color: #00897b;
+    --error-color: #d32f2f;
+    --warning-color: #ffa000;
+    --shadow-sm: 0 2px 4px rgba(2, 136, 209, 0.1);
+    --shadow-md: 0 4px 8px rgba(2, 136, 209, 0.15);
+    --shadow-lg: 0 8px 16px rgba(2, 136, 209, 0.2);
+    --shadow-glow: 0 0 20px rgba(2, 136, 209, 0.2);
+}
+
+/* Nature Dark */
+[data-theme="nature-dark"], .nature-dark {
+    --background-primary: #0a1a0a;
+    --background-secondary: #1a2a1a;
+    --surface-color: #2a3a2a;
+    --surface-hover: #3a4a3a;
+    --accent-primary: #4caf50;
+    --accent-secondary: #66bb6a;
+    --accent-tertiary: #81c784;
+    --accent-purple: #9575cd;
+    --accent-orange: #ffb74d;
+    --text-primary: #ffffff;
+    --text-secondary: #c8e6c9;
+    --text-muted: #a5d6a7;
+    --border-color: #4a6a4a;
+    --border-light: #5a7a5a;
+    --success-color: #4caf50;
+    --error-color: #e57373;
+    --warning-color: #ffb74d;
+    --shadow-sm: 0 2px 4px rgba(10, 30, 10, 0.5);
+    --shadow-md: 0 4px 8px rgba(10, 30, 10, 0.6);
+    --shadow-lg: 0 8px 16px rgba(10, 30, 10, 0.7);
+    --shadow-glow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+/* Nature Light */
+[data-theme="nature-light"], .nature-light {
+    --background-primary: #f0f7f0;
+    --background-secondary: #e3eee3;
+    --surface-color: #ffffff;
+    --surface-hover: #e3eee3;
+    --accent-primary: #2e7d32;
+    --accent-secondary: #558b2f;
+    --accent-tertiary: #7cb342;
+    --accent-purple: #5e35b1;
+    --accent-orange: #ef6c00;
+    --text-primary: #1b5e20;
+    --text-secondary: #33691e;
+    --text-muted: #558b2f;
+    --border-color: #a5d6a7;
+    --border-light: #c8e6c9;
+    --success-color: #2e7d32;
+    --error-color: #c62828;
+    --warning-color: #f9a825;
+    --shadow-sm: 0 2px 4px rgba(46, 125, 50, 0.1);
+    --shadow-md: 0 4px 8px rgba(46, 125, 50, 0.15);
+    --shadow-lg: 0 8px 16px rgba(46, 125, 50, 0.2);
+    --shadow-glow: 0 0 20px rgba(46, 125, 50, 0.2);
+}
+
+/* Classic Dark */
+[data-theme="classic-dark"], .classic-dark {
+    --background-primary: #212529;
+    --background-secondary: #343a40;
+    --surface-color: #495057;
+    --surface-hover: #6c757d;
+    --accent-primary: #007bff;
+    --accent-secondary: #6610f2;
+    --accent-tertiary: #28a745;
+    --accent-purple: #6f42c1;
+    --accent-orange: #fd7e14;
+    --text-primary: #ffffff;
+    --text-secondary: #ced4da;
+    --text-muted: #adb5bd;
+    --border-color: #6c757d;
+    --border-light: #7a8288;
+    --success-color: #28a745;
+    --error-color: #dc3545;
+    --warning-color: #ffc107;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px rgba(0, 123, 255, 0.3);
+}
+
+/* Classic Light */
+[data-theme="classic-light"], .classic-light {
+    --background-primary: #ffffff;
+    --background-secondary: #f8f9fa;
+    --surface-color: #ffffff;
+    --surface-hover: #e9ecef;
+    --accent-primary: #0d6efd;
+    --accent-secondary: #6c757d;
+    --accent-tertiary: #198754;
+    --accent-purple: #6f42c1;
+    --accent-orange: #fd7e14;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --border-color: #dee2e6;
+    --border-light: #e9ecef;
+    --success-color: #198754;
+    --error-color: #dc3545;
+    --warning-color: #ffc107;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+    --shadow-glow: 0 0 20px rgba(13, 110, 253, 0.15);
+} 

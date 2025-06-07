@@ -357,9 +357,10 @@
             var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
             await movieReviewService.AddOrUpdateSettingAsync(new Setting
                 {
-                    Id = Guid.NewGuid(),
                     Key = "AwardSettings",
-                    Value = settingsJson
+                    Value = settingsJson,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 });
 
             // Delete any existing default questions in the database

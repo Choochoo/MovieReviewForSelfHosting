@@ -137,12 +137,19 @@ namespace MovieReviewApp.Components.Pages
             var setting = settings.FirstOrDefault(x => x.Key == key);
             if (setting == null)
             {
-                setting = new Setting { Key = key, Value = value };
+                setting = new Setting 
+                { 
+                    Key = key, 
+                    Value = value,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
                 settings.Add(setting);
             }
             else
             {
                 setting.Value = value;
+                setting.UpdatedAt = DateTime.UtcNow;
             }
             await movieReviewService.AddOrUpdateSettingAsync(setting);
         }

@@ -146,6 +146,7 @@ builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
 builder.Services.AddScoped<DiscussionQuestionsService>();
+builder.Services.AddScoped<ThemeService>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 

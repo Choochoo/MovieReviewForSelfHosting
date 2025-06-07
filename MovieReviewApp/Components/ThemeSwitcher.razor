@@ -1,0 +1,173 @@
+@using MovieReviewApp.Services
+@inject ThemeService ThemeService
+@inject IJSRuntime JSRuntime
+
+<div class="theme-controls">
+    <button class="theme-toggle" @onclick="ToggleDarkMode" title="@(isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode")">
+        @(isDarkMode ? "☀️" : "🌙")
+    </button>
+</div>
+
+@code {
+    private bool isDarkMode = true; // Default to dark mode
+    private string groupTheme = "cyberpunk"; // Default to cyberpunk
+    private bool isInitialized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get the group theme from the server (no JS interop here)
+        try 
+        {
+            var savedTheme = await ThemeService.GetGroupThemeAsync();
+            
+            // Map old theme names to new theme names
+            groupTheme = savedTheme switch
+            {
+                "light" => "cyberpunk", // old light -> cyberpunk (will use light mode)
+                "dark" => "cyberpunk",  // old dark -> cyberpunk (will use dark mode)
+                "cyberpunk" => "cyberpunk",
+                "ocean" => "ocean",
+                "nature" => "nature", 
+                "classic" => "classic",
+                _ => "cyberpunk" // fallback
+            };
+            
+            Console.WriteLine($"ThemeSwitcher initialized: savedTheme='{savedTheme}', groupTheme='{groupTheme}'");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading theme: {ex.Message}");
+            groupTheme = "cyberpunk"; // fallback
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isInitialized)
+        {
+            try
+            {
+                // Get the dark mode preference from local storage (JS interop available here)
+                var darkMode = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
+                
+                // Check if there's an old theme setting that affects dark/light mode
+                var oldTheme = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "theme");
+                
+                // Set dark mode based on saved preference or old theme
+                if (!string.IsNullOrEmpty(darkMode))
+                {
+                    isDarkMode = darkMode == "true";
+                }
+                else if (oldTheme == "dark")
+                {
+                    isDarkMode = true; // old dark theme -> dark mode
+                }
+                else if (oldTheme == "light")
+                {
+                    isDarkMode = false; // old light theme -> light mode
+                }
+                else
+                {
+                    isDarkMode = true; // default to dark mode
+                }
+                
+                Console.WriteLine($"Dark mode set to: {isDarkMode} (from darkMode='{darkMode}', oldTheme='{oldTheme}')");
+                
+                // Apply the current theme with dark/light mode
+                await ApplyCurrentTheme();
+                
+                isInitialized = true;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", $"Theme initialization error: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        try
+        {
+            isDarkMode = !isDarkMode;
+            await JSRuntime.InvokeVoidAsync("console.log", $"Toggling theme: {groupTheme}-{(isDarkMode ? "dark" : "light")}");
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "darkMode", isDarkMode.ToString().ToLower());
+            await ApplyCurrentTheme();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Theme toggle error: {ex.Message}");
+        }
+    }
+
+    private async Task ApplyCurrentTheme()
+    {
+        try
+        {
+            var themeClass = $"{groupTheme}-{(isDarkMode ? "dark" : "light")}";
+            
+            await JSRuntime.InvokeVoidAsync("console.log", $"Applying theme: {themeClass}");
+            
+            // Method 1: Set data-theme attribute
+            await JSRuntime.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme', '{themeClass}')");
+            
+            // Method 2: Set body class
+            await JSRuntime.InvokeVoidAsync("eval", $"document.body.className = '{themeClass}'");
+            
+            // Method 3: Force CSS variable update (fallback)
+            await JSRuntime.InvokeVoidAsync("eval", $@"
+                document.documentElement.style.setProperty('--current-theme', '{themeClass}');
+                console.log('Theme applied successfully: {themeClass}');
+            ");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Apply theme error: {ex.Message}");
+        }
+    }
+
+    // Method to update the group theme when changed from Settings page
+    public async Task UpdateGroupTheme(string newTheme)
+    {
+        if (!string.IsNullOrEmpty(newTheme) && newTheme != "light" && newTheme != "dark")
+        {
+            groupTheme = newTheme;
+            Console.WriteLine($"Group theme updated to: {groupTheme}");
+            await ApplyCurrentTheme();
+            StateHasChanged();
+        }
+    }
+
+    // Method to refresh theme from server (useful when settings change)
+    public async Task RefreshTheme()
+    {
+        try
+        {
+            var savedTheme = await ThemeService.GetGroupThemeAsync();
+            var newGroupTheme = savedTheme switch
+            {
+                "light" => "cyberpunk",
+                "dark" => "cyberpunk", 
+                "cyberpunk" => "cyberpunk",
+                "ocean" => "ocean",
+                "nature" => "nature",
+                "classic" => "classic",
+                _ => "cyberpunk"
+            };
+
+            if (newGroupTheme != groupTheme)
+            {
+                groupTheme = newGroupTheme;
+                Console.WriteLine($"Theme refreshed to: {groupTheme}");
+                await ApplyCurrentTheme();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing theme: {ex.Message}");
+        }
+    }
+} 
