@@ -14,7 +14,18 @@
     <div class="setup-card">
         <div class="setup-header">
             <h1>🎬 Welcome to Movie Review App</h1>
-            <p>Setting up instance: <strong>@InstanceManager.InstanceName</strong></p>
+            @if (InstanceManager.InstanceName == "Default")
+            {
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Note:</strong> You are setting up the default instance. To create named instances, restart with:
+                    <code>dotnet run --instance "YourInstanceName"</code>
+                </div>
+            }
+            else
+            {
+                <p>Setting up instance: <strong>@InstanceManager.InstanceName</strong></p>
+            }
             <p>Let's get you set up! This is a one-time configuration to secure your API keys and settings.</p>
         </div>
 
@@ -206,7 +217,18 @@
                     <i class="bi bi-check-circle"></i>
                 </div>
                 <h2>🎉 Setup Complete!</h2>
-                <p>Your Movie Review App instance "<strong>@InstanceManager.InstanceName</strong>" is ready to use!</p>
+                @if (InstanceManager.InstanceName == "Default")
+                {
+                    <p>Your Movie Review App is ready to use!</p>
+                    <div class="info-note">
+                        <i class="bi bi-lightbulb"></i>
+                        <span>To create additional named instances, start the app with: <code>dotnet run --instance "InstanceName"</code></span>
+                    </div>
+                }
+                else
+                {
+                    <p>Your Movie Review App instance "<strong>@InstanceManager.InstanceName</strong>" is ready to use!</p>
+                }
                 <p>Settings saved to:</p>
                 <code class="file-path">@InstanceManager.InstancePath</code>
                 
@@ -413,6 +435,25 @@
         background: rgba(255, 0, 128, 0.1);
         border: 1px solid var(--error-color);
         color: var(--error-color);
+    }
+
+    .alert-warning {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid #ffc107;
+        color: #ffc107;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .alert-warning code {
+        background: rgba(0, 0, 0, 0.2);
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.25rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        margin-left: 0.25rem;
     }
 
     .audio-requirements {
