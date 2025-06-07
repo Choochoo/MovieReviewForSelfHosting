@@ -29,7 +29,9 @@
       "Bash(rg:*)",
       "Bash(dotnet build:*)",
       "Bash(mv:*)",
-      "Bash(dotnet --version)"
+      "Bash(dotnet --version)",
+      "Bash(dotnet clean:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

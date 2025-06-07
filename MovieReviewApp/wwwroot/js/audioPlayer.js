@@ -61,21 +61,4 @@ window.parseTimestamp = function(timestamp) {
     }
 };
 
-// Add visual feedback for audio playback
-document.addEventListener('DOMContentLoaded', function() {
-    // Add loading states to play buttons
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.btn') && e.target.closest('.btn').innerHTML.includes('Play')) {
-            const button = e.target.closest('.btn');
-            const originalContent = button.innerHTML;
-            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
-            button.disabled = true;
-            
-            // Reset button after a delay
-            setTimeout(() => {
-                button.innerHTML = originalContent;
-                button.disabled = false;
-            }, 2000);
-        }
-    });
-});
+// Audio player visual feedback is now handled by soundboard.js for proper state management

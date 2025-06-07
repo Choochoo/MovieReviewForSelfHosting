@@ -1,0 +1,599 @@
+@page "/soundboard/{PersonName?}"
+@using MovieReviewApp.Models
+@using MovieReviewApp.Services
+@inject SoundboardService SoundboardService
+@inject DiscussionQuestionsService DiscussionQuestionsService
+@inject IJSRuntime JSRuntime
+@inject ILogger<Soundboard> Logger
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@GetPageTitle()</PageTitle>
+
+@if (PersonName == null)
+{
+    <!-- Person Selection Page -->
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header text-center">
+                        <h4 class="mb-0">🎵 Soundboard</h4>
+                        <p class="text-muted mb-0">Select a person to view their sound clips</p>
+                    </div>
+                    <div class="card-body">
+                        @if (people?.Any() == true)
+                        {
+                            <div class="row g-3">
+                                @foreach (var person in people)
+                                {
+                                    var soundCount = soundCounts.GetValueOrDefault(person.Id.ToString(), 0);
+                                    <div class="col-md-6">
+                                        <button class="btn btn-outline-primary w-100 p-3" @onclick="() => NavigateToPerson(person.Name)">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="fs-5">@person.Name</span>
+                                                @if (soundCount > 0)
+                                                {
+                                                    <span class="badge bg-primary rounded-pill">@soundCount</span>
+                                                }
+                                            </div>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted p-4">
+                                <p>No people found in the database.</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- Person-Specific Soundboard -->
+    <div class="container-fluid">
+        <!-- Discussion Questions -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">💬 Discussion Questions</h6>
+                    </div>
+                    <div class="card-body py-2">
+                        @if (discussionQuestions?.Any() == true)
+                        {
+                            <ol class="mb-0 small">
+                                @foreach (var question in discussionQuestions)
+                                {
+                                    <li>@question.Question</li>
+                                }
+                            </ol>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0 small">No discussion questions available.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Controls -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap">
+                            <h5 class="mb-0">🎵 @GetPersonDisplayName() Soundboard</h5>
+                            <div class="d-flex gap-2 mt-2 mt-md-0 align-items-center flex-wrap">
+                                <div class="d-flex align-items-center gap-2">
+                                    <small class="text-muted">Volume:</small>
+                                    <input type="range" @bind="globalVolume" @oninput="OnVolumeChange" 
+                                           min="0" max="100" step="5" 
+                                           class="form-range" style="width: 80px;" 
+                                           title="Global volume control" />
+                                    <small class="text-muted" style="min-width: 30px;">@(globalVolume)%</small>
+                                </div>
+                                <input type="file" @ref="fileInput" @onchange="OnFileSelected" accept="audio/*" multiple style="display: none;" />
+                                <button class="btn btn-primary" @onclick="TriggerFileUpload">
+                                    📁 Upload Files
+                                </button>
+                                <button class="btn btn-outline-primary" @onclick="ToggleUrlInput">
+                                    🌐 Add URL
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <div class="alert alert-info py-2 mb-0" role="alert">
+                                <small>
+                                    <strong>💡 Quick Add:</strong> Copy an audio file or URL and paste (Ctrl+V) anywhere on this page to automatically upload it!
+                                </small>
+                            </div>
+                        </div>
+                        
+                        
+                        @if (showUrlInput)
+                        {
+                            <div class="mt-3 p-3 border rounded bg-light">
+                                <div class="d-flex gap-2 mb-2">
+                                    <input type="url" @bind="urlInput" @onkeypress="@(async (e) => { if (e.Key == "Enter") await AddSoundFromUrl(); })" 
+                                           class="form-control" placeholder="Enter direct audio file URL (e.g., .mp3, .wav)..." />
+                                    <button class="btn btn-primary" @onclick="AddSoundFromUrl" disabled="@(string.IsNullOrWhiteSpace(urlInput))">
+                                        Add
+                                    </button>
+                                    <button class="btn btn-secondary" @onclick="ToggleUrlInput">Cancel</button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(errorMessage))
+                                {
+                                    <div class="alert alert-danger alert-sm mb-0" role="alert">
+                                        @errorMessage
+                                    </div>
+                                }
+                                <small class="text-muted">
+                                    ⚠️ URL must point directly to an audio file, not a webpage. Right-click an audio file and "Copy link address".
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sound Clips Grid -->
+        <div class="row">
+            <div class="col-12">
+                @if (isLoading)
+                {
+                    <div class="text-center p-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading sounds...</p>
+                    </div>
+                }
+                else if (currentSounds?.Any() == true)
+                {
+                    <div class="row g-2">
+                        @foreach (var sound in currentSounds)
+                        {
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <button class="btn btn-primary w-100 play-sound-btn" 
+                                        @onclick="@(() => HandlePlayClick(sound.Id.ToString()))"
+                                        data-sound-url="@SoundboardService.GetSoundClipUrl(sound)"
+                                        data-sound-id="@sound.Id.ToString()"
+                                        title="@sound.OriginalFileName"
+                                        style="min-height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                                    <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">▶️</div>
+                                    <small class="text-truncate w-100" style="font-size: 0.7rem; line-height: 1.1;">
+                                        @sound.OriginalFileName
+                                    </small>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                    
+                    <!-- Delete Section - Separated at bottom to prevent accidental clicks -->
+                    <div class="row mt-5">
+                        <div class="col-12">
+                            <div class="card border-danger">
+                                <div class="card-header bg-danger text-white">
+                                    <h6 class="mb-0">⚠️ Delete Sound Clips</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted mb-3">Click a sound below to permanently delete it. This action cannot be undone.</p>
+                                    <div class="row g-2">
+                                        @foreach (var sound in currentSounds)
+                                        {
+                                            <div class="col-6 col-md-4 col-lg-3">
+                                                <button class="btn btn-outline-danger btn-sm w-100" 
+                                                        @onclick="@(() => HandleDeleteClick(sound.Id.ToString()))"
+                                                        title="Delete @sound.OriginalFileName"
+                                                        style="min-height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                                                    <div style="font-size: 1rem; margin-bottom: 0.25rem;">🗑️</div>
+                                                    <small class="text-truncate w-100" style="font-size: 0.65rem; line-height: 1.1;">
+                                                        @sound.OriginalFileName
+                                                    </small>
+                                                </button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card">
+                        <div class="card-body text-center text-muted p-5">
+                            <h5>No sound clips yet for @GetPersonDisplayName()</h5>
+                            <p class="mb-0">Use the upload buttons above to add some sounds!</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? PersonName { get; set; }
+    
+    private List<Person>? people;
+    private List<DiscussionQuestion>? discussionQuestions;
+    private List<SoundClip>? currentSounds;
+    private Dictionary<string, int> soundCounts = new();
+    private string? selectedPersonId;
+    private Person? selectedPerson;
+    private bool isLoading = false;
+    private bool showUrlInput = false;
+    private string urlInput = string.Empty;
+    private string errorMessage = string.Empty;
+    private ElementReference fileInput;
+    private int globalVolume = 80; // Default to 30% for safety
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+        
+        if (!string.IsNullOrEmpty(PersonName))
+        {
+            await SelectPersonByName(PersonName);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initializeSoundboard");
+            await JSRuntime.InvokeVoidAsync("setGlobalVolume", globalVolume / 100.0);
+            
+            // Set current person ID for paste functionality
+            if (!string.IsNullOrEmpty(selectedPersonId))
+            {
+                await JSRuntime.InvokeVoidAsync("setCurrentPersonId", selectedPersonId);
+            }
+        }
+    }
+
+    private async Task OnVolumeChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newVolume))
+        {
+            globalVolume = newVolume;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("setGlobalVolume", globalVolume / 100.0);
+            }
+            catch (InvalidOperationException)
+            {
+                // JavaScript not available during prerendering
+            }
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(PersonName) && selectedPerson?.Name != PersonName)
+        {
+            await SelectPersonByName(PersonName);
+        }
+    }
+
+    private async Task LoadInitialData()
+    {
+        people = await SoundboardService.GetPeopleAsync();
+        discussionQuestions = await DiscussionQuestionsService.GetActiveQuestionsAsync();
+        soundCounts = await SoundboardService.GetSoundClipCountsByPersonAsync();
+    }
+
+    private async Task SelectPersonByName(string personName)
+    {
+        var person = people?.FirstOrDefault(p => string.Equals(p.Name, personName, StringComparison.OrdinalIgnoreCase));
+        if (person != null)
+        {
+            selectedPerson = person;
+            selectedPersonId = person.Id.ToString();
+            await LoadCurrentSounds();
+        }
+    }
+
+    private async Task SelectPerson(string personId)
+    {
+        if (selectedPersonId == personId) return;
+
+        selectedPersonId = personId;
+        selectedPerson = people?.FirstOrDefault(p => p.Id.ToString() == personId);
+        await LoadCurrentSounds();
+    }
+
+    private async Task LoadCurrentSounds()
+    {
+        if (selectedPersonId == null) return;
+        
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            currentSounds = await SoundboardService.GetSoundClipsForPersonAsync(selectedPersonId);
+            
+            // Update JavaScript with current person ID for paste functionality
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("setCurrentPersonId", selectedPersonId);
+            }
+            catch (InvalidOperationException)
+            {
+                // JavaScript not available during prerendering
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateToPerson(string? personName)
+    {
+        if (!string.IsNullOrEmpty(personName))
+        {
+            Navigation.NavigateTo($"/soundboard/{Uri.EscapeDataString(personName)}");
+        }
+    }
+
+    private string GetPersonName(string personId)
+    {
+        return people?.FirstOrDefault(p => p.Id.ToString() == personId)?.Name ?? "Unknown";
+    }
+
+    private string GetPersonDisplayName()
+    {
+        return selectedPerson?.Name ?? PersonName ?? "Unknown";
+    }
+
+    private string GetPageTitle()
+    {
+        if (!string.IsNullOrEmpty(PersonName))
+        {
+            return $"{PersonName} Soundboard";
+        }
+        return "Soundboard";
+    }
+
+    private async Task TriggerFileUpload()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("triggerFileInput", fileInput);
+        }
+        catch (InvalidOperationException)
+        {
+            // JavaScript not available during prerendering, ignore
+        }
+    }
+
+    private async Task OnFileSelected(ChangeEventArgs e)
+    {
+        if (selectedPersonId == null) return;
+
+        try
+        {
+            var files = await JSRuntime.InvokeAsync<IJSObjectReference>("getSelectedFiles", fileInput);
+            if (files != null)
+            {
+                await ProcessFileUploads(files);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // JavaScript not available during prerendering, ignore
+        }
+    }
+
+    private async Task ProcessFileUploads(IJSObjectReference files)
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var fileCount = await files.InvokeAsync<int>("length");
+            for (int i = 0; i < fileCount; i++)
+            {
+                var file = await files.InvokeAsync<IJSObjectReference>("item", i);
+                if (file != null)
+                {
+                    await UploadFileViaJS(file);
+                }
+            }
+
+            await RefreshCurrentSounds();
+            await RefreshSoundCounts();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing file uploads");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UploadFileViaJS(IJSObjectReference file)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("uploadSoundFile", selectedPersonId, file);
+        }
+        catch (InvalidOperationException)
+        {
+            // JavaScript not available during prerendering, ignore
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error uploading file via JS");
+        }
+    }
+
+    private void ToggleUrlInput()
+    {
+        showUrlInput = !showUrlInput;
+        if (!showUrlInput)
+        {
+            urlInput = string.Empty;
+            errorMessage = string.Empty;
+        }
+    }
+
+    private async Task AddSoundFromUrl()
+    {
+        if (string.IsNullOrWhiteSpace(urlInput) || selectedPersonId == null) return;
+
+        try
+        {
+            isLoading = true;
+            errorMessage = string.Empty;
+            StateHasChanged();
+
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("uploadSoundFromUrl", selectedPersonId, urlInput);
+            }
+            catch (InvalidOperationException)
+            {
+                // JavaScript not available during prerendering, fallback to server-side upload
+                await SoundboardService.SaveSoundClipFromUrlAsync(selectedPersonId, urlInput);
+            }
+            
+            // Success
+            urlInput = string.Empty;
+            showUrlInput = false;
+            errorMessage = string.Empty;
+
+            await RefreshCurrentSounds();
+            await RefreshSoundCounts();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error adding sound from URL: {Error}", ex.Message);
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PlaySound(SoundClip sound)
+    {
+        try
+        {
+            var url = SoundboardService.GetSoundClipUrl(sound);
+            await JSRuntime.InvokeVoidAsync("playSound", url);
+        }
+        catch (InvalidOperationException)
+        {
+            // JavaScript not available during prerendering
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error playing sound {SoundId}", sound.Id);
+        }
+    }
+
+    private async Task DeleteSound(SoundClip sound)
+    {
+        try
+        {
+            bool confirmed;
+            try
+            {
+                confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Delete '{sound.OriginalFileName}'?");
+            }
+            catch (InvalidOperationException)
+            {
+                // JavaScript not available during prerendering, skip confirmation
+                confirmed = true;
+            }
+            if (!confirmed) return;
+
+            isLoading = true;
+            StateHasChanged();
+
+            await SoundboardService.DeleteSoundClipAsync(sound.Id.ToString());
+            await RefreshCurrentSounds();
+            await RefreshSoundCounts();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error deleting sound {SoundId}", sound.Id);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshCurrentSounds()
+    {
+        if (selectedPersonId != null)
+        {
+            currentSounds = await SoundboardService.GetSoundClipsForPersonAsync(selectedPersonId);
+        }
+    }
+
+    private async Task RefreshSoundCounts()
+    {
+        soundCounts = await SoundboardService.GetSoundClipCountsByPersonAsync();
+    }
+
+
+
+
+    private async Task HandlePlayClick(string soundId)
+    {
+        try
+        {
+            var sound = currentSounds?.FirstOrDefault(s => s.Id.ToString() == soundId);
+            if (sound != null)
+            {
+                await PlaySound(sound);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in HandlePlayClick for {SoundId}", soundId);
+        }
+    }
+
+    private async Task HandleDeleteClick(string soundId)
+    {
+        try
+        {
+            var sound = currentSounds?.FirstOrDefault(s => s.Id.ToString() == soundId);
+            if (sound != null)
+            {
+                await DeleteSound(sound);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in HandleDeleteClick for {SoundId}", soundId);
+        }
+    }
+
+}

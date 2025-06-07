@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.StaticFiles;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
@@ -147,6 +148,7 @@ builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
 builder.Services.AddScoped<DiscussionQuestionsService>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<SoundboardService>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 
@@ -185,7 +187,29 @@ if (!app.Environment.IsDevelopment())
 // Add first-run setup middleware (before static files for setup page styling)
 app.UseFirstRunSetup();
 
-app.UseStaticFiles();
+// Configure static files with proper MIME types for audio
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".mp3"] = "audio/mpeg";
+provider.Mappings[".wav"] = "audio/wav";
+provider.Mappings[".ogg"] = "audio/ogg";
+provider.Mappings[".m4a"] = "audio/mp4";
+provider.Mappings[".aac"] = "audio/aac";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = provider,
+    OnPrepareResponse = ctx =>
+    {
+        // Add headers for audio files
+        if (ctx.File.Name.EndsWith(".mp3") || ctx.File.Name.EndsWith(".wav") || 
+            ctx.File.Name.EndsWith(".ogg") || ctx.File.Name.EndsWith(".m4a") || 
+            ctx.File.Name.EndsWith(".aac"))
+        {
+            ctx.Context.Response.Headers.Append("Accept-Ranges", "bytes");
+            ctx.Context.Response.Headers.Append("Cache-Control", "public, max-age=3600");
+        }
+    }
+});
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
