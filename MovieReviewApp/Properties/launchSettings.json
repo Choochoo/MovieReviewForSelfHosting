@@ -2,7 +2,7 @@
   "profiles": {
     "Default Instance": {
       "commandName": "Project",
-      "commandLineArgs": "--instance default",
+      "commandLineArgs": "--instance friends",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
