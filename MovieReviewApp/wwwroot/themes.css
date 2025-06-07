@@ -161,10 +161,6 @@
 
 /* Theme toggle button styles */
 .theme-toggle {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1050;
     background-color: var(--surface-color);
     border: 1px solid var(--border-color);
     border-radius: 0.5rem;
@@ -173,7 +169,10 @@
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
 }
 
 .theme-toggle:hover {

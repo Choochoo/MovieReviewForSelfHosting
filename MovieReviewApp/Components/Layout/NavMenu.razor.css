@@ -27,17 +27,29 @@
 
 .top-row {
     height: 4rem;
-    background-color: transparent;
+    background-color: #000000 !important;
+    background: #000000 !important;
     padding: 0 1.5rem;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     border-bottom: 1px solid #333333;
+}
+
+.top-row .container-fluid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
 }
 
 .navbar-brand-container {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex: 1;
+    justify-content: space-between;
 }
 
 .navbar-brand {
@@ -149,12 +161,7 @@
 }
 
 .nav-scrollable {
-    display: none;
     padding: 1rem 0;
-}
-
-.navbar-toggler:checked ~ .nav-scrollable {
-    display: block;
 }
 
 .menu-collapsed {
@@ -168,24 +175,62 @@
 @media (max-width: 768px) {
     .navbar-toggler {
         display: block;
+        z-index: 1002;
     }
 
-    .menu-collapsed {
-        display: none;
+    .menu-collapsed .nav-scrollable {
+        display: none !important;
     }
 
-    .menu-expanded {
-        display: block;
+    .menu-expanded .nav-scrollable {
+        display: block !important;
     }
     
     .nav-scrollable {
-        position: absolute;
+        position: fixed;
         top: 4rem;
         left: 0;
         right: 0;
+        width: 100vw;
         background-color: #141414;
         border-bottom: 1px solid #333333;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.9);
+        z-index: 1001;
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
+    }
+
+    /* Ensure menu items are visible on mobile */
+    .nav-item {
+        width: 100%;
+    }
+
+    .nav-item ::deep .nav-link {
+        padding: 1rem 2rem;
+        font-size: 1rem;
+        border-bottom: 1px solid #333333;
+    }
+
+    /* Fix container overflow issues */
+    .container-fluid {
+        width: 100%;
+        max-width: 100vw;
+        padding: 0 1rem;
+        overflow: hidden;
+    }
+
+    .top-row {
+        width: 100vw;
+        max-width: 100vw;
+        overflow: hidden;
+    }
+
+    .navbar-brand-container {
+        gap: 0.5rem;
+    }
+
+    .navbar-brand {
+        font-size: 1rem;
     }
 }
 
@@ -195,11 +240,22 @@
     }
 
     .nav-scrollable {
-        display: block;
+        display: block !important;
         height: calc(100vh - 4rem);
         overflow-y: hidden;
         overflow-x: hidden;
         padding: 1rem 0;
+        position: static !important;
+        width: auto !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        z-index: auto !important;
+    }
+
+    .menu-collapsed .nav-scrollable,
+    .menu-expanded .nav-scrollable {
+        display: block !important;
     }
     
     /* Ensure nav items are properly aligned */

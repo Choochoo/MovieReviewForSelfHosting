@@ -77,51 +77,109 @@
     {
         <div class="row mt-4">
             <div class="col-md-12">
-                <div class="timeline">
-                    @foreach (var phase in Phases.Where(p => p.EndDate >= DateProvider.Now))
+                <div class="chronological-timeline">
+                    @foreach (dynamic timelineItem in GetChronologicalTimeline())
                     {
-                        var futureEvents = phase.Events?.Where(x =>
-                        x != CurrentEvent &&
-                        x != NextEvent &&
-                        x.EndDate >= DateProvider.Now).ToList() ?? new List<MovieEvent>();
-
-                        @if (futureEvents.Any())
+                        @if (timelineItem.Type == "Phase")
                         {
-                            <div class="timeline-item">
-                                <h5>Phase @phase.Number (@phase.StartDate.ToString("MMMM yyyy") - @phase.EndDate.ToString("MMMM yyyy"))</h5>
-                                @foreach (var movieEvent in futureEvents)
+                            var phase = (MovieReviewApp.Models.Phase)timelineItem.Item;
+                            var timelineEvents = phase.Events?.Where(x =>
+                                x != CurrentEvent &&
+                                x != NextEvent).ToList() ?? new List<MovieEvent>();
+
+                            @if (timelineEvents.Any())
+                            {
+                                <div class="timeline-item phase-item" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
+                                    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+                                        <i class="bi bi-calendar-event me-2"></i>
+                                        Phase @phase.Number (@phase.StartDate.ToString("MMMM yyyy") - @phase.EndDate.ToString("MMMM yyyy"))
+                                    </h5>
+                                    @foreach (var movieEvent in timelineEvents)
+                                    {
+                                        <div class="timeline-content" style="padding: 0.75rem; background-color: var(--background-secondary); border-radius: 0.5rem; margin-bottom: 0.5rem;">
+                                            <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@movieEvent.StartDate.ToString("MMMM yyyy")</span> -
+                                            <span class="person" style="color: var(--text-primary);">@(movieEvent.Person ?? "TBD")</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else if (timelineItem.Type == "Award")
+                        {
+                            var awardEvent = (AwardEvent)timelineItem.Item;
+                            
+                            <div class="timeline-item award-item" style="background-color: var(--surface-color); border: 2px solid var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(255, 107, 0, 0.2);">
+                                <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
+                                    <i class="bi bi-trophy-fill me-2"></i>
+                                    🏆 Awards - @awardEvent.StartDate.ToString("MMMM yyyy")
+                                </h5>
+                                
+                                @foreach (var question in AllAwardQuestions.Where(q => awardEvent.Questions.Contains(q.Id)))
                                 {
-                                    <div class="timeline-content">
-                                        <span class="date">@movieEvent.StartDate.ToString("MMMM yyyy")</span> -
-                                        <span class="person">@(movieEvent.Person ?? "TBD")</span>
+                                    <div class="award-category mb-3" style="border: 1px solid var(--border-light); border-radius: 0.5rem; padding: 1rem; background-color: var(--background-secondary);">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="mb-0" style="color: var(--text-primary);">@question.Question</h6>
+                                            <button class="btn btn-sm" style="background-color: var(--accent-primary); color: var(--text-primary); border: 1px solid var(--border-color);" 
+                                                    @onclick="() => ToggleResults(awardEvent.Id, question.Id)">
+                                                @(IsShowingResults(awardEvent.Id, question.Id) ? "Hide" : "Show") Results
+                                            </button>
+                                        </div>
+                                        
+                                        @if (IsShowingResults(awardEvent.Id, question.Id))
+                                        {
+                                            var results = CachedResults.GetValueOrDefault((awardEvent.Id, question.Id), new List<QuestionResult>());
+                                            var totalVoters = AllPeople.Count;
+                                            var totalPossiblePoints = totalVoters * 3;
+                                            @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
+                                            {
+                                                var percentage = totalPossiblePoints > 0 ? (result.TotalPoints / (float)totalPossiblePoints) * 100 : 0;
+                                                <div class="mb-3">
+                                                    <div class="d-flex justify-content-between">
+                                                        <strong style="color: var(--text-primary);">@result.MovieTitle</strong>
+                                                        <span style="color: var(--text-secondary);">@result.TotalPoints/@totalPossiblePoints points</span>
+                                                    </div>
+                                                    <div class="progress" style="height: 25px; background-color: var(--surface-color); border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                                                        <div class="progress-bar" 
+                                                             role="progressbar" 
+                                                             style="width: @percentage%; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: var(--text-primary); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                                                            @percentage.ToString("F1")%
+                                                        </div>
+                                                    </div>
+                                                    <small style="color: var(--text-muted);">
+                                                        (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                    </small>
+                                                </div>
+                                            }
+                                        }
                                     </div>
                                 }
                             </div>
                         }
-
-                        @if (phase.EndDate >= DateProvider.Now &&
-                                        phase.Number % AwardSettings.PhasesBeforeAward == 0)
+                        else if (timelineItem.Type == "FutureAward")
                         {
-                            var nextMonth = phase.EndDate.AddDays(1);
-                            var awardMonthStart = new DateTime(nextMonth.Year, nextMonth.Month, 1, 0, 0, 0, DateTimeKind.Local);
-                            var awardMonthEnd = awardMonthStart.AddMonths(1).AddMilliseconds(-1);
+                            dynamic futureAward = timelineItem.Item;
+                            var eligibleMovies = GetEligibleMoviesForPhase((int)futureAward.PhaseNumber);
 
                             // Only show it in the timeline if it's not the current award phase
-                            if (!DateProvider.Now.IsWithinRange(awardMonthStart, awardMonthEnd))
+                            var awardDate = (DateTime)futureAward.AwardDate;
+                            var awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
+                            
+                            if (!DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
                             {
-                                var eligibleMovies = GetEligibleMoviesForPhase(phase.Number);
-
-                                <div class="timeline-item award-period">
-                                    <h5>🏆 Awards Month</h5>
+                                <div class="timeline-item future-award-item" style="background-color: var(--surface-color); border: 1px dashed var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
+                                    <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
+                                        <i class="bi bi-trophy me-2"></i>
+                                        🏆 Future Awards Month
+                                    </h5>
                                     <div class="timeline-content">
-                                        <span class="date">@awardMonthStart.ToString("MMMM yyyy")</span>
+                                        <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@awardDate.ToString("MMMM yyyy")</span>
                                         @if (eligibleMovies.Any())
                                         {
                                             <div class="mt-2">
-                                                <div class="font-semibold mb-1">Eligible Movies:</div>
-                                                <div class="flex flex-wrap gap-2">
+                                                <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Eligible Movies:</div>
+                                                <div class="d-flex flex-wrap gap-2">
                                                     @{
-                                                        var rand = new Random(phase.Number);
+                                                        var rand = new Random((int)futureAward.PhaseNumber);
                                                         var randomizedMovies = eligibleMovies
                                                         .Select(m => new { Movie = m, Order = rand.Next() })
                                                         .OrderBy(x => x.Order)
@@ -130,8 +188,8 @@
                                                     }
                                                     @foreach (var movie in randomizedMovies)
                                                     {
-                                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                                                            [@movie.Trim()]
+                                                        <span class="badge" style="background-color: var(--accent-primary); color: var(--text-primary); padding: 0.5rem; border-radius: 0.25rem;">
+                                                            @movie.Trim()
                                                         </span>
                                                     }
                                                 </div>
@@ -147,23 +205,5 @@
         </div>
     }
 
-    @{
-        var previousAwardEvent = GetPreviousAwardEvent();
-    }
-
-    @if (previousAwardEvent != null)
-    {
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Previous Awards (@previousAwardEvent.StartDate.ToString("MMMM yyyy"))</h5>
-                    </div>
-                    <div class="card-body">
-                        <AwardResultsDisplay AwardEventId="@previousAwardEvent.Id" />
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
+    @* Award events are now displayed chronologically in the timeline above *@
 </div>

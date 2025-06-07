@@ -29,6 +29,10 @@ namespace MovieReviewApp.Components.Pages
         public List<DiscussionQuestion>? DiscussionQuestions { get; private set; }
         public bool IsCurrentPhaseAwardPhase { get; private set; }
         public AwardSetting? AwardSettings { get; private set; }
+        public List<AwardEvent> AllAwardEvents { get; private set; } = new();
+        public List<AwardQuestion> AllAwardQuestions { get; private set; } = new();
+        public List<Person> AllPeople { get; private set; } = new();
+        public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults { get; private set; } = new();
 
         // Cached data
         private List<Setting>? _settings;
@@ -54,6 +58,20 @@ namespace MovieReviewApp.Components.Pages
 
             // Load award settings
             AwardSettings = await movieReviewService.GetAwardSettingsAsync();
+
+            // Load all award events, questions, and people for chronological display
+            var awardEventsTask = movieReviewService.GetAwardEventsAsync();
+            var awardQuestionsTask = movieReviewService.GetActiveAwardQuestionsAsync();
+            var peopleTask = movieReviewService.GetAllPeopleAsync(true);
+
+            await Task.WhenAll(awardEventsTask, awardQuestionsTask, peopleTask);
+            
+            AllAwardEvents = await awardEventsTask;
+            AllAwardQuestions = await awardQuestionsTask;
+            AllPeople = await peopleTask;
+
+            // Preload all question results to avoid sync calls in UI
+            await PreloadQuestionResultsAsync();
 
             // Generate schedule if we have the required data
             if (_allNames != null && _allNames.Length > 0 && _startDate.HasValue && _startDate.Value != DateTime.MinValue)
@@ -287,58 +305,99 @@ namespace MovieReviewApp.Components.Pages
                 .ToList();
         }
 
-        public AwardEvent? GetPreviousAwardEvent()
+        // Removed GetPreviousAwardEvent() to prevent async deadlocks
+        // Award events are now displayed in the chronological timeline
+
+        private async Task PreloadQuestionResultsAsync()
+        {
+            var resultTasks = new List<Task>();
+            
+            foreach (var awardEvent in AllAwardEvents)
+            {
+                foreach (var question in AllAwardQuestions.Where(q => awardEvent.Questions.Contains(q.Id)))
+                {
+                    var task = LoadQuestionResultAsync(awardEvent.Id, question.Id);
+                    resultTasks.Add(task);
+                }
+            }
+            
+            await Task.WhenAll(resultTasks);
+        }
+
+        private async Task LoadQuestionResultAsync(Guid awardEventId, Guid questionId)
         {
             try
             {
-                // Return null if not initialized or missing required data
-                if (!_isInitialized || !_startDate.HasValue || _dbPhases == null ||
-                    _dbPhases.Count == 0 || AwardSettings == null)
-                {
-                    return null;
-                }
-
-                if (DateProvider.Now < _startDate.Value)
-                {
-                    return null;
-                }
-
-                // Find the current phase we're in
-                var currentPhase = _dbPhases.FirstOrDefault(p =>
-                    DateProvider.Now.IsWithinRange(p.StartDate, p.EndDate));
-
-                if (currentPhase == null)
-                {
-                    return null;
-                }
-
-                // If the previous phase was an award phase
-                var previousPhaseNumber = currentPhase.Number - 1;
-
-                if (previousPhaseNumber > 0 && previousPhaseNumber % AwardSettings.PhasesBeforeAward == 0)
-                {
-                    var previousPhase = _dbPhases.FirstOrDefault(p => p.Number == previousPhaseNumber);
-                    if (previousPhase == null)
-                    {
-                        return null;
-                    }
-
-                    var awardMonthStart = previousPhase.EndDate.AddDays(1);
-                    var awardMonthEnd = awardMonthStart.AddMonths(1).AddDays(-1);
-
-                    // This would need to be async in a real implementation
-                    // For now, return null to avoid blocking
-                    // You should create an async version of this method
-                    return null;
-                }
-
-                return null;
+                var results = await movieReviewService.GetQuestionResultsAsync(awardEventId, questionId);
+                CachedResults[(awardEventId, questionId)] = results;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in GetPreviousAwardEvent: {ex.Message}");
-                return null;
+                Console.WriteLine($"Error loading results for award {awardEventId}, question {questionId}: {ex.Message}");
+                CachedResults[(awardEventId, questionId)] = new List<QuestionResult>();
             }
+        }
+
+        // Method to create chronological timeline with phases and award events
+        public List<object> GetChronologicalTimeline()
+        {
+            var timeline = new List<object>();
+            
+            if (Phases == null || AwardSettings == null) return timeline;
+
+            // Add all phases to timeline (including past ones)
+            foreach (var phase in Phases)
+            {
+                timeline.Add(new { Type = "Phase", Date = phase.StartDate, Item = phase });
+                
+                // Check if this phase should have an award event after it
+                if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
+                {
+                    var awardDate = phase.EndDate.AddDays(1);
+                    
+                    // Look for an existing award event for this time period
+                    var awardEvent = AllAwardEvents.FirstOrDefault(ae => 
+                        ae.StartDate >= awardDate && ae.StartDate <= awardDate.AddMonths(1));
+                    
+                    if (awardEvent != null)
+                    {
+                        timeline.Add(new { Type = "Award", Date = awardEvent.StartDate, Item = awardEvent });
+                    }
+                    else if (awardDate > DateProvider.Now)
+                    {
+                        // Only create placeholder for future award events
+                        timeline.Add(new { Type = "FutureAward", Date = awardDate, Item = new { PhaseNumber = phase.Number, AwardDate = awardDate } });
+                    }
+                }
+            }
+            
+            // Also add any standalone award events that might not have been matched to phases
+            foreach (var awardEvent in AllAwardEvents)
+            {
+                if (!timeline.Any(t => ((dynamic)t).Type == "Award" && ((AwardEvent)((dynamic)t).Item).Id == awardEvent.Id))
+                {
+                    timeline.Add(new { Type = "Award", Date = awardEvent.StartDate, Item = awardEvent });
+                }
+            }
+            
+            // Sort by date (oldest first for chronological display)
+            return timeline.OrderBy(t => ((dynamic)t).Date).ToList();
+        }
+
+        // Dictionary to track which award results are being shown
+        private Dictionary<string, bool> showResultsDict = new Dictionary<string, bool>();
+
+        public bool IsShowingResults(Guid awardEventId, Guid questionId) => 
+            showResultsDict.ContainsKey($"show_{awardEventId}_{questionId}") && showResultsDict[$"show_{awardEventId}_{questionId}"];
+
+        public void ToggleResults(Guid awardEventId, Guid questionId)
+        {
+            var key = $"show_{awardEventId}_{questionId}";
+            if (!showResultsDict.ContainsKey(key))
+                showResultsDict[key] = false;
+            
+            showResultsDict[key] = !showResultsDict[key];
+            StateHasChanged();
         }
     }
 }
