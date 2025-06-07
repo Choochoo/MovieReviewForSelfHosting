@@ -18,14 +18,23 @@ namespace MovieReviewApp.Services
         #region Movie Events
         public async Task<List<MovieEvent>> GetAllMovieEventsAsync(int? phaseNumber = null)
         {
+            List<MovieEvent> events;
             if (phaseNumber.HasValue)
             {
-                var events = await _db.FindAsync<MovieEvent>(m => m.PhaseNumber == phaseNumber.Value);
-                return events.OrderBy(me => me.StartDate).ToList();
+                events = await _db.FindAsync<MovieEvent>(m => m.PhaseNumber == phaseNumber.Value);
+            }
+            else
+            {
+                events = await _db.GetAllAsync<MovieEvent>();
             }
 
-            var allEvents = await _db.GetAllAsync<MovieEvent>();
-            return allEvents.OrderBy(me => me.StartDate).ToList();
+            // Ensure IsEditing is always false when loading from database
+            foreach (var movieEvent in events)
+            {
+                movieEvent.IsEditing = false;
+            }
+
+            return events.OrderBy(me => me.StartDate).ToList();
         }
 
         public List<MovieEvent> GetAllMovieEvents(int? phaseNumber = null)
@@ -36,6 +45,13 @@ namespace MovieReviewApp.Services
         public async Task<List<MovieEvent>> GetPhaseEventsAsync(int phaseNumber)
         {
             var events = await _db.FindAsync<MovieEvent>(x => x.PhaseNumber == phaseNumber);
+            
+            // Ensure IsEditing is always false when loading from database
+            foreach (var movieEvent in events)
+            {
+                movieEvent.IsEditing = false;
+            }
+            
             return events.OrderBy(x => x.StartDate).ToList();
         }
 
@@ -46,7 +62,12 @@ namespace MovieReviewApp.Services
 
         public async Task<MovieEvent?> GetMovieEventByIdAsync(Guid id)
         {
-            return await _db.GetByIdAsync<MovieEvent>(id);
+            var movieEvent = await _db.GetByIdAsync<MovieEvent>(id);
+            if (movieEvent != null)
+            {
+                movieEvent.IsEditing = false;
+            }
+            return movieEvent;
         }
 
         public MovieEvent? GetMovieEventById(Guid id)

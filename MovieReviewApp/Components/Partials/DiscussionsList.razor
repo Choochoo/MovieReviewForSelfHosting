@@ -22,9 +22,11 @@
     else if (!sessions.Any())
     {
         <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> No processed discussion sessions found yet.
+            <i class="bi bi-info-circle"></i> No discussion sessions found yet.
             <br>
-            <small>Sessions will appear here after audio processing is completed.</small>
+            <small>Sessions will appear here after they are created through the audio processing page.</small>
+            <br>
+            <small>Check the browser console (F12) for any error messages.</small>
         </div>
     }
     else
@@ -152,10 +154,18 @@
         try
         {
             sessions = await MovieSessionService.GetRecentSessions(currentLimit);
+            Console.WriteLine($"DiscussionsList: Loaded {sessions.Count} sessions");
+            
+            // Log session details to help debug
+            foreach (var session in sessions)
+            {
+                Console.WriteLine($"Session: {session.MovieTitle}, Status: {session.Status}, Date: {session.Date}");
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading sessions: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
             sessions = new List<MovieSession>();
         }
         finally

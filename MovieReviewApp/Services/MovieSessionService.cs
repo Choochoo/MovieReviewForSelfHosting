@@ -423,8 +423,8 @@ public class MovieSessionService
                 Duration = await GetMediaDuration(filePath)
             };
 
-            // Determine the current processing status based on the file location
-            audioFile.ProcessingStatus = _audioOrganizer.GetStatusFromPath(filePath);
+            // Set initial processing status - all files start as pending
+            audioFile.ProcessingStatus = AudioProcessingStatus.Pending;
 
             // File properties are already set above, no need for special MP3 handling
 
@@ -678,8 +678,7 @@ public class MovieSessionService
                     audioFile.ProcessingStatus = AudioProcessingStatus.FailedMp3;
                     audioFile.ConversionError = error ?? "Unknown error during upload";
 
-                    // Move failed upload to failed_mp3 folder
-                    audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+                    // File stays in session folder, status tracked in database
                 }
             }
 
@@ -844,8 +843,14 @@ public class MovieSessionService
 
             _logger.LogInformation("Starting transcription for {FileCount} audio files", session.AudioFiles.Count);
 
+            // Ensure mic assignments is not null
+            var micAssignments = session.MicAssignments ?? new Dictionary<int, string>();
+            _logger.LogInformation("Processing transcriptions with {MicCount} mic assignments: {Assignments}", 
+                micAssignments.Count, 
+                string.Join(", ", micAssignments.Select(kvp => $"Mic{kvp.Key}={kvp.Value}")));
+
             var transcriptionResults = await _gladiaService.ProcessMultipleFilesAsync(session.AudioFiles,
-                session.MicAssignments, // Pass mic assignments for speaker name mapping
+                micAssignments, // Pass mic assignments for speaker name mapping
                 (fileName, current, total) =>
                 {
                     var progress = 20 + (int)((double)current / total * 50); // 20-70%
@@ -862,8 +867,7 @@ public class MovieSessionService
                 if (audioFile.ProcessingStatus == AudioProcessingStatus.Failed ||
                     audioFile.ProcessingStatus == AudioProcessingStatus.FailedMp3)
                 {
-                    // Move failed files to failed subfolder for organization
-                    audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath);
+                    // File stays in session folder, status tracked in database
                 }
                 // Successful files (TranscriptionComplete, ProcessedMp3) stay in original location
             }
@@ -1128,20 +1132,35 @@ public class MovieSessionService
 
     public async Task<List<MovieSession>> GetRecentSessions(int limit = 10)
     {
-        // Get all completed sessions
-        var allSessions = await _database.FindAsync<MovieSession>(s => s.Status == ProcessingStatus.Complete);
+        // Get all sessions for debugging, then filter completed ones
+        var allSessions = await _database.GetAllAsync<MovieSession>();
+        
+        _logger.LogInformation("GetRecentSessions: Found {TotalCount} total sessions", allSessions.Count);
+        
+        if (allSessions.Any())
+        {
+            var statusCounts = allSessions.GroupBy(s => s.Status).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var status in statusCounts)
+            {
+                _logger.LogInformation("Sessions with status {Status}: {Count}", status.Key, status.Value);
+            }
+        }
+        
+        // Filter to only completed sessions (as originally intended)
+        var completedSessions = allSessions.Where(s => s.Status == ProcessingStatus.Complete).ToList();
         
         // Get all movie events to sort by their start dates
         var movieEvents = await _database.GetAllAsync<MovieEvent>();
         var movieEventLookup = movieEvents.ToDictionary(me => me.Movie, me => me.StartDate);
         
         // Sort sessions by the corresponding MovieEvent.StartDate, then by session creation date
-        var sortedSessions = allSessions
+        var sortedSessions = completedSessions
             .OrderByDescending(s => movieEventLookup.TryGetValue(s.MovieTitle, out var startDate) ? startDate : s.Date)
             .ThenByDescending(s => s.CreatedAt)
             .Take(limit)
             .ToList();
 
+        _logger.LogInformation("Returning {Count} completed sessions to display", sortedSessions.Count);
         return sortedSessions;
     }
 
@@ -1381,8 +1400,7 @@ public class MovieSessionService
             audioFile.ProcessingStatus = AudioProcessingStatus.TranscriptionComplete;
             audioFile.ProcessedAt = DateTime.UtcNow;
 
-            // Move completed transcription to processed_mp3 folder
-            audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+            // File stays in session folder, status tracked in database
 
             _logger.LogInformation("Successfully transcribed {FileName} and saved JSON to {JsonPath}",
                 audioFile.FileName, jsonPath);
@@ -1393,8 +1411,7 @@ public class MovieSessionService
             audioFile.ProcessingStatus = AudioProcessingStatus.FailedMp3;
             audioFile.ConversionError = ex.Message;
 
-            // Move failed transcription to failed_mp3 folder
-            audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
+            // File stays in session folder, status tracked in database
         }
     }
 }

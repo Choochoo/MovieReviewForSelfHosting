@@ -227,7 +227,18 @@ namespace MovieReviewApp.Database
                 return document;
             }
 
-            var filter = Builders<T>.Filter.Eq("_id", idValue);
+            // Create filter with proper type handling for GUIDs
+            FilterDefinition<T> filter;
+            if (idValue is Guid guidId)
+            {
+                // Use strongly typed filter for GUIDs to preserve serialization settings
+                filter = Builders<T>.Filter.Eq("_id", guidId);
+            }
+            else
+            {
+                filter = Builders<T>.Filter.Eq("_id", idValue);
+            }
+            
             var options = new ReplaceOptions { IsUpsert = true };
             await collection.ReplaceOneAsync(filter, document, options);
 

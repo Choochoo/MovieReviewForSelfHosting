@@ -89,7 +89,7 @@ public class GladiaService
         }
     }
 
-    private async Task<string> ConvertToMp3Async(string inputPath, string outputPath)
+    private async Task<string> ConvertToMp3Async(string inputPath, string outputPath, Action<string, int, int>? progressCallback = null)
     {
         try
         {
@@ -98,32 +98,56 @@ public class GladiaService
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-i \"{inputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{outputPath}\"",
+                Arguments = $"-y -i \"{inputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{outputPath}\"",
                 UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
                 CreateNoWindow = true
             };
 
             using var process = new System.Diagnostics.Process();
             process.StartInfo = startInfo;
-
-            var outputBuilder = new StringBuilder();
-            var errorBuilder = new StringBuilder();
-
-            process.OutputDataReceived += (sender, e) => { if (e.Data != null) outputBuilder.AppendLine(e.Data); };
-            process.ErrorDataReceived += (sender, e) => { if (e.Data != null) errorBuilder.AppendLine(e.Data); };
-
             process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
 
-            await process.WaitForExitAsync();
+            // Fake progress loader with reliable process monitoring
+            var progress = 0;
+            var maxWaitTime = TimeSpan.FromMinutes(10);
+            var startTime = DateTime.UtcNow;
+
+            // Progress loop using short WaitForExit calls
+            while ((DateTime.UtcNow - startTime) < maxWaitTime)
+            {
+                // Check if process finished with a short timeout
+                if (process.WaitForExit(1000))
+                {
+                    // Process finished
+                    break;
+                }
+
+                // Update progress
+                progress = Math.Min(97, progress + 3); // Cap at 97% until process finishes
+                var progressMessage = $"Converting {Path.GetFileName(inputPath)} ({progress}%)";
+                progressCallback?.Invoke(progressMessage, 1, 1);
+                _logger.LogDebug("MP3 Conversion - Converting {FileName}: {Progress}%",
+                    Path.GetFileName(inputPath), progress);
+            }
+
+            // Check if process timed out
+            if (!process.HasExited)
+            {
+                process.Kill();
+                throw new TimeoutException($"FFmpeg conversion timed out after 10 minutes for {Path.GetFileName(inputPath)}");
+            }
+
+            // Set progress to 100% when done
+            var finalProgressMessage = $"Converting {Path.GetFileName(inputPath)} (100%)";
+            progressCallback?.Invoke(finalProgressMessage, 1, 1);
+            _logger.LogDebug("MP3 Conversion - Converting {FileName}: {Progress}%",
+                Path.GetFileName(inputPath), 100);
 
             if (process.ExitCode != 0)
             {
-                var error = errorBuilder.ToString();
-                throw new Exception($"FFmpeg conversion failed (exit code {process.ExitCode}): {error}");
+                throw new Exception($"FFmpeg conversion failed with exit code {process.ExitCode} for {Path.GetFileName(inputPath)}");
             }
 
             var originalSize = new FileInfo(inputPath).Length;
@@ -139,6 +163,23 @@ public class GladiaService
         {
             _logger.LogError(ex, "Failed to convert {InputPath} to MP3", inputPath);
             throw;
+        }
+    }
+
+    // Helper to check if a file is locked
+    private bool IsFileLocked(string filePath)
+    {
+        try
+        {
+            using (FileStream stream = File.Open(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                stream.Close();
+            }
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
         }
     }
 
@@ -178,49 +219,35 @@ public class GladiaService
                     continue;
                 }
 
-                // Get target folder using AudioFileOrganizer
-                var targetStatus = Models.AudioProcessingStatus.PendingMp3;
-                var mp3Folder = _audioOrganizer.GetFolderForStatus(targetStatus, sessionFolderPath);
-
+                // Convert to MP3 in the same session folder
                 var mp3FileName = Path.ChangeExtension(Path.GetFileName(audioFile.FilePath), ".mp3");
-                var mp3Path = Path.Combine(mp3Folder, mp3FileName);
+                var mp3Path = Path.Combine(sessionFolderPath, mp3FileName);
 
-                await ConvertToMp3Async(audioFile.FilePath, mp3Path);
+                await ConvertToMp3Async(audioFile.FilePath, mp3Path, progressCallback);
 
                 // Update audio file with MP3 details
-                audioFile.ProcessingStatus = targetStatus;
+                audioFile.ProcessingStatus = Models.AudioProcessingStatus.PendingMp3;
                 audioFile.ConvertedAt = DateTime.UtcNow;
 
-                // Delete the original WAV file and update FilePath to point to MP3
+                // Delete the original WAV file
                 var originalWavPath = audioFile.FilePath;
-                var originalWavDir = Path.GetDirectoryName(originalWavPath);
-
                 try
                 {
-                    if (File.Exists(originalWavPath))
+                    if (File.Exists(originalWavPath) && originalWavPath != mp3Path)
                     {
                         File.Delete(originalWavPath);
                         _logger.LogInformation("Deleted original WAV file: {FilePath}", originalWavPath);
                     }
-
-                    // Clean up the source directory if it's now empty
-                    if (!string.IsNullOrEmpty(originalWavDir) && Directory.Exists(originalWavDir))
-                    {
-                        var remainingFiles = Directory.GetFiles(originalWavDir, "*.*", SearchOption.AllDirectories);
-                        if (remainingFiles.Length == 0)
-                        {
-                            Directory.Delete(originalWavDir, true);
-                            _logger.LogInformation("Cleaned up empty source folder: {FolderPath}", originalWavDir);
-                        }
-                    }
                 }
                 catch (Exception deleteEx)
                 {
-                    _logger.LogWarning(deleteEx, "Failed to delete original WAV file or cleanup folder: {FilePath}", originalWavPath);
+                    _logger.LogWarning(deleteEx, "Failed to delete original WAV file: {FilePath}", originalWavPath);
                 }
 
                 // Update FilePath to point to the new MP3 file
                 audioFile.FilePath = mp3Path;
+                // Update FileName to reflect the new MP3 extension
+                audioFile.FileName = Path.GetFileName(mp3Path);
 
                 results.Add((audioFile, true, null));
                 _logger.LogInformation("Converted {FileName} to MP3: {Mp3Path}",
@@ -230,9 +257,6 @@ public class GladiaService
             {
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.Failed;
                 audioFile.ConversionError = ex.Message;
-
-                // Move failed file to failed folder with cleanup
-                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
 
                 results.Add((audioFile, false, ex.Message));
                 _logger.LogError(ex, "Failed to convert {FileName} to MP3", Path.GetFileName(audioFile.FilePath));
@@ -253,12 +277,23 @@ public class GladiaService
         Func<MovieSession, Task>? saveSessionCallback = null)
     {
         var results = new List<(AudioFile audioFile, bool success, string? error)>();
-        // Process all MP3 files that can be reprocessed (pending, processed, or failed) and haven't been uploaded to Gladia yet
+        
+        // Debug: Log all files and their status
+        Console.WriteLine($"DEBUG GLADIA: UploadAllMp3sToGladiaAsync called with {audioFiles.Count} files:");
+        foreach (var file in audioFiles)
+        {
+            Console.WriteLine($"  File: {file.FileName}, Status: {file.ProcessingStatus}, AudioUrl: {(string.IsNullOrEmpty(file.AudioUrl) ? "EMPTY" : "SET")}, Path: {file.FilePath}");
+        }
+        
+        // Process all MP3 files that can be uploaded to Gladia and haven't been uploaded yet
         var mp3Files = audioFiles.Where(f => (f.ProcessingStatus == AudioProcessingStatus.PendingMp3 ||
                                              f.ProcessingStatus == AudioProcessingStatus.ProcessedMp3 ||
-                                             f.ProcessingStatus == AudioProcessingStatus.FailedMp3) &&
+                                             f.ProcessingStatus == AudioProcessingStatus.FailedMp3 ||
+                                             f.ProcessingStatus == AudioProcessingStatus.UploadingToGladia) &&
                                            string.IsNullOrEmpty(f.AudioUrl) &&
                                            f.FilePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)).ToList();
+        
+        Console.WriteLine($"DEBUG GLADIA: After filtering, {mp3Files.Count} files qualify for upload:");
 
         // Log skipped files that are already uploaded
         var alreadyUploaded = audioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.UploadedToGladia ||
@@ -279,7 +314,12 @@ public class GladiaService
 
             try
             {
+                Console.WriteLine($"DEBUG GLADIA: Starting upload for {audioFile.FileName} (File {i + 1}/{totalFiles})");
+                Console.WriteLine($"DEBUG GLADIA: File path: {audioFile.FilePath}");
+                Console.WriteLine($"DEBUG GLADIA: File exists: {File.Exists(audioFile.FilePath)}");
+                
                 var audioUrl = await UploadSingleFileToGladiaAsync(audioFile.FilePath);
+                Console.WriteLine($"DEBUG GLADIA: Upload successful for {audioFile.FileName}, got URL: {audioUrl}");
 
                 // Store the audio URL for the transcription phase
                 audioFile.AudioUrl = audioUrl;
@@ -292,10 +332,12 @@ public class GladiaService
                     try
                     {
                         await saveSessionCallback(session);
+                        Console.WriteLine($"DEBUG GLADIA: Session state saved after uploading {audioFile.FileName}");
                         _logger.LogInformation("Session state saved after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
                     }
                     catch (Exception saveEx)
                     {
+                        Console.WriteLine($"DEBUG GLADIA: Failed to save session state after uploading {audioFile.FileName}: {saveEx.Message}");
                         _logger.LogWarning(saveEx, "Failed to save session state after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
                     }
                 }
@@ -306,11 +348,11 @@ public class GladiaService
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"DEBUG GLADIA: Upload failed for {audioFile.FileName}: {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine($"DEBUG GLADIA: Full exception: {ex}");
+                
                 audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
                 audioFile.ConversionError = ex.Message;
-
-                // Move MP3 file to failed_mp3 folder with cleanup
-                audioFile.FilePath = await _audioOrganizer.MoveFileToStatusFolder(audioFile, sessionFolderPath, cleanupSource: true);
 
                 results.Add((audioFile, false, ex.Message));
                 _logger.LogError(ex, "Failed to upload {FileName} to Gladia", Path.GetFileName(audioFile.FilePath));
@@ -322,13 +364,267 @@ public class GladiaService
 
     /// <summary>
     /// Maps Gladia speaker labels to actual participant names based on file type
+    /// For master mix files, uses timestamp-based mapping from individual mic files
     /// </summary>
+    public string BuildTranscriptFromUtterances(TranscriptionResult result, Dictionary<int, string> micAssignments, string fileName)
+    {
+        return BuildTranscriptFromUtterances(result, micAssignments, fileName, null);
+    }
+
+    /// <summary>
+    /// Maps Gladia speaker labels to actual participant names based on file type
+    /// For master mix files, uses timestamp-based mapping from individual mic transcript data
+    /// </summary>
+    public string BuildTranscriptFromUtterances(TranscriptionResult result, Dictionary<int, string> micAssignments, string fileName, List<(TranscriptionResult micResult, string participantName)>? individualMicData)
+    {
+        if (result?.result?.transcription?.utterances == null || !result.result.transcription.utterances.Any())
+        {
+            _logger.LogWarning("BuildTranscriptFromUtterances called with no utterances for file {FileName}", fileName);
+            return result?.result?.transcription?.full_transcript ?? string.Empty;
+        }
+
+        if (!micAssignments.Any())
+        {
+            _logger.LogWarning("BuildTranscriptFromUtterances called with no mic assignments for file {FileName}", fileName);
+            return result?.result?.transcription?.full_transcript ?? string.Empty;
+        }
+
+        _logger.LogInformation("Building transcript from {UtteranceCount} utterances for file {FileName} with mic assignments: {Assignments}", 
+            result.result.transcription.utterances.Count, fileName,
+            string.Join(", ", micAssignments.Select(kvp => $"Mic{kvp.Key}={kvp.Value}")));
+
+        var transcriptLines = new List<string>();
+        var upperFileName = fileName.ToUpper();
+
+        // Check if this is an individual mic file (MIC1.WAV, MIC2.WAV, etc.)
+        var micMatch = System.Text.RegularExpressions.Regex.Match(upperFileName, @"^MIC(\d+)\.(?:WAV|MP3)$");
+        if (micMatch.Success)
+        {
+            var fileBasedMicNumber = int.Parse(micMatch.Groups[1].Value); // 1-based from filename (MIC1.mp3 = 1)
+            var micNumber = fileBasedMicNumber - 1; // Convert to 0-based for mic assignments lookup
+            _logger.LogInformation("DETECTED INDIVIDUAL MIC FILE: {FileName} -> file number {FileNumber} -> internal mic number {MicNumber}", fileName, fileBasedMicNumber, micNumber);
+            _logger.LogInformation("AVAILABLE MIC ASSIGNMENTS: {Assignments}", 
+                string.Join(", ", micAssignments.Select(kvp => $"[{kvp.Key}]='{kvp.Value}'")));
+            _logger.LogInformation("LOOKING FOR MIC ASSIGNMENT: micAssignments[{MicNumber}] (converted from file mic {FileNumber})", micNumber, fileBasedMicNumber);
+            
+            // For individual mic files, all utterances belong to the mic owner
+            // The speaker ID in utterances is always 0 for individual files since it's just one person
+            if (micAssignments.TryGetValue(micNumber, out var participantName) && !string.IsNullOrEmpty(participantName))
+            {
+                _logger.LogInformation("BUILDING TRANSCRIPT: Processing {UtteranceCount} utterances for {ParticipantName} from mic {MicNumber}", 
+                    result.result.transcription.utterances.Count, participantName, micNumber);
+                    
+                foreach (var utterance in result.result.transcription.utterances)
+                {
+                    if (!string.IsNullOrWhiteSpace(utterance.text))
+                    {
+                        var transcriptLine = $"{participantName}: {utterance.text.Trim()}";
+                        transcriptLines.Add(transcriptLine);
+                        _logger.LogTrace("ADDED TRANSCRIPT LINE: {Line}", transcriptLine.Substring(0, Math.Min(100, transcriptLine.Length)));
+                    }
+                }
+                _logger.LogInformation("Built transcript for individual mic {FileName} (internal mic {MicNumber}, file mic {FileNumber}) with {LineCount} lines for {ParticipantName}", 
+                    fileName, micNumber, fileBasedMicNumber, transcriptLines.Count, participantName);
+            }
+            else
+            {
+                _logger.LogWarning("No participant name found for mic {MicNumber} (file mic {FileNumber}) in file {FileName}. Available assignments: {Assignments}",
+                    micNumber, fileBasedMicNumber, fileName, string.Join(", ", micAssignments.Select(kvp => $"[{kvp.Key}]='{kvp.Value}'")));
+                
+                // Fallback: use generic name based on file number for display
+                foreach (var utterance in result.result.transcription.utterances)
+                {
+                    if (!string.IsNullOrWhiteSpace(utterance.text))
+                    {
+                        transcriptLines.Add($"Mic {fileBasedMicNumber}: {utterance.text.Trim()}");
+                    }
+                }
+            }
+        }
+        else
+        {
+            // For master/mix files, use timestamp-based mapping if individual mic data is available
+            _logger.LogInformation("Processing master/mix file {FileName}", fileName);
+            
+            if (individualMicData != null && individualMicData.Any())
+            {
+                _logger.LogInformation("Using timestamp-based speaker mapping for master mix with {MicCount} individual mic files", individualMicData.Count);
+                transcriptLines = BuildTimestampBasedTranscript(result, individualMicData);
+            }
+            else
+            {
+                // Fallback: Use Gladia's speaker diarization (less reliable)
+                _logger.LogWarning("No individual mic data available for {FileName}, falling back to Gladia speaker diarization", fileName);
+                
+                foreach (var utterance in result.result.transcription.utterances)
+                {
+                    if (!string.IsNullOrWhiteSpace(utterance.text))
+                    {
+                        // Map Gladia speaker number (0-based) to participant name using mic assignments
+                        // Try to map speaker 0 -> mic 0, speaker 1 -> mic 1, etc. (corrected to 0-based)
+                        var micNumber = utterance.speaker;
+                        
+                        if (micAssignments.TryGetValue(micNumber, out var participantName) && !string.IsNullOrEmpty(participantName))
+                        {
+                            transcriptLines.Add($"{participantName}: {utterance.text.Trim()}");
+                            _logger.LogTrace("Mapped speaker {SpeakerNum} to {ParticipantName} in master mix", utterance.speaker, participantName);
+                        }
+                        else
+                        {
+                            // Fallback to generic speaker label if no mapping found
+                            transcriptLines.Add($"Speaker {utterance.speaker + 1}: {utterance.text.Trim()}");
+                            _logger.LogTrace("No mapping found for speaker {SpeakerNum}, using generic label", utterance.speaker);
+                        }
+                    }
+                }
+            }
+            
+            var uniqueSpeakers = result.result.transcription.utterances.Select(u => u.speaker).Distinct().Count();
+            _logger.LogInformation("Built transcript for master/mix file {FileName} with {LineCount} lines from {SpeakerCount} detected speakers", 
+                fileName, transcriptLines.Count, uniqueSpeakers);
+        }
+
+        var finalTranscript = string.Join("\n", transcriptLines);
+        
+        _logger.LogInformation("FINAL TRANSCRIPT for {FileName}:", fileName);
+        _logger.LogInformation("  - Generated {LineCount} transcript lines", transcriptLines.Count);
+        _logger.LogInformation("  - Total transcript length: {Length} characters", finalTranscript.Length);
+        _logger.LogInformation("  - Lines contain newlines: {HasNewlines}", finalTranscript.Contains('\n'));
+        _logger.LogInformation("  - Number of newlines: {NewlineCount}", finalTranscript.Count(c => c == '\n'));
+        _logger.LogInformation("  - First 500 characters: {Preview}", 
+            finalTranscript.Length > 0 ? finalTranscript.Substring(0, Math.Min(500, finalTranscript.Length)) : "[EMPTY]");
+        
+        if (transcriptLines.Count > 0)
+        {
+            _logger.LogInformation("  - Sample lines: {SampleLines}", 
+                string.Join(" | ", transcriptLines.Take(3).Select(l => l.Length > 50 ? l.Substring(0, 50) + "..." : l)));
+        }
+        
+        // Log the exact transcript that will be analyzed
+        _logger.LogInformation("TRANSCRIPT FOR ANALYSIS (first 10 lines):");
+        var analysisLines = finalTranscript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < Math.Min(10, analysisLines.Length); i++)
+        {
+            _logger.LogInformation("  Line {LineNum}: {Line}", i + 1, analysisLines[i].Length > 100 ? analysisLines[i].Substring(0, 100) + "..." : analysisLines[i]);
+        }
+        
+        return finalTranscript;
+    }
+
+    /// <summary>
+    /// Builds a transcript for master mix files using timestamp-based mapping from individual mic files
+    /// This provides much more accurate speaker attribution than Gladia's speaker diarization
+    /// </summary>
+    private List<string> BuildTimestampBasedTranscript(TranscriptionResult masterMixResult, List<(TranscriptionResult micResult, string participantName)> individualMicData)
+    {
+        var transcriptLines = new List<string>();
+        const double TIMESTAMP_TOLERANCE = 1.0; // Allow 1 second tolerance for timestamp matching
+        
+        _logger.LogInformation("Building timestamp-based transcript from master mix with {UtteranceCount} utterances", 
+            masterMixResult.result.transcription.utterances.Count);
+
+        foreach (var masterUtterance in masterMixResult.result.transcription.utterances)
+        {
+            if (string.IsNullOrWhiteSpace(masterUtterance.text))
+                continue;
+
+            string? bestMatchSpeaker = null;
+            double bestMatchScore = 0;
+            string? bestMatchText = null;
+
+            // Check each individual mic file to see which participant's timing best matches this utterance
+            foreach (var (micResult, participantName) in individualMicData)
+            {
+                if (micResult?.result?.transcription?.utterances == null)
+                    continue;
+
+                // Find the best matching utterance from this mic based on timestamp overlap
+                foreach (var micUtterance in micResult.result.transcription.utterances)
+                {
+                    if (string.IsNullOrWhiteSpace(micUtterance.text))
+                        continue;
+
+                    // Calculate overlap between master utterance and mic utterance
+                    var overlapStart = Math.Max(masterUtterance.start, micUtterance.start);
+                    var overlapEnd = Math.Min(masterUtterance.end, micUtterance.end);
+                    var overlap = Math.Max(0, overlapEnd - overlapStart);
+                    
+                    var masterDuration = masterUtterance.end - masterUtterance.start;
+                    var micDuration = micUtterance.end - micUtterance.start;
+                    
+                    // Calculate overlap percentage relative to both utterances
+                    var overlapScore = overlap / Math.Max(masterDuration, micDuration);
+                    
+                    // Also consider text similarity (simple approach)
+                    var textSimilarity = CalculateTextSimilarity(masterUtterance.text, micUtterance.text);
+                    var combinedScore = (overlapScore * 0.7) + (textSimilarity * 0.3);
+
+                    if (combinedScore > bestMatchScore && combinedScore > 0.3) // Minimum threshold
+                    {
+                        bestMatchScore = combinedScore;
+                        bestMatchSpeaker = participantName;
+                        bestMatchText = micUtterance.text;
+                    }
+                }
+            }
+
+            // Add the utterance with the best matching speaker
+            if (bestMatchSpeaker != null)
+            {
+                transcriptLines.Add($"{bestMatchSpeaker}: {masterUtterance.text.Trim()}");
+                _logger.LogTrace("Matched master utterance [{Start:F1}s-{End:F1}s] to {Speaker} (score: {Score:F2})", 
+                    masterUtterance.start, masterUtterance.end, bestMatchSpeaker, bestMatchScore);
+            }
+            else
+            {
+                // No good match found, use generic speaker label
+                transcriptLines.Add($"Unknown Speaker: {masterUtterance.text.Trim()}");
+                _logger.LogTrace("No speaker match found for master utterance [{Start:F1}s-{End:F1}s]: {Text}", 
+                    masterUtterance.start, masterUtterance.end, masterUtterance.text.Substring(0, Math.Min(50, masterUtterance.text.Length)));
+            }
+        }
+
+        _logger.LogInformation("Built timestamp-based transcript with {LineCount} lines", transcriptLines.Count);
+        return transcriptLines;
+    }
+
+    /// <summary>
+    /// Simple text similarity calculation for matching utterances
+    /// </summary>
+    private double CalculateTextSimilarity(string text1, string text2)
+    {
+        if (string.IsNullOrWhiteSpace(text1) || string.IsNullOrWhiteSpace(text2))
+            return 0;
+
+        var words1 = text1.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        var words2 = text2.ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        
+        if (words1.Count == 0 || words2.Count == 0)
+            return 0;
+
+        var intersection = words1.Intersect(words2).Count();
+        var union = words1.Union(words2).Count();
+        
+        return union > 0 ? (double)intersection / union : 0;
+    }
+
     public string MapSpeakerLabelsToNames(string transcriptText, Dictionary<int, string> micAssignments, string fileName)
     {
-        if (string.IsNullOrEmpty(transcriptText) || !micAssignments.Any())
+        if (string.IsNullOrEmpty(transcriptText))
         {
+            _logger.LogWarning("MapSpeakerLabelsToNames called with empty transcript text");
             return transcriptText;
         }
+        
+        if (!micAssignments.Any())
+        {
+            _logger.LogWarning("MapSpeakerLabelsToNames called with no mic assignments");
+            return transcriptText;
+        }
+
+        _logger.LogInformation("Mapping speaker labels for file {FileName} with {AssignmentCount} mic assignments: {Assignments}", 
+            fileName, micAssignments.Count, 
+            string.Join(", ", micAssignments.Select(kvp => $"Mic{kvp.Key}={kvp.Value}")));
 
         var result = transcriptText;
         var upperFileName = fileName.ToUpper();
@@ -341,12 +637,18 @@ public class GladiaService
             if (micAssignments.TryGetValue(micNumber, out var participantName) && !string.IsNullOrEmpty(participantName))
             {
                 // For individual mic files, replace ALL speaker labels with the mic owner's name
+                var originalLength = result.Length;
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\bSpeaker \d+:", $"{participantName}:");
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\bspeaker \d+:", $"{participantName}:");
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\[Speaker \d+\]:", $"[{participantName}]:");
                 result = System.Text.RegularExpressions.Regex.Replace(result, @"\(Speaker \d+\):", $"({participantName}):");
-
-                _logger.LogInformation("Mapped all speakers in {FileName} to {ParticipantName}", fileName, participantName);
+                // Also handle variations without colons
+                result = System.Text.RegularExpressions.Regex.Replace(result, @"^Speaker \d+\s", $"{participantName}: ", System.Text.RegularExpressions.RegexOptions.Multiline);
+                result = System.Text.RegularExpressions.Regex.Replace(result, @"^speaker \d+\s", $"{participantName}: ", System.Text.RegularExpressions.RegexOptions.Multiline);
+                
+                var replacedChars = originalLength - result.Length;
+                _logger.LogInformation("Mapped all speakers in {FileName} to {ParticipantName}, replaced {CharCount} characters", 
+                    fileName, participantName, Math.Abs(replacedChars));
             }
         }
         // Check for other known individual files (PHONE.WAV, SOUND_PAD.WAV)
@@ -365,23 +667,38 @@ public class GladiaService
         // For master mix and other files, use traditional speaker number mapping
         else
         {
+            var replacementCount = 0;
             // Map Speaker 1, Speaker 2, etc. to actual names based on mic assignments
             for (int i = 1; i <= 10; i++) // Support up to 10 speakers
             {
                 if (micAssignments.TryGetValue(i, out var participantName) && !string.IsNullOrEmpty(participantName))
                 {
-                    // Replace "Speaker 1:" with "John:" etc.
-                    result = result.Replace($"Speaker {i}:", $"{participantName}:");
-                    result = result.Replace($"Speaker {i} :", $"{participantName}:");
-                    result = result.Replace($"speaker {i}:", $"{participantName}:");
-                    result = result.Replace($"speaker {i} :", $"{participantName}:");
+                    var patterns = new[]
+                    {
+                        ($"Speaker {i}:", $"{participantName}:"),
+                        ($"Speaker {i} :", $"{participantName}:"),
+                        ($"speaker {i}:", $"{participantName}:"),
+                        ($"speaker {i} :", $"{participantName}:"),
+                        ($"[Speaker {i}]:", $"[{participantName}]:"),
+                        ($"(Speaker {i}):", $"({participantName}):")
+                    };
 
-                    // Also handle cases where there might be brackets or other formatting
-                    result = result.Replace($"[Speaker {i}]:", $"[{participantName}]:");
-                    result = result.Replace($"(Speaker {i}):", $"({participantName}):");
+                    foreach (var (oldPattern, newPattern) in patterns)
+                    {
+                        var countBefore = result.Length;
+                        result = result.Replace(oldPattern, newPattern);
+                        if (result.Length != countBefore)
+                        {
+                            var occurrences = (countBefore - result.Length) / (oldPattern.Length - newPattern.Length);
+                            replacementCount += occurrences;
+                            _logger.LogDebug("Replaced {Count} occurrences of '{Old}' with '{New}'", 
+                                occurrences, oldPattern, newPattern);
+                        }
+                    }
                 }
             }
-            _logger.LogInformation("Applied speaker number mapping for {FileName}", fileName);
+            _logger.LogInformation("Applied speaker number mapping for {FileName}, made {ReplacementCount} replacements", 
+                fileName, replacementCount);
         }
 
         return result;
@@ -392,6 +709,13 @@ public class GladiaService
     /// </summary>
     private async Task<string> UploadSingleFileToGladiaAsync(string filePath)
     {
+        Console.WriteLine($"DEBUG GLADIA: UploadSingleFileToGladiaAsync called for: {filePath}");
+        Console.WriteLine($"DEBUG GLADIA: IsConfigured: {IsConfigured}");
+        Console.WriteLine($"DEBUG GLADIA: API key present: {!string.IsNullOrEmpty(_apiKey)}");
+        
+        // Log configuration status first
+        LogConfigurationStatus();
+        
         const int maxRetries = 3;
         const int baseDelayMs = 2000;
 
@@ -399,6 +723,7 @@ public class GladiaService
         {
             try
             {
+                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt}/{maxRetries} for {Path.GetFileName(filePath)}");
                 _logger.LogInformation("Upload attempt {Attempt}/{MaxRetries} for {FileName}",
                     attempt, maxRetries, Path.GetFileName(filePath));
 
@@ -407,14 +732,21 @@ public class GladiaService
             catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex))
             {
                 var delay = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
+                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt} failed for {Path.GetFileName(filePath)}, retrying in {delay}ms: {ex.Message}");
                 _logger.LogWarning("Upload attempt {Attempt} failed for {FileName}, retrying in {Delay}ms: {Error}",
                     attempt, Path.GetFileName(filePath), delay, ex.Message);
 
                 await Task.Delay(delay);
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt} failed with non-retryable exception: {ex.GetType().Name}: {ex.Message}");
+                throw;
+            }
         }
 
         // Final attempt without retry wrapper
+        Console.WriteLine($"DEBUG GLADIA: Final upload attempt for {Path.GetFileName(filePath)}");
         return await UploadSingleFileToGladiaAsyncInternal(filePath);
     }
 
@@ -434,20 +766,41 @@ public class GladiaService
     /// </summary>
     private async Task<string> UploadSingleFileToGladiaAsyncInternal(string filePath)
     {
+        Console.WriteLine($"DEBUG GLADIA: Starting upload for file: {filePath}");
+        
         if (!File.Exists(filePath))
         {
+            Console.WriteLine($"DEBUG GLADIA ERROR: File not found: {filePath}");
             throw new FileNotFoundException($"Audio file not found: {filePath}");
         }
 
         var fileInfo = new FileInfo(filePath);
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
 
+        Console.WriteLine($"DEBUG GLADIA: File info - Size: {fileInfo.Length:N0} bytes, Extension: {extension}");
         _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia",
             Path.GetFileName(filePath), fileInfo.Length);
+
+        // Check API key availability
+        Console.WriteLine($"DEBUG GLADIA: API Key configured: {!string.IsNullOrEmpty(_apiKey)}");
+        Console.WriteLine($"DEBUG GLADIA: API Key length: {_apiKey?.Length ?? 0}");
+        Console.WriteLine($"DEBUG GLADIA: Base URL: {_baseUrl}");
+        Console.WriteLine($"DEBUG GLADIA: HttpClient BaseAddress: {_httpClient.BaseAddress}");
+
+        // Check headers
+        Console.WriteLine($"DEBUG GLADIA: Request headers count: {_httpClient.DefaultRequestHeaders.Count()}");
+        foreach (var header in _httpClient.DefaultRequestHeaders)
+        {
+            var maskedValue = header.Key.ToLower().Contains("key") && header.Value.Any() 
+                ? $"{header.Value.First().Substring(0, Math.Min(10, header.Value.First().Length))}..." 
+                : string.Join(", ", header.Value);
+            Console.WriteLine($"DEBUG GLADIA: Header - {header.Key}: {maskedValue}");
+        }
 
         using var form = new MultipartFormDataContent();
 
         // Use streaming instead of loading entire file into memory
+        Console.WriteLine($"DEBUG GLADIA: Opening file stream for {Path.GetFileName(filePath)}");
         using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920);
         using var fileContent = new StreamContent(fileStream);
 
@@ -463,33 +816,83 @@ public class GladiaService
             _ => "audio/mpeg"
         };
 
+        Console.WriteLine($"DEBUG GLADIA: Setting content type: {contentType}");
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        
         // Create custom filename with movie name and mic identifier
         var customFilename = CreateCustomFilename(filePath);
+        Console.WriteLine($"DEBUG GLADIA: Custom filename: {customFilename}");
         form.Add(fileContent, "audio", customFilename);
 
-        // Note: Transcription configuration is set during the transcription request, not upload
+        Console.WriteLine($"DEBUG GLADIA: Posting to endpoint: /v2/upload");
+        Console.WriteLine($"DEBUG GLADIA: Full URL will be: {_httpClient.BaseAddress}/v2/upload");
 
-        var response = await _httpClient.PostAsync("/v2/upload", form);
-
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            var errorContent = await response.Content.ReadAsStringAsync();
-            throw new Exception($"Gladia upload failed with status {response.StatusCode}: {errorContent}");
+            var response = await _httpClient.PostAsync("/v2/upload", form);
+            Console.WriteLine($"DEBUG GLADIA: Response status: {response.StatusCode}");
+            Console.WriteLine($"DEBUG GLADIA: Response headers count: {response.Headers.Count()}");
+            
+            foreach (var header in response.Headers)
+            {
+                Console.WriteLine($"DEBUG GLADIA: Response Header - {header.Key}: {string.Join(", ", header.Value)}");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"DEBUG GLADIA ERROR: Status {response.StatusCode}, Content: {errorContent}");
+                
+                // Log detailed error info
+                Console.WriteLine($"DEBUG GLADIA ERROR: Reason phrase: {response.ReasonPhrase}");
+                if (response.Content.Headers.Any())
+                {
+                    Console.WriteLine($"DEBUG GLADIA ERROR: Content headers:");
+                    foreach (var header in response.Content.Headers)
+                    {
+                        Console.WriteLine($"  {header.Key}: {string.Join(", ", header.Value)}");
+                    }
+                }
+                
+                throw new Exception($"Gladia upload failed with status {response.StatusCode}: {errorContent}");
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"DEBUG GLADIA: Success response length: {content.Length}");
+            Console.WriteLine($"DEBUG GLADIA: Response content: {content}");
+            
+            var uploadResult = JsonSerializer.Deserialize<UploadResponse>(content);
+            Console.WriteLine($"DEBUG GLADIA: Deserialized audio_url: {uploadResult?.audio_url}");
+
+            if (uploadResult?.audio_url == null)
+            {
+                Console.WriteLine($"DEBUG GLADIA ERROR: Missing audio_url in response: {content}");
+                throw new Exception($"Gladia upload response missing audio_url: {content}");
+            }
+
+            _logger.LogInformation("Successfully uploaded {FileName} to Gladia with URL: {AudioUrl}",
+                Path.GetFileName(filePath), uploadResult.audio_url);
+
+            Console.WriteLine($"DEBUG GLADIA: Upload successful, returning URL: {uploadResult.audio_url}");
+            return uploadResult.audio_url;
         }
-
-        var content = await response.Content.ReadAsStringAsync();
-        var uploadResult = JsonSerializer.Deserialize<UploadResponse>(content);
-
-        if (uploadResult?.audio_url == null)
+        catch (HttpRequestException httpEx)
         {
-            throw new Exception($"Gladia upload response missing audio_url: {content}");
+            Console.WriteLine($"DEBUG GLADIA ERROR: HttpRequestException - {httpEx.Message}");
+            Console.WriteLine($"DEBUG GLADIA ERROR: Inner exception: {httpEx.InnerException?.Message}");
+            throw;
         }
-
-        _logger.LogInformation("Successfully uploaded {FileName} to Gladia with URL: {AudioUrl}",
-            Path.GetFileName(filePath), uploadResult.audio_url);
-
-        return uploadResult.audio_url;
+        catch (TaskCanceledException tcEx)
+        {
+            Console.WriteLine($"DEBUG GLADIA ERROR: TaskCanceledException (timeout?) - {tcEx.Message}");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DEBUG GLADIA ERROR: General exception - {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"DEBUG GLADIA ERROR: Stack trace: {ex.StackTrace}");
+            throw;
+        }
     }
 
     public async Task<string> UploadFileAsync(string filePath, AudioFile? audioFile = null)
@@ -601,7 +1004,7 @@ public class GladiaService
             var customFilename = CreateCustomFilename(filePath);
             form.Add(fileContent, "audio", customFilename);
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}/v2/upload", form);
+            var response = await _httpClient.PostAsync("/v2/upload", form);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -657,11 +1060,11 @@ public class GladiaService
             // Determine actual speaker count based on file type
             int actualSpeakerCount = Math.Max(1, numOfSpeakers); // Ensure at least 1 speaker
             bool isIndividualMic = false;
-            
+
             if (!string.IsNullOrEmpty(fileName))
             {
                 var upperFileName = fileName.ToUpperInvariant();
-                
+
                 // Individual mic files have only 1 speaker
                 if (System.Text.RegularExpressions.Regex.IsMatch(upperFileName, @"^MIC\d+\.(WAV|MP3)$") ||
                     upperFileName == "PHONE.WAV" || upperFileName == "PHONE.MP3" ||
@@ -681,7 +1084,7 @@ public class GladiaService
                     _logger.LogInformation("Detected mix file {FileName}, using {SpeakerCount} speakers", fileName, actualSpeakerCount);
                 }
             }
-            
+
             // Comprehensive request to get detailed transcription data including timestamps, emphasis, confidence, etc.
             var request = new TranscriptionRequest
             {
@@ -880,20 +1283,20 @@ public class GladiaService
             var fileName = Path.GetFileName(filePath);
             var extension = Path.GetExtension(fileName);
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
-            
+
             // Get the folder path to extract movie name
             var directoryPath = Path.GetDirectoryName(filePath);
             if (string.IsNullOrEmpty(directoryPath))
             {
                 return fileName; // Fallback to original filename
             }
-            
+
             // Navigate up to find the session folder (YYYY-MonthName-MovieTitle)
             var currentDir = new DirectoryInfo(directoryPath);
             while (currentDir != null)
             {
                 var folderName = currentDir.Name;
-                
+
                 // Check if this matches the YYYY-MonthName-MovieTitle pattern
                 var monthNameMatch = Regex.Match(folderName, @"(\d{4})-([A-Za-z]+)-(.+)");
                 if (monthNameMatch.Success)
@@ -901,17 +1304,17 @@ public class GladiaService
                     var moviePart = monthNameMatch.Groups[3].Value;
                     // Convert hyphens to spaces for movie title
                     var movieTitle = moviePart.Replace("-", " ").Trim();
-                    
+
                     // Create custom filename: MovieTitle_OriginalFilename.ext
                     var customName = $"{movieTitle}_{fileNameWithoutExt}{extension}";
-                    _logger.LogInformation("Created custom filename for Gladia: {CustomName} (from {OriginalName})", 
+                    _logger.LogInformation("Created custom filename for Gladia: {CustomName} (from {OriginalName})",
                         customName, fileName);
                     return customName;
                 }
-                
+
                 currentDir = currentDir.Parent;
             }
-            
+
             // Fallback to original filename if no matching pattern found
             _logger.LogDebug("No movie folder pattern found for {FilePath}, using original filename", filePath);
             return fileName;
@@ -929,7 +1332,7 @@ public class GladiaService
     {
         var results = new List<TranscriptionResult>();
         var totalFiles = audioFiles.Count;
-        
+
         // Calculate number of speakers, ensuring at least 1
         int numOfSpeakers = 2; // Default for when no assignments
         if (micAssignments != null && micAssignments.Any())
@@ -964,11 +1367,10 @@ public class GladiaService
                 audioFile.TranscriptId = result.id;
                 audioFile.JsonFilePath = jsonPath; // Store path to JSON file
 
-                // Apply speaker name mapping if available
-                var rawTranscript = result.result?.transcription?.full_transcript;
-                audioFile.TranscriptText = micAssignments != null && !string.IsNullOrEmpty(rawTranscript)
-                    ? MapSpeakerLabelsToNames(rawTranscript, micAssignments, audioFile.FileName)
-                    : rawTranscript;
+                // Build transcript from utterances with proper speaker mapping
+                audioFile.TranscriptText = micAssignments != null && micAssignments.Any()
+                    ? BuildTranscriptFromUtterances(result, micAssignments, audioFile.FileName)
+                    : result.result?.transcription?.full_transcript ?? string.Empty;
 
                 audioFile.ProcessedAt = DateTime.UtcNow;
 

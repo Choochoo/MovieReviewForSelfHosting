@@ -1,3 +1,6 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson.Serialization.Options;
 using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
@@ -16,11 +19,12 @@ namespace MovieReviewApp.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ProcessedAt { get; set; }
         public string? ErrorMessage { get; set; }
+        [BsonDictionaryOptions(DictionaryRepresentation.ArrayOfDocuments)]
         public Dictionary<int, string> MicAssignments { get; set; } = new();
         public CategoryResults CategoryResults { get; set; } = new();
     }
 
-    public class AudioFile
+    public class AudioFile : BaseModel
     {
         public string FileName { get; set; } = string.Empty;
         public string FilePath { get; set; } = string.Empty;
@@ -96,6 +100,7 @@ namespace MovieReviewApp.Models
     public enum AudioProcessingStatus
     {
         Pending,              // Just uploaded, not processed yet
+        Uploading,           // Currently uploading the file
         ConvertingToMp3,      // Currently converting WAV to MP3
         PendingMp3,           // MP3 conversion complete, ready for upload
         FailedMp3,            // MP3 conversion failed
@@ -109,9 +114,9 @@ namespace MovieReviewApp.Models
         Failed                // General processing failure
     }
 
-    public class ProcessingQueueItem
+    public class ProcessingQueueItem : BaseModel
     {
-        public string SessionId { get; set; } = string.Empty;
+        public Guid SessionId { get; set; }
         public string FolderPath { get; set; } = string.Empty;
         public ProcessingStatus Status { get; set; } = ProcessingStatus.Pending;
         public DateTime QueuedAt { get; set; } = DateTime.UtcNow;

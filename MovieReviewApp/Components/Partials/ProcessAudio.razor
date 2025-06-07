@@ -149,7 +149,10 @@
                                 <div class="col-md-4">
                                     <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : "border-success")">
                                         <div class="card-body">
-                                            <h6 class="card-title">@session.MovieTitle</h6>
+                                            <h6 class="card-title">
+                                                @session.MovieTitle
+                                                <span class="badge @GetSessionStatusBadgeClass(session.Status) ms-2">@session.Status</span>
+                                            </h6>
                                             <p class="card-text">
                                                 <small class="text-muted">
                                                     @session.Date.ToString("MMM yyyy") • 
@@ -353,7 +356,7 @@
         
         var queueItem = new ProcessingQueueItem
         {
-            SessionId = Guid.NewGuid().ToString(),
+            SessionId = Guid.NewGuid(),
             FolderPath = folder.Path,
             Status = ProcessingStatus.Validating,
             CurrentStep = "Validating folder structure"
@@ -369,7 +372,7 @@
             
             // Prepare movie session (NO database save yet)
             var session = await MovieSessionService.PrepareSessionFromFolder(folder.Path, latestAssignments);
-            queueItem.SessionId = session.Id.ToString();
+            queueItem.SessionId = session.Id;
             
             // Start processing - only saves to database after 100% success
             await MovieSessionService.ProcessSession(session, (status, progress, step) =>
@@ -407,7 +410,16 @@
 
     private async Task LoadRecentSessions()
     {
-        recentSessions = await MovieSessionService.GetRecentSessions(10);
+        // Load all sessions to show processed files regardless of completion status
+        var allSessions = await MovieSessionService.GetAllSessions();
+        
+        // Filter to sessions that have at least some processed files and sort by date
+        recentSessions = allSessions
+            .Where(s => s.AudioFiles?.Any() == true) // Sessions with audio files
+            .OrderByDescending(s => s.CreatedAt)
+            .ThenByDescending(s => s.Date)
+            .Take(10)
+            .ToList();
     }
 
     private void ViewSession(string sessionId)
@@ -527,6 +539,17 @@
         ProcessingStatus.Complete => "🟢",
         ProcessingStatus.Failed => "🔴",
         _ => "⚪"
+    };
+
+    private string GetSessionStatusBadgeClass(ProcessingStatus status) => status switch
+    {
+        ProcessingStatus.Pending => "bg-secondary",
+        ProcessingStatus.Validating => "bg-info",
+        ProcessingStatus.Transcribing => "bg-primary", 
+        ProcessingStatus.Analyzing => "bg-warning",
+        ProcessingStatus.Complete => "bg-success",
+        ProcessingStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
     };
 
     public void Dispose()

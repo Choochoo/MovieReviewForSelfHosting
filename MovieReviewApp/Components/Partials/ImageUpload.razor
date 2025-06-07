@@ -77,15 +77,21 @@
     {
         await UpdatePreviewImage();
         dotNetRef = DotNetObjectReference.Create(this);
-        
-        // Try to initialize paste handler, ignore if function doesn't exist (cache issue)
-        try
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
         {
-            await JSRuntime.InvokeVoidAsync("initializePasteHandler", dotNetRef, componentId);
-        }
-        catch (JSException)
-        {
-            // Function doesn't exist due to cache, will work after refresh
+            // Initialize paste handler after component is rendered
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("initializePasteHandler", dotNetRef, componentId);
+            }
+            catch (JSException)
+            {
+                // Function doesn't exist due to cache, will work after refresh
+            }
         }
     }
 

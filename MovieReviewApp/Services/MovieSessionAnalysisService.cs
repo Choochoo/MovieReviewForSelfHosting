@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 
 namespace MovieReviewApp.Services;
 
+
 public class MovieSessionAnalysisService
 {
     // Maximum transcript size to prevent OpenAI timeouts - balanced for 20-min processing
@@ -49,51 +50,152 @@ public class MovieSessionAnalysisService
 
     public async Task<CategoryResults> AnalyzeSessionAsync(MovieSession session)
     {
+        var results = await AnalyzeSessionsAsync(new[] { session });
+        return results.First().categoryResults;
+    }
+
+    public async Task<List<(MovieSession session, CategoryResults categoryResults)>> AnalyzeSessionsAsync(IEnumerable<MovieSession> sessions)
+    {
+        if (!IsConfigured)
+        {
+            throw new InvalidOperationException("OpenAI API key not configured - cannot perform analysis");
+        }
+
+        var sessionList = sessions.ToList();
+        _logger.LogInformation("Starting parallel analysis of {SessionCount} sessions", sessionList.Count);
+
+        // Configure parallelism - adjust based on your OpenAI rate limits
+        var maxConcurrency = Math.Min(sessionList.Count, 3); // Start with 3 concurrent requests
+        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+
+        var analysisResults = new List<(MovieSession session, CategoryResults categoryResults)>();
+        var tasks = sessionList.Select(async session =>
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                _logger.LogInformation("Starting analysis for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
+
+                var categoryResults = await AnalyzeSingleSessionAsync(session);
+
+                lock (analysisResults)
+                {
+                    analysisResults.Add((session, categoryResults));
+                }
+
+                _logger.LogInformation("Completed analysis for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
+                return (session, categoryResults);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to analyze session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
+
+                // Return empty results for failed sessions rather than failing the entire batch
+                var emptyResults = new CategoryResults();
+                lock (analysisResults)
+                {
+                    analysisResults.Add((session, emptyResults));
+                }
+                return (session, emptyResults);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+
+        _logger.LogInformation("Completed parallel analysis of {SessionCount} sessions", sessionList.Count);
+        return analysisResults.OrderBy(r => sessionList.IndexOf(r.session)).ToList();
+    }
+
+    private async Task<CategoryResults> AnalyzeSingleSessionAsync(MovieSession session)
+    {
+        // Combine all transcripts with speaker information
+        var combinedTranscript = BuildCombinedTranscript(session);
+
+        _logger.LogDebug("Built combined transcript for session {SessionId}: {Length} characters",
+            session.Id, combinedTranscript?.Length ?? 0);
+
+        if (string.IsNullOrEmpty(combinedTranscript))
+        {
+            var fileInfo = session.AudioFiles.Select(f => $"{f.FileName}: HasTranscript={!string.IsNullOrEmpty(f.TranscriptText)}, Status={f.ProcessingStatus}").ToList();
+            _logger.LogWarning("No transcript content available for analysis. Audio files: {FileInfo}", string.Join(", ", fileInfo));
+            throw new Exception("No transcript content available for analysis");
+        }
+
+        if (combinedTranscript.Length < 500)
+        {
+            _logger.LogWarning("Combined transcript is very short ({Length} chars) - OpenAI may not have enough content to analyze", combinedTranscript.Length);
+        }
+
+        // Create the analysis prompt based on processaudio.md specifications
+        var analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
+
+        // Log prompt size before sending to OpenAI
+        _logger.LogDebug("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars",
+            analysisPrompt.Length, combinedTranscript.Length);
+
+        // Call OpenAI to analyze the transcript
+        var analysisResult = await CallOpenAIForAnalysisWithRetry(analysisPrompt);
+
+        // Save OpenAI response to movie session folder
+        await SaveOpenAIResponseAsync(session, analysisPrompt, analysisResult);
+
+        // Parse the AI response into CategoryResults
+        var categoryResults = ParseAnalysisResult(analysisResult);
+
+        // Generate audio clips for highlights
+        await GenerateAudioClipsAsync(session, categoryResults);
+
+        return categoryResults;
+    }
+
+    private string ConvertJsonTranscriptToPlainText(string jsonTranscript, string speakerName, List<string> participantsPresent)
+    {
         try
         {
-            if (!IsConfigured)
+            // Check if it's actually JSON
+            if (!jsonTranscript.TrimStart().StartsWith("{") && !jsonTranscript.TrimStart().StartsWith("["))
             {
-                throw new InvalidOperationException("OpenAI API key not configured - cannot perform analysis");
+                // Not JSON, return as-is
+                return jsonTranscript;
             }
 
-            // Combine all transcripts with speaker information
-            var combinedTranscript = BuildCombinedTranscript(session);
+            var transcriptData = JsonSerializer.Deserialize<TranscriptData>(jsonTranscript);
+            var sb = new StringBuilder();
 
-            if (string.IsNullOrEmpty(combinedTranscript))
+            if (transcriptData?.utterances != null)
             {
-                throw new Exception("No transcript content available for analysis");
+                foreach (var utterance in transcriptData.utterances)
+                {
+                    // Skip empty utterances
+                    if (string.IsNullOrWhiteSpace(utterance.text))
+                        continue;
+
+                    // For individual mic files, use the provided speaker name
+                    // For master mix, if there's only one participant, use their name
+                    // Otherwise use a generic speaker label
+                    string actualSpeaker = speakerName;
+
+                    if (speakerName == "Speaker" && participantsPresent.Count == 1)
+                    {
+                        actualSpeaker = participantsPresent[0];
+                    }
+
+                    sb.AppendLine($"{actualSpeaker}: {utterance.text.Trim()}");
+                }
             }
 
-            // Create the analysis prompt based on processaudio.md specifications
-            var analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
-
-            // Log prompt size before sending to OpenAI
-            _logger.LogInformation("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars",
-                analysisPrompt.Length, combinedTranscript.Length);
-
-            // Call OpenAI to analyze the transcript
-            var analysisResult = await CallOpenAIForAnalysis(analysisPrompt);
-
-            // Save OpenAI response to movie session folder
-            await SaveOpenAIResponseAsync(session, analysisPrompt, analysisResult);
-
-            // Parse the AI response into CategoryResults
-            var categoryResults = ParseAnalysisResult(analysisResult);
-
-            // Generate audio clips for highlights
-            await GenerateAudioClipsAsync(session, categoryResults);
-
-            _logger.LogInformation("Successfully analyzed session {SessionId} for movie {MovieTitle}", session.Id, session.MovieTitle);
-
-            return categoryResults;
+            return sb.ToString();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to analyze session {SessionId}", session.Id);
-            throw;
+            _logger.LogWarning(ex, "Failed to parse JSON transcript, returning as-is");
+            return jsonTranscript;
         }
     }
-
     private string BuildCombinedTranscript(MovieSession session)
     {
         var transcriptBuilder = new StringBuilder();
@@ -108,6 +210,20 @@ public class MovieSessionAnalysisService
         // Get master recording and individual files
         var masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText));
         var individualFiles = session.AudioFiles.Where(f => !f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+
+        _logger.LogInformation("Building transcript from {TotalFiles} audio files: Master={MasterFile}, Individual={IndividualCount}",
+            session.AudioFiles.Count,
+            masterFile?.FileName ?? "None",
+            individualFiles.Count);
+
+        foreach (var file in session.AudioFiles)
+        {
+            _logger.LogDebug("Audio file {FileName}: IsMaster={IsMaster}, HasTranscript={HasTranscript}, TranscriptLength={Length}",
+                file.FileName,
+                file.IsMasterRecording,
+                !string.IsNullOrEmpty(file.TranscriptText),
+                file.TranscriptText?.Length ?? 0);
+        }
 
         // Calculate available space for transcripts (reserve space for context and instructions)
         var contextSize = transcriptBuilder.Length;
@@ -126,6 +242,10 @@ public class MovieSessionAnalysisService
             transcriptBuilder.AppendLine();
 
             var masterTranscript = masterFile.TranscriptText;
+
+            // Convert JSON format to plain text
+            masterTranscript = ConvertJsonTranscriptToPlainText(masterTranscript, "Speaker", session.ParticipantsPresent);
+
             if (masterTranscript.Length > maxTranscriptSpace)
             {
                 // Smart truncation: keep beginning and end, skip middle
@@ -165,7 +285,17 @@ public class MovieSessionAnalysisService
 
             foreach (var audioFile in individualFiles.OrderBy(f => f.SpeakerNumber ?? 99))
             {
-                var speakerLabel = audioFile.SpeakerNumber.HasValue ? $"Speaker {audioFile.SpeakerNumber}" : "Unknown Speaker";
+                // Determine the speaker name based on mic number
+                var participantIndex = (audioFile.SpeakerNumber ?? 1) - 1;
+                var participantName = session.ParticipantsPresent.ElementAtOrDefault(participantIndex);
+
+                if (participantName == null)
+                {
+                    _logger.LogWarning("No participant mapped for mic {MicNumber}, skipping", audioFile.SpeakerNumber);
+                    continue;
+                }
+
+                var speakerLabel = participantName;
                 var fileName = Path.GetFileNameWithoutExtension(audioFile.FilePath);
                 var headerSize = $"--- {speakerLabel} ({fileName}) ---\n".Length;
 
@@ -180,6 +310,10 @@ public class MovieSessionAnalysisService
                 remainingSpace -= headerSize;
 
                 var transcript = audioFile.TranscriptText;
+
+                // Convert JSON format to plain text using the participant's name
+                transcript = ConvertJsonTranscriptToPlainText(transcript, participantName, session.ParticipantsPresent);
+
                 if (transcript.Length > remainingSpace)
                 {
                     transcript = transcript.Substring(0, Math.Max(0, remainingSpace - 100));
@@ -210,81 +344,157 @@ public class MovieSessionAnalysisService
     private async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime sessionDate, List<string> participants, string transcript)
     {
         var participantsList = string.Join(", ", participants);
+        var discussionQuestions = await GetFormattedDiscussionQuestionsAsync();
+        var jsonSchema = GenerateJsonSchema();
 
         return $@"
-                You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
+You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
 
-                ## PARTICIPANTS:
-                The following people were present for this discussion. These are their CORRECT names - please use these exact spellings when identifying speakers:
+## PARTICIPANTS:
+The following people were present for this discussion. These are their CORRECT names - please use these exact spellings when identifying speakers:
 
-                {participantsList}
+{participantsList}
 
-                **IMPORTANT**: When transcription software identifies speakers as ""Speaker1"", ""Speaker2"", etc. or misspells names like ""Gary"" or ""Carrie"" (when it should be ""Keri""), try to match them to the correct names above based on context and voice patterns. Use the exact spellings provided.
+**IMPORTANT**: When transcription software identifies speakers as ""Speaker1"", ""Speaker2"", etc. or misspells names like ""Gary"" or ""Carrie"" (when it should be ""Keri""), try to match them to the correct names above based on context and voice patterns. Use the exact spellings provided.
 
-                ## CRITICAL SPEAKER VERIFICATION REQUIREMENTS:
+## CRITICAL SPEAKER VERIFICATION REQUIREMENTS:
 
-                **MASTER_MIX TRANSCRIPTIONS ARE OFTEN WRONG!** You MUST verify every speaker attribution by cross-referencing with individual microphone recordings.
+**MASTER_MIX TRANSCRIPTIONS ARE OFTEN WRONG!** You MUST verify every speaker attribution by cross-referencing with individual microphone recordings.
 
-                ### Speaker Verification Process:
-                1. **Microphone Mapping**: Individual mic files (mic1.wav, mic2.wav, etc.) correspond to participants in the EXACT order listed above:
-                   - mic1.wav = {participants.ElementAtOrDefault(0) ?? "First participant"}
-                   - mic2.wav = {participants.ElementAtOrDefault(1) ?? "Second participant"}
-                   - mic3.wav = {participants.ElementAtOrDefault(2) ?? "Third participant"}
-                   - etc.
+### Speaker Verification Process:
+1. **Microphone Mapping**: Individual mic files (mic1.wav, mic2.wav, etc.) correspond to participants in the EXACT order listed above:
+   - mic1.wav = {participants.ElementAtOrDefault(0) ?? "First participant"}
+   - mic2.wav = {participants.ElementAtOrDefault(1) ?? "Second participant"}
+   - mic3.wav = {participants.ElementAtOrDefault(2) ?? "Third participant"}
+   - etc.
 
-                2. **Verification Steps for EVERY Quote**:
-                   - Find the timestamp in master_mix where something interesting was said
-                   - Check that EXACT timestamp in ALL individual mic recordings
-                   - The clearest audio at that timestamp indicates the TRUE speaker
-                   - Individual mic files use ""speaker: 0"" - this just means the person on that mic
-                   - TRUST THE INDIVIDUAL MIC OVER MASTER_MIX
+2. **Verification Steps for EVERY Quote**:
+   - Find the timestamp in master_mix where something interesting was said
+   - Check that EXACT timestamp in ALL individual mic recordings
+   - The clearest audio at that timestamp indicates the TRUE speaker
+   - Individual mic files use ""speaker: 0"" - this just means the person on that mic
+   - TRUST THE INDIVIDUAL MIC OVER MASTER_MIX
 
-                3. **Example**:
-                   - Master_mix at 123.45s shows: ""Dave: This movie sucked""
-                   - Check timestamp 123.45s in all individual files
-                   - If mic3.wav has clear audio saying ""This movie sucked"" at 123.45s
-                   - Then the third participant ({participants.ElementAtOrDefault(2) ?? "Third participant"}) said it
-                   - NOT Dave (unless Dave happens to be the third participant)
+3. **Example**:
+   - Master_mix at 123.45s shows: ""Dave: This movie sucked""
+   - Check timestamp 123.45s in all individual files
+   - If mic3.wav has clear audio saying ""This movie sucked"" at 123.45s
+   - Then the third participant ({participants.ElementAtOrDefault(2) ?? "Third participant"}) said it
+   - NOT Dave (unless Dave happens to be the third participant)
 
-                4. **Handling Variations**:
-                   - Minor word differences are acceptable: ""That's crazy"" vs ""That is crazy""
-                   - Different transcription services may hear things slightly differently
-                   - Focus on matching the core content and timestamp
+4. **Handling Variations**:
+   - Minor word differences are acceptable: ""That's crazy"" vs ""That is crazy""
+   - Different transcription services may hear things slightly differently
+   - Focus on matching the core content and timestamp
 
-                5. **Overlapping Speech**:
-                   - When multiple people talk at once, ONLY include the main speaker's content
-                   - Remove side comments, ""yeah"", laughter, or unrelated interjections
-                   - Be STRICT about this - only keep directly relevant speech
+5. **Overlapping Speech**:
+   - When multiple people talk at once, ONLY include the main speaker's content
+   - Remove side comments, ""yeah"", laughter, or unrelated interjections
+   - Be STRICT about this - only keep directly relevant speech
 
-                6. **Quality Control**:
-                   - If you can't find a quote in ANY individual mic file, mark it as [UNVERIFIED]
-                   - Never guess based on ""who would say this"" - only use mic verification
-                   - Individual mics are the SOURCE OF TRUTH
+6. **Quality Control**:
+   - If you can't find a quote in ANY individual mic file, mark it as [UNVERIFIED]
+   - Never guess based on ""who would say this"" - only use mic verification
+   - Individual mics are the SOURCE OF TRUTH
 
-                ## IMPORTANT TRANSCRIPT CONTEXT:
-                The transcript below contains multiple audio sources from the SAME conversation:
-                - Master_mix recording shows the full group dynamic
-                - Individual mic recordings (mic1, mic2, etc.) show specific people clearly
-                - All recordings are time-synchronized
-                - When master_mix says ""Speaker1"" or gets a name wrong, check individual mics!
+## IMPORTANT TRANSCRIPT CONTEXT:
+The transcript below contains multiple audio sources from the SAME conversation:
+- Master_mix recording shows the full group dynamic
+- Individual mic recordings (mic1, mic2, etc.) show specific people clearly
+- All recordings are time-synchronized
+- When master_mix says ""Speaker1"" or gets a name wrong, check individual mics!
 
-                **CRITICAL: For EVERY quote you include in your analysis:**
-                1. Note which individual mic file verified the speaker
-                2. Use the participant name from the ordered list above
-                3. Never trust master_mix speaker labels without verification
+**CRITICAL: For EVERY quote you include in your analysis:**
+1. Note which individual mic file verified the speaker
+2. Use the participant name from the ordered list above
+3. Never trust master_mix speaker labels without verification
 
-                ## YOUR MISSION:
-                [Rest of your existing prompt continues here...]
+## YOUR MISSION:
+Find the most entertaining moments in these categories:
 
-                ## VERIFICATION CHECKLIST:
-                Before attributing ANY quote to ANYONE:
-                - ✓ Did I check the timestamp in all individual mic files?
-                - ✓ Did I find clear audio in a specific mic file?
-                - ✓ Did I map the mic number to the correct participant name?
-                - ✓ Am I ignoring what master_mix claims about who said it?
+### CONTROVERSIAL & SPICY TAKES
+- Most Offensive Take
+- Hottest Take 
+- Biggest Argument Starter
 
-                Remember: Master_mix helps you find interesting moments. Individual mics tell you WHO ACTUALLY SAID IT.";
+### PEAK COMEDY GOLD
+- Best Joke
+- Best Roast
+- Funniest Random Tangent
+
+### GROUP DYNAMICS & REACTIONS
+- Most Passionate Defense
+- Biggest Unanimous Reaction
+- Most Boring Statement
+- Best Plot Twist Revelation
+
+### PERSONALITY MOMENTS
+- Movie Snob Moment
+- Guilty Pleasure Admission
+- Quietest Person's Best Moment
+
+### TOP 5 LISTS
+- Top 5 Funniest Sentences
+- Top 5 Most Bland Comments
+
+### INITIAL DISCUSSION QUESTIONS
+Look for when these common discussion questions were asked and answered:
+{discussionQuestions}
+
+## CRITICAL: RESPONSE FORMAT
+You MUST return your response as a valid JSON object matching this EXACT structure. Do not include any text before or after the JSON:
+
+{jsonSchema}
+
+## VERIFICATION CHECKLIST:
+Before attributing ANY quote to ANYONE:
+- ✓ Did I check the timestamp in all individual mic files?
+- ✓ Did I find clear audio in a specific mic file?
+- ✓ Did I map the mic number to the correct participant name?
+- ✓ Am I ignoring what master_mix claims about who said it?
+
+Remember: Master_mix helps you find interesting moments. Individual mics tell you WHO ACTUALLY SAID IT.
+
+TRANSCRIPT TO ANALYZE:
+{transcript}";
     }
+    private async Task<string> CallOpenAIForAnalysisWithRetry(string prompt)
+    {
+        const int maxRetries = 3;
+        var baseDelayMs = 1000;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                return await CallOpenAIForAnalysis(prompt);
+            }
+            catch (HttpRequestException ex) when (ex.Message.Contains("429") || ex.Message.Contains("rate limit"))
+            {
+                if (attempt == maxRetries)
+                {
+                    _logger.LogError("OpenAI rate limit exceeded after {MaxRetries} attempts", maxRetries);
+                    throw;
+                }
+
+                var delayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
+                _logger.LogWarning("OpenAI rate limit hit on attempt {Attempt}/{MaxRetries}, retrying in {DelayMs}ms",
+                    attempt, maxRetries, delayMs);
+
+                await Task.Delay(delayMs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OpenAI request failed on attempt {Attempt}/{MaxRetries}", attempt, maxRetries);
+                if (attempt == maxRetries) throw;
+
+                await Task.Delay(baseDelayMs * attempt);
+            }
+        }
+
+        throw new Exception("Should not reach here");
+    }
+
     private async Task<string> CallOpenAIForAnalysis(string prompt)
     {
         var requestBody = new
@@ -1096,7 +1306,8 @@ public class MovieSessionAnalysisService
     {
         try
         {
-            _logger.LogInformation("Generating conversation statistics for {ParticipantCount} participants", session.ParticipantsPresent.Count);
+            _logger.LogInformation("Generating conversation statistics for {ParticipantCount} participants: {Participants}",
+                session.ParticipantsPresent.Count, string.Join(", ", session.ParticipantsPresent));
 
             // Initialize dictionaries for all participants
             foreach (var participant in session.ParticipantsPresent)
@@ -1106,6 +1317,7 @@ public class MovieSessionAnalysisService
                 stats.InterruptionCounts[participant] = 0;
                 stats.LaughterCounts[participant] = 0;
                 stats.CurseWordCounts[participant] = 0;
+                _logger.LogDebug("Initialized stats for participant: '{Participant}'", participant);
             }
 
             // Analyze transcripts for conversation patterns
@@ -1114,7 +1326,17 @@ public class MovieSessionAnalysisService
 
             foreach (var audioFile in transcriptFiles)
             {
-                _logger.LogDebug("Analyzing transcript from {FileName}", audioFile.FileName);
+                _logger.LogDebug("Analyzing transcript from {FileName} with {Length} characters",
+                    audioFile.FileName, audioFile.TranscriptText?.Length ?? 0);
+
+                if (!string.IsNullOrEmpty(audioFile.TranscriptText))
+                {
+                    // Log first few lines of transcript for debugging
+                    var firstLines = audioFile.TranscriptText.Split('\n').Take(5);
+                    _logger.LogDebug("First few lines of {FileName}: {Lines}",
+                        audioFile.FileName, string.Join(" | ", firstLines));
+                }
+
                 AnalyzeTranscriptForStats(audioFile.TranscriptText, stats, session.ParticipantsPresent);
             }
 
@@ -1183,8 +1405,18 @@ public class MovieSessionAnalysisService
 
     private void AnalyzeTranscriptForStats(string transcript, SessionStats stats, List<string> participants)
     {
+        if (string.IsNullOrWhiteSpace(transcript))
+        {
+            _logger.LogWarning("AnalyzeTranscriptForStats called with empty transcript");
+            return;
+        }
+
         var lines = transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         var processedLines = 0;
+        var totalLines = lines.Length;
+
+        _logger.LogInformation("Analyzing transcript with {TotalLines} lines for participants: {Participants}",
+            totalLines, string.Join(", ", participants));
 
         foreach (var line in lines)
         {
@@ -1199,31 +1431,28 @@ public class MovieSessionAnalysisService
             var speakerPart = line.Substring(0, colonIndex).Trim();
             var textPart = line.Substring(colonIndex + 1).Trim();
 
+            // Skip if text part is empty or too short
+            if (string.IsNullOrWhiteSpace(textPart) || textPart.Length < 2)
+                continue;
+
             // Map speaker names (handle common transcription issues)
             var speaker = MapSpeakerName(speakerPart);
 
-            // If speaker isn't in our participants list, try to match by similarity
-            if (!participants.Contains(speaker, StringComparer.OrdinalIgnoreCase))
-            {
-                var similarSpeaker = participants.FirstOrDefault(p =>
-                    p.Equals(speaker, StringComparison.OrdinalIgnoreCase) ||
-                    p.Contains(speaker, StringComparison.OrdinalIgnoreCase) ||
-                    speaker.Contains(p, StringComparison.OrdinalIgnoreCase));
+            // IMPORTANT: Check if this speaker is in our participants list
+            var matchedParticipant = participants.FirstOrDefault(p =>
+                p.Equals(speaker, StringComparison.OrdinalIgnoreCase) ||
+                p.Contains(speaker, StringComparison.OrdinalIgnoreCase) ||
+                speaker.Contains(p, StringComparison.OrdinalIgnoreCase));
 
-                if (similarSpeaker != null)
-                {
-                    speaker = similarSpeaker;
-                }
-                else
-                {
-                    _logger.LogDebug("Unknown speaker '{Speaker}' not matching any participant", speaker);
-                    continue;
-                }
+            if (matchedParticipant == null)
+            {
+                // This speaker is NOT in our participants list - skip them entirely
+                _logger.LogTrace("Skipping speaker '{Speaker}' - not in participants list", speaker);
+                continue;
             }
 
-            if (!stats.WordCounts.ContainsKey(speaker))
-                continue;
-
+            // Use the exact participant name from the list
+            speaker = matchedParticipant;
             processedLines++;
 
             // Count words
@@ -1242,7 +1471,7 @@ public class MovieSessionAnalysisService
                 stats.InterruptionCounts[speaker]++;
             }
 
-            // Look for laughter triggers - both causing and reacting
+            // Look for laughter triggers
             var lowerText = textPart.ToLower();
             if (lowerText.Contains("laugh") || lowerText.Contains("haha") ||
                 lowerText.Contains("[laughter]") || lowerText.Contains("funny") ||
@@ -1257,12 +1486,31 @@ public class MovieSessionAnalysisService
             stats.CurseWordCounts[speaker] += curseWords;
         }
 
-        _logger.LogDebug("Processed {ProcessedLines} lines from transcript", processedLines);
+        _logger.LogInformation("=== TRANSCRIPT ANALYSIS COMPLETE ===");
+        _logger.LogInformation("Processed {ProcessedLines}/{TotalLines} lines from transcript", processedLines, totalLines);
+        _logger.LogInformation("FINAL WORD COUNTS: {WordCounts}",
+            string.Join(", ", stats.WordCounts.Select(kvp => $"{kvp.Key}: {kvp.Value}")));
     }
 
     private string MapSpeakerName(string rawSpeaker)
     {
-        // Handle common transcription patterns
+        // Clean up the speaker name first
+        var cleanSpeaker = rawSpeaker.Trim();
+
+        // Handle common Gladia patterns like "Speaker 1", "speaker 1", etc.
+        if (cleanSpeaker.StartsWith("Speaker ", StringComparison.OrdinalIgnoreCase))
+        {
+            // Keep as-is, will be matched by similarity in the calling method
+            return cleanSpeaker;
+        }
+
+        // Handle numbered patterns like "Speaker1", "speaker1", etc.
+        if (System.Text.RegularExpressions.Regex.IsMatch(cleanSpeaker, @"^Speaker\s*\d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            return cleanSpeaker;
+        }
+
+        // Handle common transcription patterns and name variations
         var nameMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "Carrie", "Keri" },
@@ -1270,16 +1518,10 @@ public class MovieSessionAnalysisService
             { "Kerry", "Keri" },
             { "Jerry", "Jeremiah" },
             { "Jeremy", "Jeremiah" },
-            { "Lacy", "Lacey" },
-            { "Speaker1", "Unknown" },
-            { "Speaker2", "Unknown" },
-            { "Speaker3", "Unknown" },
-            { "Speaker4", "Unknown" },
-            { "Speaker5", "Unknown" },
-            { "Speaker6", "Unknown" }
+            { "Lacy", "Lacey" }
         };
 
-        return nameMapping.TryGetValue(rawSpeaker, out var mapped) ? mapped : rawSpeaker;
+        return nameMapping.TryGetValue(cleanSpeaker, out var mapped) ? mapped : cleanSpeaker;
     }
 
     private double CalculateWordsPerMinute(MovieSession session, int totalWords)
@@ -1715,6 +1957,151 @@ public class MovieSessionAnalysisService
             // Don't throw - this is optional functionality and shouldn't break the analysis
         }
     }
+
+    private string GenerateJsonSchema()
+    {
+        var sampleResponse = new OpenAIAnalysisResponse
+        {
+            MostOffensiveTake = CreateSampleCategoryWinner(),
+            HottestTake = CreateSampleCategoryWinner(),
+            BiggestArgumentStarter = CreateSampleCategoryWinner(),
+            BestJoke = CreateSampleCategoryWinner(),
+            BestRoast = CreateSampleCategoryWinner(),
+            FunniestRandomTangent = CreateSampleCategoryWinner(),
+            MostPassionateDefense = CreateSampleCategoryWinner(),
+            BiggestUnanimousReaction = CreateSampleCategoryWinner(),
+            MostBoringStatement = CreateSampleCategoryWinner(),
+            BestPlotTwistRevelation = CreateSampleCategoryWinner(),
+            MovieSnobMoment = CreateSampleCategoryWinner(),
+            GuiltyPleasureAdmission = CreateSampleCategoryWinner(),
+            QuietestPersonBestMoment = CreateSampleCategoryWinner(),
+            Top5FunniestSentences = CreateSampleTopFiveList(),
+            Top5MostBlandComments = CreateSampleTopFiveList(),
+            OpeningQuestions = CreateSampleInitialQuestions()
+        };
+
+        // Serialize with indentation to create a readable schema
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = null, // Keep original property names
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never
+        };
+
+        var schemaJson = JsonSerializer.Serialize(sampleResponse, options);
+
+        // Replace sample values with placeholders and instructions
+        schemaJson = ReplaceSampleValuesWithPlaceholders(schemaJson);
+
+        return schemaJson;
+    }
+
+    private CategoryWinnerDto CreateSampleCategoryWinner()
+    {
+        return new CategoryWinnerDto
+        {
+            Speaker = "[Exact participant name]",
+            Timestamp = "[MM:SS format]",
+            Quote = "[Exact quote verified from individual mic]",
+            Setup = "[Context leading to this moment]",
+            GroupReaction = "[How others reacted]",
+            WhyItsGreat = "[Why this is entertaining]",
+            AudioQualityString = "Clear",
+            EntertainmentScore = 8,
+            RunnersUp = new List<RunnerUpDto>
+            {
+                new RunnerUpDto
+                {
+                    Speaker = "[Name]",
+                    Timestamp = "[MM:SS]",
+                    BriefDescription = "[Short description]",
+                    Place = 2
+                }
+            }
+        };
+    }
+
+    private TopFiveListDto CreateSampleTopFiveList()
+    {
+        return new TopFiveListDto
+        {
+            Entries = new List<TopFiveEntryDto>
+            {
+                new TopFiveEntryDto
+                {
+                    Rank = 1,
+                    Speaker = "[Name]",
+                    Timestamp = "[MM:SS]",
+                    Quote = "[Quote]",
+                    Context = "[Context]",
+                    AudioQualityString = "Clear",
+                    Score = 9.5,
+                    Reasoning = "[Why this is funny/bland]"
+                },
+                new TopFiveEntryDto
+                {
+                    Rank = 2,
+                    Speaker = "[Name]",
+                    Timestamp = "[MM:SS]",
+                    Quote = "[Quote]",
+                    Context = "[Context]",
+                    AudioQualityString = "Clear",
+                    Score = 9.0,
+                    Reasoning = "[Why this is funny/bland]"
+                }
+            }
+        };
+    }
+
+    private InitialQuestionsDto CreateSampleInitialQuestions()
+    {
+        return new InitialQuestionsDto
+        {
+            Questions = new List<QuestionAnswerDto>
+            {
+                new QuestionAnswerDto
+                {
+                    Question = "[Question asked]",
+                    Speaker = "[Who answered]",
+                    Answer = "[Their answer]",
+                    Timestamp = "[MM:SS]",
+                    EntertainmentValue = 7
+                }
+            }
+        };
+    }
+
+    private string ReplaceSampleValuesWithPlaceholders(string schemaJson)
+    {
+        // This method could be enhanced to replace specific patterns,
+        // but for now the sample objects already contain placeholder text
+        // that will guide OpenAI on what to put in each field
+
+        return schemaJson;
+    }
+}
+
+public class TranscriptData
+{
+    public List<WordCountUtterance> utterances { get; set; } = new List<WordCountUtterance>();
+}
+
+public class WordCountUtterance
+{
+    public double start { get; set; }
+    public double end { get; set; }
+    public string text { get; set; } = string.Empty;
+    public int speaker { get; set; }
+    public double confidence { get; set; }
+    public List<WordCountWord>? words { get; set; }
+}
+
+public class WordCountWord
+{
+    public string word { get; set; } = string.Empty;
+    public double start { get; set; }
+    public double end { get; set; }
+    public double confidence { get; set; }
 }
 
 // DTO for OpenAI analysis response structure

@@ -31,8 +31,10 @@ namespace MovieReviewApp.Models
         public string? Synopsis { get; set; } = null;
 
         [NotMapped]
+        [BsonIgnore]
         public bool FromDatabase { get; set; }
         [NotMapped]
+        [BsonIgnore]
         public bool IsEditing { get; set; }
     }
 }

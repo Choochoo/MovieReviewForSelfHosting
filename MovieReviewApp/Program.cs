@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Features;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using MovieReviewApp.Components;
 using MovieReviewApp.Database;
@@ -8,8 +9,12 @@ using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
 using MovieReviewApp.Services;
 
-// Configure MongoDB GUID serialization to match BaseModel
+// Configure MongoDB serialization
 BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLegacy));
+
+// Configure MongoDB to ignore extra elements (for properties that were removed or have [BsonIgnore])
+var conventionPack = new ConventionPack { new IgnoreExtraElementsConvention(true) };
+ConventionRegistry.Register("IgnoreExtraElements", conventionPack, type => true);
 
 
 // Parse command line arguments

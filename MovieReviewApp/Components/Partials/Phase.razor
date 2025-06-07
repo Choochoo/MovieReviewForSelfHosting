@@ -232,6 +232,8 @@ else
 
 @code {
 
+
+
     [Parameter]
     public MovieEvent? MovieEvent { get; set; }
 
@@ -462,21 +464,24 @@ else
                 {
                     MovieEvent.SeenDate = new DateTime(selectedYear, 1, 1);
                 }
-                
+
                 // Add <br/> tags before saving
                 if (!string.IsNullOrEmpty(MovieEvent.Reasoning))
                 {
                     MovieEvent.Reasoning = MarkdownService.AddLineBreaks(MovieEvent.Reasoning);
                 }
-                
-                await Task.Run(() => movieReviewService.AddOrUpdateMovieEvent(MovieEvent));
+
+                await movieReviewService.AddOrUpdateMovieEventAsync(MovieEvent);
 
                 // Reload the MovieEvent from database to get the latest saved state
-                var updatedMovieEvent = movieReviewService.GetMovieEventById(MovieEvent.Id);
+                var updatedMovieEvent = await movieReviewService.GetMovieEventByIdAsync(MovieEvent.Id);
                 if (updatedMovieEvent != null)
                 {
                     // Update the current MovieEvent with saved values
                     MovieEvent = updatedMovieEvent;
+                    
+                    // Ensure IsEditing is false after reload
+                    MovieEvent.IsEditing = false;
 
                     // Force UI refresh to show updated image state
                     StateHasChanged();
@@ -487,7 +492,14 @@ else
                     //await MessengerService.SendMovieUpdateMessage(MovieEvent.Person, MovieEvent.Movie);
                 }
 
-                this.Cancel();
+                // Ensure edit mode is turned off
+                if (MovieEvent != null)
+                {
+                    MovieEvent.IsEditing = false;
+                }
+                
+                // Force UI update after turning off edit mode
+                StateHasChanged();
             }
         }
         catch (Exception ex)

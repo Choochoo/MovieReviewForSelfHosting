@@ -3,6 +3,7 @@
 @using MovieReviewApp.Database
 @inject MovieReviewService MovieReviewService
 @inject MovieSessionService MovieSessionService
+@inject IJSRuntime JSRuntime
 
 <div class="participant-assignment">
     <h6 class="mb-3">🎤 Assign Participants to Microphones</h6>
@@ -74,6 +75,9 @@
 </div>
 
 @code {
+    private const string MIC_ASSIGNMENTS_KEY = "micAssignments";
+    private const string PRESENT_SPEAKERS_KEY = "presentSpeakers";
+
     [Parameter] public Dictionary<int, string> MicAssignments { get; set; } = new();
     [Parameter] public EventCallback<Dictionary<int, string>> MicAssignmentsChanged { get; set; }
     [Parameter] public HashSet<int> PresentSpeakers { get; set; } = new();
@@ -88,12 +92,75 @@
         await LoadPeople();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadCachedAssignments();
+            StateHasChanged();
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         // Only load people once, don't reload on every parameter change
         if (people == null || !people.Any())
         {
             await LoadPeople();
+        }
+    }
+
+    private async Task LoadCachedAssignments()
+    {
+        try
+        {
+            // Load mic assignments
+            var cachedAssignments = await JSRuntime.InvokeAsync<string>("localStorage.getItem", MIC_ASSIGNMENTS_KEY);
+            if (!string.IsNullOrEmpty(cachedAssignments))
+            {
+                var assignments = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, string>>(cachedAssignments);
+                if (assignments != null)
+                {
+                    MicAssignments = assignments;
+                    await MicAssignmentsChanged.InvokeAsync(MicAssignments);
+                }
+            }
+
+            // Load present speakers
+            var cachedSpeakers = await JSRuntime.InvokeAsync<string>("localStorage.getItem", PRESENT_SPEAKERS_KEY);
+            if (!string.IsNullOrEmpty(cachedSpeakers))
+            {
+                var speakers = System.Text.Json.JsonSerializer.Deserialize<HashSet<int>>(cachedSpeakers);
+                if (speakers != null)
+                {
+                    PresentSpeakers = speakers;
+                    await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+                }
+            }
+        }
+        catch
+        {
+            // If there's any error loading from cache, start with empty collections
+            MicAssignments = new();
+            PresentSpeakers = new();
+        }
+    }
+
+    private async Task SaveAssignmentsToCache()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", 
+                MIC_ASSIGNMENTS_KEY, 
+                System.Text.Json.JsonSerializer.Serialize(MicAssignments));
+
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", 
+                PRESENT_SPEAKERS_KEY, 
+                System.Text.Json.JsonSerializer.Serialize(PresentSpeakers));
+        }
+        catch
+        {
+            // Silently fail if we can't save to cache
         }
     }
 
@@ -153,6 +220,7 @@
         
         await MicAssignmentsChanged.InvokeAsync(MicAssignments);
         await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+        await SaveAssignmentsToCache();
     }
 
     private async Task LoadPreviousAssignments()
@@ -161,6 +229,7 @@
         if (previousAssignments.Any())
         {
             MicAssignments.Clear();
+            PresentSpeakers.Clear();
             foreach (var assignment in previousAssignments)
             {
                 MicAssignments[assignment.Key] = assignment.Value;
@@ -170,6 +239,7 @@
             statusMessage = "Loaded assignments from previous session";
             await MicAssignmentsChanged.InvokeAsync(MicAssignments);
             await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+            await SaveAssignmentsToCache();
         }
         else
         {
@@ -186,8 +256,7 @@
         statusMessage = "Assignments cleared";
         await MicAssignmentsChanged.InvokeAsync(MicAssignments);
         await PresentSpeakersChanged.InvokeAsync(PresentSpeakers);
+        await SaveAssignmentsToCache();
         StateHasChanged();
     }
-
-
 }

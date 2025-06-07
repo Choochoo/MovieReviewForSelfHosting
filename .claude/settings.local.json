@@ -16,7 +16,9 @@
       "Bash(chmod:*)",
       "Bash(echo:*)",
       "Bash(git add:*)",
-      "Bash(dotnet build)"
+      "Bash(dotnet build)",
+      "WebFetch(domain:docs.gladia.io)",
+      "Bash(dotnet build:*)"
     ],
     "deny": []
   }
