@@ -1,9 +1,12 @@
 @page "/setup"
 @using MovieReviewApp.Services
+@using MovieReviewApp.Database
+@using MovieReviewApp.Models
 @inject SecretsManager SecretsManager
 @inject InstanceManager InstanceManager
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject MongoDbService MongoDb
 
 <PageTitle>First Run Setup - Movie Review App</PageTitle>
 
@@ -107,10 +110,10 @@
                     <h3>🎭 Instance Configuration</h3>
                     
                     <div class="form-group">
-                        <label for="displayName">Instance Display Name</label>
-                        <input type="text" id="displayName" @bind="displayName" class="form-control" 
-                               placeholder="@InstanceManager.InstanceName" />
-                        <small class="help-text">Friendly name for this instance (e.g., "Family Movie Night", "Work Film Club")</small>
+                        <label for="groupName">Group Name *</label>
+                        <input type="text" id="groupName" @bind="groupName" class="form-control" 
+                               placeholder="e.g., Family Movie Night" />
+                        <small class="help-text">Display name for your movie review group</small>
                     </div>
 
                     <div class="form-group">
@@ -121,50 +124,48 @@
                         </select>
                         <small class="help-text">Determines default settings and content filtering preferences</small>
                     </div>
-
-                    <div class="form-group">
-                        <label for="description">Description (Optional)</label>
-                        <input type="text" id="description" @bind="description" class="form-control" 
-                               placeholder="Brief description of this instance..." />
-                        <small class="help-text">Optional description to help identify this instance</small>
-                    </div>
                 </div>
 
                 <div class="setup-section">
-                    <h3>🚀 Deployment Instructions</h3>
-                    <p class="section-description">Configure port numbers using command line arguments</p>
+                    <h3>🚀 Multiple Instance Deployment</h3>
+                    <p class="section-description">Create multiple instances by starting the app with different instance names</p>
                     
                     <div class="deployment-instructions">
-                        <h4>🖥️ Command Line</h4>
-                        <p>Start instances with specific ports using the --port argument:</p>
+                        <div class="info-note">
+                            <i class="bi bi-exclamation-circle"></i>
+                            <span><strong>Important:</strong> Each instance must be started with a unique instance name using the --instance parameter</span>
+                        </div>
+
+                        <h4>🖥️ Command Line Examples</h4>
                         <div class="code-example">
                             <code>dotnet run --instance "Family-Movies" --port 5000</code>
                             <code>dotnet run --instance "Work-Film-Club" --port 5001</code>
+                            <code>dotnet run --instance "Friends-Cinema" --port 5002</code>
                         </div>
 
                         <h4>🌐 IIS Deployment</h4>
-                        <p>For IIS hosting, configure the port in web.config:</p>
+                        <p>For IIS hosting, configure the instance name and port in web.config:</p>
                         <div class="code-example">
-                            <code>&lt;aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll --instance MyInstance --port 5010" /&gt;</code>
+                            <code>&lt;aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll --instance Family-Movies --port 5000" /&gt;</code>
                         </div>
 
-                        <h5>Multiple IIS Instances Example:</h5>
+                        <h5>Creating Multiple IIS Sites:</h5>
                         <ol class="deployment-steps">
-                            <li>Create separate IIS applications (e.g., /family, /work, /friends)</li>
-                            <li>Copy the application files to each folder</li>
-                            <li>Edit web.config in each folder with unique instance names and ports:
+                            <li>Create separate IIS sites or applications for each instance</li>
+                            <li>Deploy the application files to each site</li>
+                            <li>Edit web.config in each site with unique instance names:
                                 <div class="code-example">
-                                    <code>Family: --instance "Family" --port 5000</code>
-                                    <code>Work: --instance "Work" --port 5001</code>
-                                    <code>Friends: --instance "Friends" --port 5002</code>
+                                    <code>Site 1: --instance "Family-Movies" --port 5000</code>
+                                    <code>Site 2: --instance "Work-Film-Club" --port 5001</code>
+                                    <code>Site 3: --instance "Friends-Cinema" --port 5002</code>
                                 </div>
                             </li>
-                            <li>Configure IIS bindings to match the port numbers</li>
+                            <li>Configure IIS bindings appropriately for each site</li>
                         </ol>
                         
                         <div class="info-note">
                             <i class="bi bi-info-circle"></i>
-                            <span>Each instance maintains its own database, configuration, and secrets</span>
+                            <span>Each instance has its own database, configuration, and secrets stored in: <code>@InstanceManager.InstancePath</code></span>
                         </div>
                     </div>
                 </div>
@@ -213,12 +214,8 @@
                     <h4>Instance Details:</h4>
                     <ul>
                         <li><strong>Instance:</strong> @InstanceManager.InstanceName</li>
-                        <li><strong>Display Name:</strong> @(string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName)</li>
+                        <li><strong>Group Name:</strong> @groupName</li>
                         <li><strong>Content Type:</strong> @contentType</li>
-                        @if (!string.IsNullOrEmpty(description))
-                        {
-                            <li><strong>Description:</strong> @description</li>
-                        }
                     </ul>
                 </div>
                 
@@ -593,9 +590,8 @@
     private string gladiaKey = "";
     private string openaiKey = "";
     private string facebookChatUrl = "";
-    private string displayName = "";
+    private string groupName = "";
     private string contentType = "General";
-    private string description = "";
     
     private bool isSaving = false;
     private bool isComplete = false;
@@ -613,9 +609,8 @@
 
         // Load current instance config for defaults
         currentConfig = InstanceManager.GetInstanceConfig();
-        displayName = currentConfig.DisplayName;
+        groupName = currentConfig.DisplayName;
         contentType = currentConfig.Environment; // Map old Environment to new ContentType
-        description = currentConfig.Description;
     }
 
     private async Task SaveSetup()
@@ -631,9 +626,10 @@
             
             // Validate required fields
             if (string.IsNullOrWhiteSpace(tmdbKey) || 
-                string.IsNullOrWhiteSpace(mongoConnection))
+                string.IsNullOrWhiteSpace(mongoConnection) ||
+                string.IsNullOrWhiteSpace(groupName))
             {
-                errorMessage = "TMDB API key and MongoDB connection string are required.";
+                errorMessage = "TMDB API key, MongoDB connection string, and Group Name are required.";
                 Console.WriteLine($"Validation failed: {errorMessage}");
                 return;
             }
@@ -671,15 +667,18 @@
             var instanceConfig = new InstanceConfig
             {
                 InstanceName = InstanceManager.InstanceName,
-                DisplayName = string.IsNullOrEmpty(displayName) ? InstanceManager.InstanceName : displayName.Trim(),
+                DisplayName = groupName.Trim(),
                 Environment = contentType,
                 Port = currentConfig.Port, // Keep existing port, will be set by command line
-                Description = description.Trim(),
+                Description = "", // No longer used
                 CreatedDate = currentConfig.CreatedDate == default ? DateTime.UtcNow : currentConfig.CreatedDate,
                 LastUsed = DateTime.UtcNow
             };
 
             InstanceManager.SaveInstanceConfig(instanceConfig);
+            
+            // Save group name to MongoDB settings
+            await SaveGroupNameToSettings(groupName.Trim());
             
             Console.WriteLine("Setup completed successfully");
             isComplete = true;
@@ -704,5 +703,27 @@
     private void GoToApp()
     {
         Navigation.NavigateTo("/");
+    }
+    
+    private async Task SaveGroupNameToSettings(string groupName)
+    {
+        try
+        {
+            var setting = await MongoDb.FindOneAsync<Setting>(s => s.Key == "GroupName");
+            if (setting != null)
+            {
+                setting.Value = groupName;
+                await MongoDb.UpsertAsync(setting);
+            }
+            else
+            {
+                await MongoDb.InsertAsync(new Setting { Key = "GroupName", Value = groupName });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving group name to settings: {ex.Message}");
+            // Non-critical error, continue with setup
+        }
     }
 }
