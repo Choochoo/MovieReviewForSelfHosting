@@ -18,7 +18,9 @@
       "Bash(git add:*)",
       "Bash(dotnet build)",
       "WebFetch(domain:docs.gladia.io)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(dotnet build)",
+      "Bash(cmd.exe:*)"
     ],
     "deny": []
   }

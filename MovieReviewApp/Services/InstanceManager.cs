@@ -10,39 +10,54 @@ namespace MovieReviewApp.Services
 
         public InstanceManager(string? instanceName = null)
         {
-            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            // Check for custom data path from environment variable
+            var customDataPath = Environment.GetEnvironmentVariable("MOVIEREVIEW_DATA_PATH");
+            string basePath;
             
-            // Handle WSL environment - use Windows path if running in WSL
-            if (IsRunningInWSL())
+            if (!string.IsNullOrEmpty(customDataPath))
             {
-                // In WSL, we need to use the Windows AppData path
-                // Try to detect the Windows username from the current path or use hardcoded fallback
-                var currentPath = Directory.GetCurrentDirectory();
-                Console.WriteLine($"InstanceManager: Current directory in WSL: {currentPath}");
-                
-                // Extract Windows username from path if possible
-                var match = System.Text.RegularExpressions.Regex.Match(currentPath, @"/mnt/c/Users/([^/]+)/");
-                if (match.Success)
+                // Use custom path if provided
+                basePath = customDataPath;
+                Console.WriteLine($"InstanceManager: Using custom data path from environment: {basePath}");
+            }
+            else if (OperatingSystem.IsWindows() || IsRunningInWSL())
+            {
+                // Windows or WSL: Use ProgramData for easier server access
+                if (IsRunningInWSL())
                 {
-                    var windowsUsername = match.Groups[1].Value;
-                    appDataPath = $"/mnt/c/Users/{windowsUsername}/AppData/Roaming";
-                    Console.WriteLine($"InstanceManager: Detected Windows username: {windowsUsername}");
+                    // In WSL, use Windows ProgramData path
+                    basePath = "/mnt/c/ProgramData";
                 }
                 else
                 {
-                    // Fallback to hardcoded path
-                    appDataPath = "/mnt/c/Users/Jared/AppData/Roaming";
-                    Console.WriteLine($"InstanceManager: Using fallback Windows username: Jared");
+                    basePath = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+                }
+            }
+            else
+            {
+                // Linux/Unix: Use /etc or /var/lib for server-friendly access
+                if (Directory.Exists("/etc") && HasWritePermission("/etc"))
+                {
+                    basePath = "/etc";
+                }
+                else if (Directory.Exists("/var/lib") && HasWritePermission("/var/lib"))
+                {
+                    basePath = "/var/lib";
+                }
+                else
+                {
+                    // Fallback to user's home directory
+                    basePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 }
             }
             
-            _instancesRootPath = Path.Combine(appDataPath, "MovieReviewApp", "instances");
+            _instancesRootPath = Path.Combine(basePath, "MovieReviewApp", "instances");
             
             _instanceName = instanceName ?? GetDefaultInstanceName();
             _instancePath = Path.Combine(_instancesRootPath, _instanceName);
             
             Console.WriteLine($"InstanceManager: Running in WSL: {IsRunningInWSL()}");
-            Console.WriteLine($"InstanceManager: AppData path: {appDataPath}");
+            Console.WriteLine($"InstanceManager: Base path: {basePath}");
             Console.WriteLine($"InstanceManager: Instance path: {_instancePath}");
             Console.WriteLine($"InstanceManager: Secrets path: {SecretsPath}");
             Console.WriteLine($"InstanceManager: Config path: {ConfigPath}");
@@ -163,6 +178,22 @@ namespace MovieReviewApp.Services
             return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_INTEROP")) ||
                    File.Exists("/proc/sys/fs/binfmt_misc/WSLInterop");
+        }
+
+        private static bool HasWritePermission(string path)
+        {
+            try
+            {
+                // Try to create a test directory to check write permissions
+                var testPath = Path.Combine(path, ".moviereview_test_" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(testPath);
+                Directory.Delete(testPath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 
