@@ -8,14 +8,13 @@
     <div class="container-fluid">
         <div class="navbar-brand-container">
             <a class="navbar-brand" href="">@GetTitle()</a>
-            <ThemeToggle />
+            <div style="margin-left: auto; margin-right: 5px;">
+                <ThemeToggle />
+            </div>
         </div>
-        <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu" aria-expanded="@(!collapseNavMenu)" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
     </div>
 </div>
-<div class="nav-scrollable @NavMenuCssClass" @onclick:stopPropagation="true">
+<div class="nav-scrollable">
     <nav class="flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
@@ -51,8 +50,6 @@
 </div>
 
 @code {
-    private bool collapseNavMenu = true;
-    private string NavMenuCssClass => collapseNavMenu ? "menu-collapsed" : "menu-expanded";
     private string? currentTitle;
     
     protected override void OnInitialized()
@@ -78,10 +75,5 @@
             RefreshTitle();
         }
         return currentTitle ?? AppSettings.Value.Title;
-    }
-    
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
     }
 }

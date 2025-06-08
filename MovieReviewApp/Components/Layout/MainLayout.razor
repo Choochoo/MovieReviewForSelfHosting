@@ -8,6 +8,47 @@
 @inject SecretsManager SecretsManager
 @inject ThemeService ThemeService
 
+
+<!-- MOBILE MENU - Only rendered on mobile devices -->
+<div class="mobile-only">
+    <!-- MOBILE MENU OVERLAY -->
+    @if (showMobileMenu)
+    {
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 99999; padding: 80px 15px 20px 15px; overflow-y: auto; overflow-x: hidden;">
+            <div style="display: flex; flex-direction: column; max-width: 100%; box-sizing: border-box;">
+                <a href="" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>🏠</span> Home
+                </a>
+                <a href="settings" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>⚙️</span> Settings
+                </a>
+                <a href="history" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>📚</span> History
+                </a>
+                <a href="discussions" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>💬</span> Discussions
+                </a>
+                <a href="audio-processing" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>🎤</span> Audio Processing
+                </a>
+                <a href="soundboard" @onclick="CloseMobileMenu" style="color: white; text-decoration: none; font-size: 18px; padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden;">
+                    <span>🎵</span> Soundboard
+                </a>
+                <div style="padding: 15px 10px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 10px;">
+                    <span>🎨</span> Theme: <MovieReviewApp.Components.Partials.ThemeToggle />
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- MOBILE MENU BUTTON -->
+    <button @onclick="ToggleMobileMenu" 
+            class="mobile-menu-btn"
+            style="position: fixed; top: 15px; right: 15px; width: 50px; height: 50px; background: #000000; color: #00D9FF; border: 2px solid #00D9FF; border-radius: 8px; z-index: 100000; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        @if (showMobileMenu) { <span>✕</span> } else { <span>☰</span> }
+    </button>
+</div>
+
 @if (IsFirstRunSetup)
 {
     <div class="page-no-sidebar">
@@ -61,6 +102,11 @@ else
         margin-left: 250px;
     }
 
+    /* Hide mobile-only content on desktop */
+    .mobile-only {
+        display: none;
+    }
+
     .page-no-sidebar {
         width: 100%;
         min-height: 100vh;
@@ -68,57 +114,95 @@ else
 
     /* Mobile viewport and layout fixes */
     @@media (max-width: 768px) {
+        * {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        
+        html, body {
+            overflow-x: hidden !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
         .page {
             flex-direction: column;
-            width: 100vw;
-            min-width: 100vw;
-            overflow-x: hidden;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         .sidebar {
-            width: 100vw;
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: auto;
-            z-index: 1001;
-            transform: translateY(-100%);
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar.show-mobile {
-            transform: translateY(0);
+            display: none !important; /* Hide sidebar on mobile */
         }
 
         main {
-            margin-left: 0;
-            width: 100vw;
-            min-width: 100vw;
-            padding: 0 15px;
+            margin-left: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0;
             box-sizing: border-box;
         }
 
+        /* Show mobile-only content on mobile */
+        .mobile-only {
+            display: block !important;
+        }
+
         .content {
-            width: 100%;
-            max-width: 100vw;
-            overflow-x: hidden;
-            padding: 1rem 0;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+            padding: 1rem !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        /* Target common elements that cause horizontal scroll */
+        div, main, article, section, .card, .container, .container-fluid {
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+            box-sizing: border-box !important;
+        }
+        
+        /* Fix any tables or wide content */
+        table {
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            display: block !important;
+            white-space: nowrap !important;
         }
 
         /* Force full width for mobile */
         body {
-            width: 100vw;
-            min-width: 100vw;
-            overflow-x: hidden;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
         }
     }
 </style>
 
 @code {
     private bool IsFirstRunSetup => Navigation.Uri.Contains("/setup", StringComparison.OrdinalIgnoreCase) || SecretsManager.IsFirstRun;
+    private bool showMobileMenu = false;
 
     protected override async Task OnInitializedAsync()
     {
         await ThemeService.InitializeAsync();
+    }
+
+    private void ToggleMobileMenu()
+    {
+        showMobileMenu = !showMobileMenu;
+    }
+
+    private void CloseMobileMenu()
+    {
+        showMobileMenu = false;
     }
 }
