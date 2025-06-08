@@ -139,6 +139,9 @@ builder.Services.AddScoped<MarkdownService>();
 
 // Register new audio processing services
 builder.Services.AddScoped<GladiaService>();
+builder.Services.AddScoped<OpenAIService>();
+builder.Services.AddScoped<ClaudeService>();
+builder.Services.AddScoped<PromptService>();
 builder.Services.AddHttpClient<MovieSessionAnalysisService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis of long sessions

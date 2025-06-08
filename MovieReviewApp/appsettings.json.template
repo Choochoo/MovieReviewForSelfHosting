@@ -15,6 +15,12 @@
   "Gladia": {
     "ApiKey": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL"
   },
+  "OpenAI": {
+    "ApiKey": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL"
+  },
+  "Claude": {
+    "ApiKey": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL"
+  },
   
   // Database - Connection strings configured via secure setup
   "MongoDB": {

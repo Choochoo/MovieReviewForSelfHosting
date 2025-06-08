@@ -255,6 +255,116 @@
             </small>
         </div>
     </div>
+
+    <div class="settings-section">
+        <h3 class="section-title" @onclick="ToggleAdvanced" style="cursor: pointer;">
+            <i class="bi @(showAdvanced ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            Advanced
+        </h3>
+        
+        @if (showAdvanced)
+        {
+            <div class="advanced-settings">
+                <div class="api-key-section">
+                    <h5>API Configuration</h5>
+                    <p class="text-muted">Configure API keys for external services. Changes are saved to encrypted storage.</p>
+                    
+                    <div class="api-key-grid">
+                        <div class="api-key-item">
+                            <label class="api-label">OpenAI API Key:</label>
+                            <div class="api-key-description">
+                                <small class="text-muted">For AI text spicing features. <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get your key here <i class="bi bi-box-arrow-up-right"></i></a></small>
+                            </div>
+                            <div class="api-input-group">
+                                <input type="@(showOpenAIKey ? "text" : "password")" 
+                                       @bind="openAIApiKey" 
+                                       class="form-control" 
+                                       placeholder="sk-..." />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showOpenAIKey = !showOpenAIKey">
+                                    <i class="bi @(showOpenAIKey ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                                <button type="button" 
+                                        class="btn @(IsOpenAIConfigured ? "btn-success" : "btn-secondary") btn-sm" 
+                                        @onclick="() => SaveOpenAIApiKey()">
+                                    @(IsOpenAIConfigured ? "Configured" : "Not Configured")
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="api-key-item">
+                            <label class="api-label">Claude API Key:</label>
+                            <div class="api-key-description">
+                                <small class="text-muted">Backup for AI text spicing features. <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">Get your key here <i class="bi bi-box-arrow-up-right"></i></a></small>
+                            </div>
+                            <div class="api-input-group">
+                                <input type="@(showClaudeKey ? "text" : "password")" 
+                                       @bind="claudeApiKey" 
+                                       class="form-control" 
+                                       placeholder="sk-ant-..." />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showClaudeKey = !showClaudeKey">
+                                    <i class="bi @(showClaudeKey ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                                <button type="button" 
+                                        class="btn @(IsClaudeConfigured ? "btn-success" : "btn-secondary") btn-sm" 
+                                        @onclick="() => SaveClaudeApiKey()">
+                                    @(IsClaudeConfigured ? "Configured" : "Not Configured")
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="api-key-item">
+                            <label class="api-label">TMDB API Key:</label>
+                            <div class="api-key-description">
+                                <small class="text-muted">For movie data and posters. <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener noreferrer">Get your free key here <i class="bi bi-box-arrow-up-right"></i></a></small>
+                            </div>
+                            <div class="api-input-group">
+                                <input type="@(showTMDBKey ? "text" : "password")" 
+                                       @bind="tmdbApiKey" 
+                                       class="form-control" 
+                                       placeholder="..." />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showTMDBKey = !showTMDBKey">
+                                    <i class="bi @(showTMDBKey ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                                <button type="button" 
+                                        class="btn @(IsTMDBConfigured ? "btn-success" : "btn-secondary") btn-sm" 
+                                        @onclick="() => SaveTMDBApiKey()">
+                                    @(IsTMDBConfigured ? "Configured" : "Not Configured")
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="api-key-item">
+                            <label class="api-label">Gladia API Key:</label>
+                            <div class="api-key-description">
+                                <small class="text-muted">For audio transcription features. <a href="https://gladia.io/" target="_blank" rel="noopener noreferrer">Get your key here <i class="bi bi-box-arrow-up-right"></i></a></small>
+                            </div>
+                            <div class="api-input-group">
+                                <input type="@(showGladiaKey ? "text" : "password")" 
+                                       @bind="gladiaApiKey" 
+                                       class="form-control" 
+                                       placeholder="..." />
+                                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showGladiaKey = !showGladiaKey">
+                                    <i class="bi @(showGladiaKey ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                                <button type="button" 
+                                        class="btn @(IsGladiaConfigured ? "btn-success" : "btn-secondary") btn-sm" 
+                                        @onclick="() => SaveGladiaApiKey()">
+                                    @(IsGladiaConfigured ? "Configured" : "Not Configured")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(apiMessage))
+                    {
+                        <div class="alert @(apiMessageIsError ? "alert-danger" : "alert-success") mt-3">
+                            @apiMessage
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 <style>
@@ -532,6 +642,88 @@
         .btn-sm {
             padding: 0.25rem 0.5rem;
             font-size: 0.8rem;
+        }
+    }
+
+    /* Advanced Settings Styles */
+    .advanced-settings {
+        margin-top: 1rem;
+    }
+
+    .api-key-section {
+        background-color: var(--surface-color, #f8f9fa);
+        border: 1px solid var(--border-color, #e9ecef);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+    }
+
+    .api-key-grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .api-key-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .api-key-description {
+        margin-bottom: 0.25rem;
+    }
+
+    .api-key-description a {
+        color: var(--accent-primary, #007bff);
+        text-decoration: none;
+    }
+
+    .api-key-description a:hover {
+        text-decoration: underline;
+    }
+
+    .api-label {
+        font-weight: 600;
+        color: var(--text-primary, #212529);
+        margin-bottom: 0.25rem;
+    }
+
+    .api-input-group {
+        display: flex;
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .api-input-group .form-control {
+        flex: 1;
+    }
+
+    .api-input-group .btn {
+        white-space: nowrap;
+    }
+
+    .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+
+    .btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+
+    .section-title i {
+        margin-right: 0.5rem;
+        font-size: 0.9em;
+    }
+
+    @@media (max-width: 768px) {
+        .api-input-group {
+            flex-direction: column;
+        }
+        
+        .api-key-section {
+            padding: 1rem;
         }
     }
 </style>

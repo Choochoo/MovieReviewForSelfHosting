@@ -23,6 +23,15 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private ThemeService themeService { get; set; } = default!;
 
+        [Inject]
+        private SecretsManager secretsManager { get; set; } = default!;
+
+        [Inject]
+        private OpenAIService openAIService { get; set; } = default!;
+
+        [Inject]
+        private ClaudeService claudeService { get; set; } = default!;
+
         private List<Person> People { get; set; } = new();
         private DateTime StartDate { get; set; } = DateTime.Now;
         public int TimeCount { get; set; } = 1;
@@ -36,6 +45,24 @@ namespace MovieReviewApp.Components.Pages
         private List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public string NewQuestionText { get; set; } = "";
         public bool NewQuestionIsActive { get; set; } = true;
+
+        // Advanced Settings
+        private bool showAdvanced = false;
+        private string openAIApiKey = "";
+        private string claudeApiKey = "";
+        private string tmdbApiKey = "";
+        private string gladiaApiKey = "";
+        private bool showOpenAIKey = false;
+        private bool showClaudeKey = false;
+        private bool showTMDBKey = false;
+        private bool showGladiaKey = false;
+        private string apiMessage = "";
+        private bool apiMessageIsError = false;
+
+        private bool IsOpenAIConfigured => openAIService?.IsConfigured ?? false;
+        private bool IsClaudeConfigured => claudeService?.IsConfigured ?? false;
+        private bool IsTMDBConfigured => !string.IsNullOrEmpty(secretsManager?.GetSecret("TMDB:ApiKey"));
+        private bool IsGladiaConfigured => !string.IsNullOrEmpty(secretsManager?.GetSecret("Gladia:ApiKey"));
 
         public readonly List<SelectListItem> TimePeriods = new List<SelectListItem>
         {
@@ -272,5 +299,79 @@ namespace MovieReviewApp.Components.Pages
                 DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
             }
         }
+
+        // Advanced Settings Methods
+        private void ToggleAdvanced()
+        {
+            showAdvanced = !showAdvanced;
+            if (showAdvanced)
+            {
+                LoadCurrentApiKeys();
+            }
+        }
+
+        private void LoadCurrentApiKeys()
+        {
+            // Don't pre-populate keys for security - just check if they exist
+            openAIApiKey = "";
+            claudeApiKey = "";
+            tmdbApiKey = "";
+            gladiaApiKey = "";
+        }
+
+        private async Task SaveApiKey(string provider, string apiKey)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(apiKey))
+                {
+                    apiMessage = $"{provider} API key cannot be empty";
+                    apiMessageIsError = true;
+                    return;
+                }
+
+                var secretKey = provider switch
+                {
+                    "OpenAI" => "OpenAI:ApiKey",
+                    "Claude" => "Claude:ApiKey", 
+                    "TMDB" => "TMDB:ApiKey",
+                    "Gladia" => "Gladia:ApiKey",
+                    _ => throw new ArgumentException($"Unknown provider: {provider}")
+                };
+
+                // Save to encrypted storage
+                secretsManager.SetSecret(secretKey, apiKey);
+
+                apiMessage = $"{provider} API key saved successfully!";
+                apiMessageIsError = false;
+
+                // Clear the input field
+                switch (provider)
+                {
+                    case "OpenAI": openAIApiKey = ""; break;
+                    case "Claude": claudeApiKey = ""; break;
+                    case "TMDB": tmdbApiKey = ""; break;
+                    case "Gladia": gladiaApiKey = ""; break;
+                }
+
+                StateHasChanged();
+
+                // Clear message after 3 seconds
+                await Task.Delay(3000);
+                apiMessage = "";
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                apiMessage = $"Error saving {provider} API key: {ex.Message}";
+                apiMessageIsError = true;
+            }
+        }
+
+        // Helper methods for API key saving
+        private async void SaveOpenAIApiKey() => await SaveApiKey("OpenAI", openAIApiKey);
+        private async void SaveClaudeApiKey() => await SaveApiKey("Claude", claudeApiKey);
+        private async void SaveTMDBApiKey() => await SaveApiKey("TMDB", tmdbApiKey);
+        private async void SaveGladiaApiKey() => await SaveApiKey("Gladia", gladiaApiKey);
     }
 }
