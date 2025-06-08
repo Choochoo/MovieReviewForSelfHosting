@@ -3,7 +3,8 @@ using Microsoft.JSInterop;
 using MongoDB.Driver;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
-using MovieReviewApp.Services;
+using MovieReviewApp.Application.Services;
+using MovieReviewApp.Utilities;
 
 namespace MovieReviewApp.Components.Pages
 {

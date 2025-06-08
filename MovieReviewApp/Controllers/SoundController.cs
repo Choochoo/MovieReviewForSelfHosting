@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using MovieReviewApp.Services;
+using MovieReviewApp.Infrastructure.Repositories;
 
 namespace MovieReviewApp.Controllers
 {
@@ -7,12 +7,12 @@ namespace MovieReviewApp.Controllers
     [Route("api/[controller]")]
     public class SoundController : ControllerBase
     {
-        private readonly SoundboardService _soundboardService;
+        private readonly SoundboardRepository _soundboardRepository;
         private readonly ILogger<SoundController> _logger;
 
-        public SoundController(SoundboardService soundboardService, ILogger<SoundController> logger)
+        public SoundController(SoundboardRepository soundboardRepository, ILogger<SoundController> logger)
         {
-            _soundboardService = soundboardService;
+            _soundboardRepository = soundboardRepository;
             _logger = logger;
         }
 
@@ -31,12 +31,12 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var soundClip = await _soundboardService.SaveSoundClipAsync(personId, file, description);
+                var soundClip = await _soundboardRepository.SaveSoundClipAsync(personId, file, description);
                 return Ok(new { 
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
                     originalFileName = soundClip.OriginalFileName,
-                    url = _soundboardService.GetSoundClipUrl(soundClip)
+                    url = _soundboardRepository.GetSoundClipUrl(soundClip)
                 });
             }
             catch (Exception ex)
@@ -56,12 +56,12 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var soundClip = await _soundboardService.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
+                var soundClip = await _soundboardRepository.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
                 return Ok(new { 
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
                     originalFileName = soundClip.OriginalFileName,
-                    url = _soundboardService.GetSoundClipUrl(soundClip)
+                    url = _soundboardRepository.GetSoundClipUrl(soundClip)
                 });
             }
             catch (Exception ex)
@@ -81,7 +81,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var success = await _soundboardService.DeleteSoundClipAsync(id);
+                var success = await _soundboardRepository.DeleteSoundClipAsync(id);
                 if (success)
                 {
                     return Ok();
@@ -121,7 +121,7 @@ namespace MovieReviewApp.Controllers
             {
                 _logger.LogInformation("Serving sound file via API: {FileName}", fileName);
                 
-                var soundClip = (await _soundboardService.GetAllSoundClipsAsync()).FirstOrDefault(s => s.FileName == fileName);
+                var soundClip = (await _soundboardRepository.GetAllSoundClipsAsync()).FirstOrDefault(s => s.FileName == fileName);
                 if (soundClip == null || !soundClip.IsActive)
                 {
                     _logger.LogWarning("Sound clip not found or inactive: {FileName}", fileName);
@@ -157,7 +157,7 @@ namespace MovieReviewApp.Controllers
         {
             try
             {
-                var allSounds = await _soundboardService.GetAllSoundClipsAsync();
+                var allSounds = await _soundboardRepository.GetAllSoundClipsAsync();
                 var debugInfo = allSounds.Where(s => s.IsActive).Select(s => new
                 {
                     id = s.Id,
@@ -167,7 +167,7 @@ namespace MovieReviewApp.Controllers
                     fileExists = System.IO.File.Exists(s.FilePath),
                     fileSize = s.FileSize,
                     contentType = s.ContentType,
-                    url = _soundboardService.GetSoundClipUrl(s),
+                    url = _soundboardRepository.GetSoundClipUrl(s),
                     personId = s.PersonId
                 }).ToList();
 

@@ -1,12 +1,11 @@
 @page "/setup"
-@using MovieReviewApp.Services
-@using MovieReviewApp.Database
+
 @using MovieReviewApp.Models
 @inject SecretsManager SecretsManager
 @inject InstanceManager InstanceManager
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
-@inject MongoDbService MongoDb
+@inject IDatabaseService DatabaseService
 
 <PageTitle>First Run Setup - Movie Review App</PageTitle>
 
@@ -750,16 +749,16 @@
     {
         try
         {
-            var setting = await MongoDb.FindOneAsync<Setting>(s => s.Key == "GroupName");
+            var setting = await DatabaseService.FindOneAsync<Setting>(s => s.Key == "GroupName");
             if (setting != null)
             {
                 setting.Value = groupName;
                 setting.UpdatedAt = DateTime.UtcNow;
-                await MongoDb.UpsertAsync(setting);
+                await DatabaseService.UpsertAsync(setting);
             }
             else
             {
-                await MongoDb.InsertAsync(new Setting 
+                await DatabaseService.InsertAsync(new Setting 
                 { 
                     Key = "GroupName", 
                     Value = groupName,

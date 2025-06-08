@@ -1,4 +1,4 @@
-using MovieReviewApp.Services;
+using MovieReviewApp.Infrastructure.Configuration;
 
 namespace MovieReviewApp.Middleware
 {

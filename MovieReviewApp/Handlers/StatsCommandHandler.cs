@@ -1,6 +1,6 @@
 ﻿using MovieReviewApp.Enums;
 using MovieReviewApp.Helpers;
-using MovieReviewApp.Services;
+using MovieReviewApp.Application.Services;
 
 namespace MovieReviewApp.Handlers
 {

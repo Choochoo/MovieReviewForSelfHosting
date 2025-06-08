@@ -26,7 +26,7 @@ Each instance is completely isolated with its own:
 
 ### Prerequisites
 
-- .NET 8.0 or later
+- .NET 9.0
 - MongoDB instance (local or cloud)
 - **FFmpeg** (required for audio processing) - see [Audio Processing Setup](#-audio-processing-setup) below
 - API keys for:
@@ -252,6 +252,57 @@ This is a personal family project, but feel free to fork and adapt for your own 
 - **Large file upload failures**: The app automatically converts >100MB WAV files to MP3, but requires FFmpeg
 - **"Error while copying content to a stream"**: Usually resolved by MP3 conversion (requires FFmpeg)
 - **Conversion failures**: Check FFmpeg installation with `ffmpeg -version` in terminal/command prompt
+
+## Project Structure
+
+The application follows a clean architecture pattern with the following structure:
+
+### Core Layer
+- `Core/Interfaces/` - Contains all service interfaces
+  - `IDatabaseService.cs` - Database operations interface
+  - `IAwardEventService.cs` - Award event operations interface
+
+### Infrastructure Layer
+- `Infrastructure/Database/` - Database implementations
+  - `MongoDbService.cs` - MongoDB implementation of IDatabaseService
+- `Infrastructure/Services/` - External service implementations
+  - `OpenAIService.cs` - OpenAI integration
+  - `ClaudeService.cs` - Claude AI integration
+  - `GladiaService.cs` - Gladia integration
+
+### Application Layer
+- `Services/` - Business logic implementations
+  - `AwardEventService.cs` - Award event management
+  - Other business services...
+
+### Providers
+- `Providers/` - Configuration and external service providers
+  - `SecureConfigurationProvider.cs` - Secure configuration management
+
+## Service Registration
+
+Services are registered in Program.cs using dependency injection:
+
+```csharp
+// Database
+builder.Services.AddSingleton<IDatabaseService, MongoDbService>();
+
+// Business Services
+builder.Services.AddScoped<IAwardEventService, AwardEventService>();
+```
+
+## Development
+
+1. Ensure MongoDB is running and accessible
+2. Update connection strings in appsettings.json
+3. Run the application using `dotnet run`
+
+## Testing
+
+Run tests using:
+```bash
+dotnet test
+```
 
 ---
 

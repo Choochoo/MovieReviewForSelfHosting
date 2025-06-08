@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MovieReviewApp.Models;
-using MovieReviewApp.Services;
+using MovieReviewApp.Application.Services;
+using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Infrastructure.Configuration;
 
 namespace MovieReviewApp.Components.Pages
 {

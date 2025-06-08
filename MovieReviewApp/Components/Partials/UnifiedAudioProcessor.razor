@@ -1,13 +1,12 @@
-@using MovieReviewApp.Database
 @using MovieReviewApp.Models
-@using MovieReviewApp.Services
+
 @using System.Globalization
 @using System.Text.RegularExpressions
 @using MovieReviewApp.Enums
 @using Microsoft.AspNetCore.Components.Forms
 @inject IWebHostEnvironment WebHostEnvironment
 @inject MovieSessionService MovieSessionService
-@inject MongoDbService MongoDbService
+@inject IDatabaseService DatabaseService
 @inject MovieReviewService MovieReviewService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
@@ -670,7 +669,7 @@
             Console.WriteLine($"DEBUG: All uploads completed");
 
             // Check for existing sessions with the same movie title and date
-            var existingSessions = await MongoDbService.FindAsync<MovieSession>(s => 
+            var existingSessions = await DatabaseService.FindAsync<MovieSession>(s => 
                 s.MovieTitle == movie.Movie && 
                 s.Date.Date == movie.StartDate.Date);
 
@@ -693,7 +692,7 @@
                     }
                 }
                 
-                await MongoDbService.DeleteByIdAsync<MovieSession>(existingSession.Id);
+                await DatabaseService.DeleteByIdAsync<MovieSession>(existingSession.Id);
             }
 
             // Create session folder structure
@@ -751,7 +750,7 @@
             AnalyzeAudioFiles(selectedSession);
 
             // Save the session
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             Console.WriteLine($"DEBUG: Session saved to database with {selectedSession.AudioFiles.Count} files");
 
             await InvokeAsync(StateHasChanged);
@@ -791,7 +790,7 @@
     {
         if (await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the session for '{session.MovieTitle}'? This action cannot be undone."))
         {
-            await MongoDbService.DeleteByIdAsync<MovieSession>(session.Id);
+            await DatabaseService.DeleteByIdAsync<MovieSession>(session.Id);
             await LoadExistingSessions();
             await InvokeAsync(StateHasChanged);
         }
@@ -804,7 +803,7 @@
         isSaving = true;
         try
         {
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             
             // Return to selection view after successful save
             BackToSelection();
@@ -839,7 +838,7 @@
 
             // Force immediate UI update
             await InvokeAsync(StateHasChanged);
-            await MongoDbService.UpsertAsync(selectedSession!);
+            await DatabaseService.UpsertAsync(selectedSession!);
 
             switch (targetStatus)
             {
@@ -854,7 +853,7 @@
                     var nextStatus = extension == ".mp3" ? AudioProcessingStatus.UploadingToGladia : AudioProcessingStatus.ConvertingToMp3;
                     
                     file.CurrentStep = "Determining next step...";
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     await StartProcess(file, nextStatus);
                     break;
 
@@ -868,7 +867,7 @@
                     // Mark as uploaded and move to MP3 conversion
                     file.ProcessingStatus = AudioProcessingStatus.Pending;
                     file.CurrentStep = "File uploaded, ready for conversion";
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     await StartProcess(file, AudioProcessingStatus.ConvertingToMp3);
                     break;
 
@@ -882,7 +881,7 @@
                     file.ProgressPercentage = 0;
                     file.CurrentStep = "Starting MP3 conversion";
                     await InvokeAsync(StateHasChanged);
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     
                     // Since FFmpeg doesn't report progress, we'll simulate it
                     var progressCts = new CancellationTokenSource();
@@ -929,7 +928,7 @@
                         file.ProgressPercentage = 100;
                         file.CanRetry = true;
                         await InvokeAsync(StateHasChanged);
-                        await MongoDbService.UpsertAsync(selectedSession!);
+                        await DatabaseService.UpsertAsync(selectedSession!);
                         
                         // Update session progress
                         await UpdateSessionProgress();
@@ -952,7 +951,7 @@
                     file.ProgressPercentage = 0;
                     file.CurrentStep = "Starting upload to Gladia";
                     await InvokeAsync(StateHasChanged);
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     
                     // Real Gladia upload
                     var uploadResults = await GladiaService.UploadAllMp3sToGladiaAsync(
@@ -970,7 +969,7 @@
                             InvokeAsync(StateHasChanged);
                         },
                         selectedSession!,
-                        async (s) => await MongoDbService.UpsertAsync(s));
+                        async (s) => await DatabaseService.UpsertAsync(s));
 
                     var uploadResult = uploadResults.FirstOrDefault();
                     if (uploadResult.success)
@@ -980,7 +979,7 @@
                         file.ProgressPercentage = 100;
                         file.CanRetry = true;
                         await InvokeAsync(StateHasChanged);
-                        await MongoDbService.UpsertAsync(selectedSession!);
+                        await DatabaseService.UpsertAsync(selectedSession!);
                         
                         // Update session progress
                         await UpdateSessionProgress();
@@ -1007,7 +1006,7 @@
 
                     file.CurrentStep = "Starting transcription";
                     file.ProgressPercentage = 10;
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     await InvokeAsync(StateHasChanged);
 
                     // Determine speaker count
@@ -1024,7 +1023,7 @@
                     file.TranscriptId = transcriptionId;
                     file.CurrentStep = "Transcription in progress";
                     file.ProgressPercentage = 30;
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     await InvokeAsync(StateHasChanged);
 
                     // Wait for completion and get result
@@ -1039,7 +1038,7 @@
                     file.CurrentStep = "Transcription complete";
                     file.ProgressPercentage = 100;
                     file.ProcessedAt = DateTime.UtcNow;
-                    await MongoDbService.UpsertAsync(selectedSession!);
+                    await DatabaseService.UpsertAsync(selectedSession!);
                     await InvokeAsync(StateHasChanged);
                     
                     // Update session progress
@@ -1059,14 +1058,14 @@
                     throw new Exception($"Invalid processing status: {targetStatus}");
             }
 
-            await MongoDbService.UpsertAsync(selectedSession!);
+            await DatabaseService.UpsertAsync(selectedSession!);
         }
         catch (Exception ex)
         {
             file.ProcessingStatus = AudioProcessingStatus.Failed;
             file.ConversionError = ex.Message;
             file.CurrentStep = $"Error: {ex.Message}";
-            await MongoDbService.UpsertAsync(selectedSession!);
+            await DatabaseService.UpsertAsync(selectedSession!);
             throw; // Re-throw to be caught by StartBulkProcessing
         }
         finally
@@ -1166,7 +1165,7 @@
             }
             
             // Save the status changes
-            await MongoDbService.UpsertAsync(selectedSession!);
+            await DatabaseService.UpsertAsync(selectedSession!);
             await InvokeAsync(StateHasChanged);
             
             // Run phases in order, but only if needed
@@ -1221,7 +1220,7 @@
             });
             
         // Update UI after conversion batch
-        await MongoDbService.UpsertAsync(selectedSession!);
+        await DatabaseService.UpsertAsync(selectedSession!);
         await InvokeAsync(StateHasChanged);
         await UpdateSessionProgress();
         
@@ -1245,10 +1244,10 @@
                 Console.WriteLine($"DEBUG: Upload Progress - {step}");
             },
             selectedSession!,
-            async (s) => await MongoDbService.UpsertAsync(s));
+            async (s) => await DatabaseService.UpsertAsync(s));
             
         // Update UI after upload batch
-        await MongoDbService.UpsertAsync(selectedSession!);
+        await DatabaseService.UpsertAsync(selectedSession!);
         await InvokeAsync(StateHasChanged);
         await UpdateSessionProgress();
         
@@ -1280,7 +1279,7 @@
         }
         
         // Update UI after transcription batch
-        await MongoDbService.UpsertAsync(selectedSession!);
+        await DatabaseService.UpsertAsync(selectedSession!);
         await InvokeAsync(StateHasChanged);
         await UpdateSessionProgress();
         
@@ -1316,7 +1315,7 @@
         }
         
         // Update UI after AI analysis
-        await MongoDbService.UpsertAsync(selectedSession!);
+        await DatabaseService.UpsertAsync(selectedSession!);
         await InvokeAsync(StateHasChanged);
         await UpdateSessionProgress();
         
@@ -1374,7 +1373,7 @@
             file.ConversionError = string.Empty;
         }
 
-        await MongoDbService.UpsertAsync(selectedSession);
+        await DatabaseService.UpsertAsync(selectedSession);
         await InvokeAsync(StateHasChanged);
 
         try
@@ -1385,7 +1384,7 @@
                 file.CurrentStep = "Analyzing conversation";
                 file.ProgressPercentage = 50;
             }
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             await InvokeAsync(StateHasChanged);
 
             // Run the actual AI analysis - this analyzes ALL transcripts together
@@ -1399,7 +1398,7 @@
                 file.CurrentStep = "AI analysis complete";
                 file.ProgressPercentage = 90;
             }
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             await InvokeAsync(StateHasChanged);
 
             // Mark all eligible files as complete
@@ -1435,7 +1434,7 @@
         }
         finally
         {
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             await InvokeAsync(StateHasChanged);
             await UpdateSessionProgress();
         }
@@ -1624,7 +1623,7 @@
             file.ProcessingStatus = AudioProcessingStatus.Failed;
             file.ConversionError = "No transcript available for AI analysis";
             file.CurrentStep = "AI analysis failed - no transcript";
-            await MongoDbService.UpsertAsync(selectedSession!);
+            await DatabaseService.UpsertAsync(selectedSession!);
             await InvokeAsync(StateHasChanged);
             return;
         }
@@ -1637,7 +1636,7 @@
         file.CanRetry = false;
         file.ConversionError = string.Empty;
 
-        await MongoDbService.UpsertAsync(selectedSession!);
+        await DatabaseService.UpsertAsync(selectedSession!);
         await InvokeAsync(StateHasChanged);
 
         Console.WriteLine($"DEBUG: Starting AI processing for {file.FileName}");
@@ -1968,7 +1967,7 @@
         
         if (anyUpdated)
         {
-            await MongoDbService.UpsertAsync(selectedSession);
+            await DatabaseService.UpsertAsync(selectedSession);
             await InvokeAsync(StateHasChanged);
             await UpdateSessionProgress();
         }

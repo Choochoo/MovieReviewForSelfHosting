@@ -5,10 +5,16 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
 using MovieReviewApp.Components;
+using MovieReviewApp.Core.Interfaces;
 using MovieReviewApp.Database;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
-using MovieReviewApp.Services;
+using MovieReviewApp.Application.Services;
+using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.FileSystem;
+using MovieReviewApp.Infrastructure.Repositories;
+using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Utilities;
 
 // Configure MongoDB serialization
 BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLegacy));
@@ -121,13 +127,12 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 10L * 1024 * 1024 * 1024; // 10 GB
 });
 
-// Add MongoDB service
-builder.Services.AddSingleton<MongoDbService>(provider =>
-    new MongoDbService(
-        provider.GetRequiredService<IConfiguration>(),
-        provider.GetRequiredService<SecretsManager>(),
-        provider.GetRequiredService<InstanceManager>(),
-        provider.GetRequiredService<ILogger<MongoDbService>>()));
+// Register database service
+builder.Services.AddSingleton<IDatabaseService, MongoDbService>();
+
+// Register award services
+builder.Services.AddScoped<IAwardEventService, AwardEventRepository>();
+builder.Services.AddScoped<IAwardVoteService, AwardVoteRepository>();
 
 builder.Services.AddScoped<MovieReviewService>();
 
@@ -151,7 +156,7 @@ builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
 builder.Services.AddScoped<DiscussionQuestionsService>();
 builder.Services.AddScoped<ThemeService>();
-builder.Services.AddScoped<SoundboardService>();
+builder.Services.AddScoped<SoundboardRepository>();
 
 // MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
 
