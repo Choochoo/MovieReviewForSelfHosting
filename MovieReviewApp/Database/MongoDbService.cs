@@ -287,6 +287,26 @@ namespace MovieReviewApp.Database
         }
 
         /// <summary>
+        /// Deletes a document by ID (generic version for compatibility)
+        /// </summary>
+        public async Task<bool> DeleteAsync<T>(Guid id)
+        {
+            return await DeleteByIdAsync<T>(id);
+        }
+
+        /// <summary>
+        /// Deletes a document by ID (string version for compatibility)
+        /// </summary>
+        public async Task<bool> DeleteAsync<T>(string id)
+        {
+            if (!Guid.TryParse(id, out var guidId))
+            {
+                return false;
+            }
+            return await DeleteByIdAsync<T>(guidId);
+        }
+
+        /// <summary>
         /// Deletes documents matching a filter
         /// </summary>
         public async Task<long> DeleteManyAsync<T>(Expression<Func<T, bool>> filter)

@@ -49,12 +49,19 @@ namespace MovieReviewApp.Services
             return _data.TryGetValue(key, out value);
         }
 
-        public void Set(string key, string value)
+        public void Set(string key, string? value)
         {
-            _data[key] = value;
+            if (value != null)
+            {
+                _data[key] = value;
+            }
+            else
+            {
+                _data.Remove(key);
+            }
         }
 
-        public IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string parentPath)
+        public IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
         {
             var results = new List<string>();
 
@@ -116,7 +123,7 @@ namespace MovieReviewApp.Services
     {
         public bool HasChanged => false;
         public bool ActiveChangeCallbacks => false;
-        public IDisposable RegisterChangeCallback(Action<object> callback, object state) => new NoOpDisposable();
+        public IDisposable RegisterChangeCallback(Action<object?> callback, object? state) => new NoOpDisposable();
 
         private class NoOpDisposable : IDisposable
         {

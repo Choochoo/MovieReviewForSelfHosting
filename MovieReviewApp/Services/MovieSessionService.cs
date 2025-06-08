@@ -1414,4 +1414,153 @@ public class MovieSessionService
             // File stays in session folder, status tracked in database
         }
     }
+
+    public async Task<List<MovieSession>> GetAllAsync()
+    {
+        try
+        {
+            return await _database.GetAllAsync<MovieSession>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get all movie sessions");
+            return new List<MovieSession>();
+        }
+    }
+
+    public async Task<MovieSession?> GetByIdAsync(string id)
+    {
+        try
+        {
+            return await _database.GetByIdAsync<MovieSession>(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get movie session by id {Id}", id);
+            return null;
+        }
+    }
+
+    public async Task<List<MovieSession>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var sessions = await _database.GetAllAsync<MovieSession>();
+            return sessions
+                .Where(s => s.Date >= startDate && s.Date <= endDate)
+                .OrderByDescending(s => s.Date)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get movie sessions by date range");
+            return new List<MovieSession>();
+        }
+    }
+
+    public async Task<MovieSession> CreateAsync(MovieSession session)
+    {
+        try
+        {
+            await _database.InsertAsync(session);
+            _logger.LogInformation("Created movie session for {MovieTitle}", session.MovieTitle);
+            return session;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create movie session for {MovieTitle}", session.MovieTitle);
+            throw;
+        }
+    }
+
+    public async Task<MovieSession> UpdateAsync(MovieSession session)
+    {
+        try
+        {
+            await _database.UpsertAsync(session);
+            _logger.LogInformation("Updated movie session for {MovieTitle}", session.MovieTitle);
+            return session;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update movie session for {MovieTitle}", session.MovieTitle);
+            throw;
+        }
+    }
+
+    public async Task<bool> DeleteAsync(string id)
+    {
+        try
+        {
+            var session = await GetByIdAsync(id);
+            if (session == null)
+                return false;
+
+            await _database.DeleteAsync<MovieSession>(id);
+            _logger.LogInformation("Deleted movie session {Id}", id);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete movie session {Id}", id);
+            return false;
+        }
+    }
+
+    public async Task<List<MovieSession>> GetByStatusAsync(ProcessingStatus status)
+    {
+        try
+        {
+            var sessions = await _database.GetAllAsync<MovieSession>();
+            return sessions
+                .Where(s => s.Status == status)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get movie sessions by status {Status}", status);
+            return new List<MovieSession>();
+        }
+    }
+
+    public async Task<List<MovieSession>> GetByParticipantAsync(string participantName)
+    {
+        try
+        {
+            var sessions = await _database.GetAllAsync<MovieSession>();
+            return sessions
+                .Where(s => s.ParticipantsPresent.Contains(participantName) || s.ParticipantsAbsent.Contains(participantName))
+                .OrderByDescending(s => s.Date)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get movie sessions for participant {ParticipantName}", participantName);
+            return new List<MovieSession>();
+        }
+    }
+
+    public async Task<MovieSession> UpdateProcessingStatusAsync(string id, ProcessingStatus status, string? errorMessage = null)
+    {
+        try
+        {
+            var session = await GetByIdAsync(id);
+            if (session == null)
+                throw new KeyNotFoundException($"Movie session with id {id} not found");
+
+            session.Status = status;
+            session.ErrorMessage = errorMessage;
+            session.ProcessedAt = status == ProcessingStatus.Complete ? DateTime.UtcNow : null;
+
+            await _database.UpsertAsync(session);
+            _logger.LogInformation("Updated processing status for movie session {Id} to {Status}", id, status);
+            return session;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update processing status for movie session {Id}", id);
+            throw;
+        }
+    }
 }
