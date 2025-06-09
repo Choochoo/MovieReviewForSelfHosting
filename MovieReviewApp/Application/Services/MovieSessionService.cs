@@ -1158,7 +1158,7 @@ public class MovieSessionService
         
         // Sort sessions by the corresponding MovieEvent.StartDate, then by session creation date
         List<MovieSession> sortedSessions = completedSessions
-            .OrderByDescending(s => movieEventLookup.TryGetValue(s.MovieTitle, out var startDate) ? startDate : s.Date)
+            .OrderByDescending(s => movieEventLookup.TryGetValue(s.MovieTitle, out DateTime startDate) ? startDate : s.Date)
             .ThenByDescending(s => s.CreatedAt)
             .Take(limit)
             .ToList();
