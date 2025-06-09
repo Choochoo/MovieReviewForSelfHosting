@@ -43,8 +43,14 @@ public class GladiaService
         }
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the Gladia service is properly configured with an API key.
+    /// </summary>
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
 
+    /// <summary>
+    /// Logs the current configuration status of the Gladia service for debugging purposes.
+    /// </summary>
     public void LogConfigurationStatus()
     {
         IEnumerable<KeyValuePair<string, string?>> allConfigKeys = _configuration.AsEnumerable().Where(kvp => kvp.Key.Contains("Gladia", StringComparison.OrdinalIgnoreCase));
@@ -188,6 +194,12 @@ public class GladiaService
     /// <summary>
     /// Phase 1: Convert all WAV files to MP3 format
     /// </summary>
+    /// <summary>
+    /// Converts all WAV audio files to MP3 format for optimized uploading to Gladia API.
+    /// </summary>
+    /// <param name="session">The movie session containing audio files to convert.</param>
+    /// <param name="progressCallback">Optional callback to report conversion progress.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains conversion results for each file.</returns>
     public async Task<List<(AudioFile audioFile, bool success, string? error)>> ConvertAllWavsToMp3Async(
         List<AudioFile> audioFiles,
         string sessionFolderPath,
@@ -271,6 +283,12 @@ public class GladiaService
     /// <summary>
     /// Phase 2: Upload all MP3 files to Gladia for transcription
     /// </summary>
+    /// <summary>
+    /// Uploads all MP3 audio files from a session to the Gladia API for transcription processing.
+    /// </summary>
+    /// <param name="session">The movie session containing audio files to upload.</param>
+    /// <param name="progressCallback">Optional callback to report upload progress.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains upload results for each file.</returns>
     public async Task<List<(AudioFile audioFile, bool success, string? error)>> UploadAllMp3sToGladiaAsync(
         List<AudioFile> audioFiles,
         string sessionFolderPath,

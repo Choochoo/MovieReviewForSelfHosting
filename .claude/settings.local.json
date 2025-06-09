@@ -32,7 +32,8 @@
       "Bash(dotnet --version)",
       "Bash(dotnet clean:*)",
       "Bash(curl:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

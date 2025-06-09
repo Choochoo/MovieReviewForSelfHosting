@@ -10,6 +10,8 @@ using MovieReviewApp.Database;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
 using MovieReviewApp.Application.Services;
+using MovieReviewApp.Application.Services.Analysis;
+using MovieReviewApp.Application.Services.Session;
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Infrastructure.Repositories;
@@ -147,10 +149,28 @@ builder.Services.AddScoped<GladiaService>();
 builder.Services.AddScoped<OpenAIService>();
 builder.Services.AddScoped<ClaudeService>();
 builder.Services.AddScoped<PromptService>();
-builder.Services.AddHttpClient<MovieSessionAnalysisService>(client =>
+
+// Register refactored analysis services
+builder.Services.AddScoped<TranscriptProcessingService>();
+builder.Services.AddScoped<PromptGenerationService>();
+builder.Services.AddScoped<ResponseParsingService>();
+builder.Services.AddScoped<SimpleSessionStatsService>();
+builder.Services.AddHttpClient<OpenAIApiService>(client =>
 {
-    client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis of long sessions
+    client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis
 });
+builder.Services.AddScoped<MovieSessionAnalysisOrchestrator>();
+
+// Register refactored session services
+builder.Services.AddScoped<SessionRepositoryService>();
+builder.Services.AddScoped<SessionMetadataService>();
+builder.Services.AddScoped<AudioProcessingWorkflowService>();
+builder.Services.AddScoped<SessionAnalysisService>();
+builder.Services.AddScoped<SessionMaintenanceService>();
+builder.Services.AddScoped<SessionOrchestrationService>();
+
+// Keep the original MovieSessionAnalysisService for backward compatibility
+builder.Services.AddScoped<MovieSessionAnalysisService>();
 builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
