@@ -77,7 +77,7 @@ namespace MovieReviewApp.Core.Services
         {
             try
             {
-                var entity = await GetByIdAsync(id);
+                T? entity = await GetByIdAsync(id);
                 if (entity == null)
                     return false;
 

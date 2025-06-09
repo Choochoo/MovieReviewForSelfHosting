@@ -22,13 +22,13 @@ namespace MovieReviewApp.Application.Services
 
         public async Task InitializeAsync()
         {
-            var setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
             _currentTheme = setting?.Value ?? "dark";
         }
 
         public async Task<string> GetThemeAsync()
         {
-            var setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
             _currentTheme = setting?.Value ?? "dark";
             return _currentTheme;
         }
@@ -42,7 +42,7 @@ namespace MovieReviewApp.Application.Services
 
             _currentTheme = theme;
 
-            var setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
             if (setting == null)
             {
                 setting = new Setting
@@ -65,13 +65,13 @@ namespace MovieReviewApp.Application.Services
 
         public async Task ToggleThemeAsync()
         {
-            var newTheme = _currentTheme == "dark" ? "light" : "dark";
+            string newTheme = _currentTheme == "dark" ? "light" : "dark";
             await SetThemeAsync(newTheme);
         }
 
         public async Task<string> GetGroupThemeAsync()
         {
-            var setting = await _movieReviewService.GetSettingAsync("group_theme");
+            Setting? setting = await _movieReviewService.GetSettingAsync("group_theme");
             return setting?.Value ?? "cyberpunk";
         }
     }

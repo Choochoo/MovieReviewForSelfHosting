@@ -46,7 +46,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var image = new ImageStorage
+                ImageStorage image = new ImageStorage
                 {
                     FileName = fileName,
                     ContentType = contentType,
@@ -73,7 +73,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var image = await GetByIdAsync(id);
+                ImageStorage? image = await GetByIdAsync(id);
                 if (image == null)
                     return false;
 
@@ -92,7 +92,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var images = await _databaseService.GetAllAsync<ImageStorage>();
+                IEnumerable<ImageStorage> images = await _databaseService.GetAllAsync<ImageStorage>();
                 return images
                     .Where(i => i.UploadDate >= startDate && i.UploadDate <= endDate)
                     .OrderByDescending(i => i.UploadDate)
@@ -109,7 +109,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var images = await _databaseService.GetAllAsync<ImageStorage>();
+                IEnumerable<ImageStorage> images = await _databaseService.GetAllAsync<ImageStorage>();
                 return images
                     .Where(i => i.ContentType == contentType)
                     .OrderByDescending(i => i.UploadDate)
@@ -126,7 +126,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var images = await _databaseService.GetAllAsync<ImageStorage>();
+                IEnumerable<ImageStorage> images = await _databaseService.GetAllAsync<ImageStorage>();
                 return images.FirstOrDefault(i => i.Hash == hash);
             }
             catch (Exception ex)

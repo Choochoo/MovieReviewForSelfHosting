@@ -46,7 +46,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var settings = await _databaseService.GetAllAsync<Setting>();
+                IEnumerable<Setting> settings = await _databaseService.GetAllAsync<Setting>();
                 return settings.FirstOrDefault(s => s.Key == key);
             }
             catch (Exception ex)
@@ -93,7 +93,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var setting = await GetByIdAsync(id);
+                Setting? setting = await GetByIdAsync(id);
                 if (setting == null)
                     return false;
 
@@ -112,7 +112,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var setting = await GetByKeyAsync(key);
+                Setting? setting = await GetByKeyAsync(key);
                 return setting?.Value;
             }
             catch (Exception ex)
@@ -126,7 +126,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var setting = await GetByKeyAsync(key);
+                Setting? setting = await GetByKeyAsync(key);
                 if (setting == null)
                 {
                     setting = new Setting

@@ -253,55 +253,118 @@ This is a personal family project, but feel free to fork and adapt for your own 
 - **"Error while copying content to a stream"**: Usually resolved by MP3 conversion (requires FFmpeg)
 - **Conversion failures**: Check FFmpeg installation with `ffmpeg -version` in terminal/command prompt
 
-## Project Structure
+## 🏗️ Project Architecture
 
-The application follows a clean architecture pattern with the following structure:
+The application follows **Clean Architecture** principles with clear separation of concerns:
 
-### Core Layer
-- `Core/Interfaces/` - Contains all service interfaces
-  - `IDatabaseService.cs` - Database operations interface
-  - `IAwardEventService.cs` - Award event operations interface
+### Architecture Overview
 
-### Infrastructure Layer
-- `Infrastructure/Database/` - Database implementations
-  - `MongoDbService.cs` - MongoDB implementation of IDatabaseService
-- `Infrastructure/Services/` - External service implementations
-  - `OpenAIService.cs` - OpenAI integration
-  - `ClaudeService.cs` - Claude AI integration
-  - `GladiaService.cs` - Gladia integration
+```
+Application/
+├── Services/              # Business logic services
+│   ├── AudioClipService.cs      # Audio clip generation
+│   ├── MovieReviewService.cs    # Core movie review logic
+│   ├── MovieSessionService.cs   # Movie session management
+│   └── ThemeService.cs          # Theme management
+│
+Infrastructure/
+├── Configuration/         # Application configuration
+├── Database/             # Data access layer
+│   └── MongoDbService.cs       # MongoDB implementation
+├── FileSystem/           # File operations
+│   └── ImageService.cs         # Image processing
+├── Repositories/         # Data repositories
+│   ├── AwardEventRepository.cs
+│   ├── PersonRepository.cs
+│   └── SoundClipRepository.cs
+└── Services/             # External service integrations
+    ├── GladiaService.cs        # Audio transcription
+    ├── MessengerService.cs     # Facebook integration
+    └── SecureConfigurationProvider.cs
+│
+Core/
+└── Interfaces/           # Domain interfaces
+    └── IDatabaseService.cs     # Database abstraction
+│
+Utilities/                # Helper classes and extensions
+├── DateExtensions.cs           # Date utility methods
+└── EnumHelper.cs              # Enum utilities
+```
 
-### Application Layer
-- `Services/` - Business logic implementations
-  - `AwardEventService.cs` - Award event management
-  - Other business services...
+### Key Architecture Principles
 
-### Providers
-- `Providers/` - Configuration and external service providers
-  - `SecureConfigurationProvider.cs` - Secure configuration management
+- **Clean Architecture**: Organized into distinct layers with clear dependencies
+- **Repository Pattern**: Data access through repositories implementing interfaces
+- **Dependency Injection**: All services use interface abstraction (IDatabaseService)
+- **SOLID Principles**: Especially Dependency Inversion with interface-based design
+- **Instance Isolation**: Complete separation between different group instances
 
-## Service Registration
+### Coding Standards
+
+#### Type Declaration Standards
+- **NEVER use `var` keyword**: All variable declarations must use explicit types
+- **Enforced by .editorconfig**: Build will fail if `var` is used anywhere
+- **Examples**:
+  ```csharp
+  // CORRECT
+  List<MovieSession> sessions = await _database.GetAllAsync<MovieSession>();
+  string fileName = Path.GetFileName(filePath);
+  Dictionary<string, int> counts = new Dictionary<string, int>();
+  
+  // INCORRECT - Build error
+  var sessions = await _database.GetAllAsync<MovieSession>();
+  ```
+
+### Service Registration
 
 Services are registered in Program.cs using dependency injection:
 
 ```csharp
-// Database
+// Database abstraction
 builder.Services.AddSingleton<IDatabaseService, MongoDbService>();
 
-// Business Services
-builder.Services.AddScoped<IAwardEventService, AwardEventService>();
+// Application services
+builder.Services.AddScoped<MovieReviewService>();
+builder.Services.AddScoped<MovieSessionService>();
+builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<AudioClipService>();
+
+// Infrastructure services
+builder.Services.AddScoped<ImageService>();
+builder.Services.AddScoped<GladiaService>();
+builder.Services.AddScoped<MessengerService>();
+
+// Repositories
+builder.Services.AddScoped<AwardEventRepository>();
+builder.Services.AddScoped<PersonRepository>();
+builder.Services.AddScoped<SoundClipRepository>();
 ```
 
-## Development
+## 🔧 Development
 
-1. Ensure MongoDB is running and accessible
-2. Update connection strings in appsettings.json
-3. Run the application using `dotnet run`
+### Prerequisites
+- .NET 8.0
+- MongoDB instance
+- FFmpeg (for audio processing)
 
-## Testing
+### Development Setup
+1. **Clone and build**:
+   ```bash
+   git clone [repo-url]
+   cd MovieReviewApp
+   dotnet build
+   ```
 
-Run tests using:
+2. **Start development instance**:
+   ```bash
+   dotnet run --instance "dev"
+   # Follow setup wizard at http://localhost:5000/setup
+   ```
+
+### Build Commands
 ```bash
-dotnet test
+dotnet build                    # Standard build with validation
+dotnet build -c Release        # Release build for production
 ```
 
 ---

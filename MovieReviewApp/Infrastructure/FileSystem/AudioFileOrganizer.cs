@@ -32,7 +32,7 @@ public class AudioFileOrganizer
             return new List<string>();
         }
 
-        var audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        HashSet<string> audioExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
             ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp"

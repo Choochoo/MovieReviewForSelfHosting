@@ -18,7 +18,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
             _data.Clear();
 
             // Load secrets from SecretsManager
-            var secrets = new[]
+            string[] secrets = new[]
             {
                 "TMDB:ApiKey",
                 "MongoDB:ConnectionString",
@@ -30,7 +30,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
             Console.WriteLine("SecureConfigurationProvider: Loading secrets...");
             foreach (var secret in secrets)
             {
-                var value = _secretsManager.GetSecret(secret);
+                string? value = _secretsManager.GetSecret(secret);
                 if (!string.IsNullOrEmpty(value))
                 {
                     _data[secret] = value;
@@ -63,7 +63,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public IEnumerable<string> GetChildKeys(IEnumerable<string> earlierKeys, string? parentPath)
         {
-            var results = new List<string>();
+            List<string> results = new List<string>();
 
             if (parentPath == null)
             {
@@ -92,7 +92,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         private static string Segment(string key, int prefixLength)
         {
-            var indexOf = key.IndexOf(':', prefixLength);
+            int indexOf = key.IndexOf(':', prefixLength);
             return indexOf < 0 ? key.Substring(prefixLength) : key.Substring(prefixLength, indexOf - prefixLength);
         }
 
@@ -113,7 +113,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public IConfigurationProvider Build(IConfigurationBuilder builder)
         {
-            var provider = new SecureConfigurationProvider(_secretsManager);
+            SecureConfigurationProvider provider = new SecureConfigurationProvider(_secretsManager);
             provider.Load(); // Ensure secrets are loaded
             return provider;
         }

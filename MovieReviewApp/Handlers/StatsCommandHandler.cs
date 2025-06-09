@@ -33,10 +33,10 @@ namespace MovieReviewApp.Handlers
         {
             // Read text files in the folder
             string[] allFilesText = FolderHelper.GetTextFromFiles(Path.Combine(_webRootPath, "uploads", folderName));
-            var text = string.Join(Environment.NewLine, allFilesText);
+            string text = string.Join(Environment.NewLine, allFilesText);
 
             // Split text into words, remove common words, and count word frequency
-            var words = text
+            List<string> words = text
                 .Split(new[] { ' ', '.', ',', ';', ':', '?', '!', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(w => w.ToLower())
                 .Where(w => !_commonWords.Contains(w))  // Exclude common words
@@ -51,13 +51,13 @@ namespace MovieReviewApp.Handlers
 
         private HashSet<string> LoadCommonWords()
         {
-            var commonWordsFilePath = Path.Combine(_webRootPath, "assets", "common_words.txt");
+            string commonWordsFilePath = Path.Combine(_webRootPath, "assets", "common_words.txt");
 
             if (File.Exists(commonWordsFilePath))
             {
                 try
                 {
-                    var commonWords = File.ReadAllLines(commonWordsFilePath)
+                    HashSet<string> commonWords = File.ReadAllLines(commonWordsFilePath)
                                           .Select(word => word.ToLower().Trim())
                                           .Where(word => !string.IsNullOrWhiteSpace(word))
                                           .ToHashSet();

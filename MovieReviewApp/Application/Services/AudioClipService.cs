@@ -18,7 +18,7 @@ public class AudioClipService
     {
         try
         {
-            var duration = endTimeSeconds - startTimeSeconds;
+            double duration = endTimeSeconds - startTimeSeconds;
             if (duration <= 0 || duration > 300) // Max 5 minutes
             {
                 _logger.LogWarning("Invalid clip duration: {Duration} seconds", duration);
@@ -26,11 +26,11 @@ public class AudioClipService
             }
 
             // Create clips directory
-            var clipsDir = Path.Combine(_webHost.WebRootPath, "clips", sessionId);
+            string clipsDir = Path.Combine(_webHost.WebRootPath, "clips", sessionId);
             Directory.CreateDirectory(clipsDir);
 
-            var outputPath = Path.Combine(clipsDir, $"{clipId}.mp3");
-            var tempWavPath = Path.Combine(clipsDir, $"{clipId}_temp.wav");
+            string outputPath = Path.Combine(clipsDir, $"{clipId}.mp3");
+            string tempWavPath = Path.Combine(clipsDir, $"{clipId}_temp.wav");
 
             try
             {
@@ -42,7 +42,7 @@ public class AudioClipService
                 {
                     // For now, just rename the WAV to MP3 extension (browser can play WAV)
                     // In future, could add MP3 encoding here
-                    var finalOutputPath = Path.ChangeExtension(outputPath, ".wav");
+                    string finalOutputPath = Path.ChangeExtension(outputPath, ".wav");
                     File.Move(tempWavPath, finalOutputPath);
 
                     // Return relative URL path
@@ -72,28 +72,28 @@ public class AudioClipService
     {
         await Task.Run(() =>
         {
-            using var reader = new AudioFileReader(inputPath);
+            using AudioFileReader reader = new AudioFileReader(inputPath);
 
-            var startPosition = (long)(startSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
-            var endPosition = (long)(endSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
+            long startPosition = (long)(startSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
+            long endPosition = (long)(endSeconds * reader.WaveFormat.SampleRate * reader.WaveFormat.Channels * (reader.WaveFormat.BitsPerSample / 8));
 
             // Ensure positions are within bounds
             startPosition = Math.Max(0, Math.Min(startPosition, reader.Length));
             endPosition = Math.Max(startPosition, Math.Min(endPosition, reader.Length));
 
-            var length = endPosition - startPosition;
+            long length = endPosition - startPosition;
 
             reader.Position = startPosition;
 
-            using var writer = new WaveFileWriter(outputPath, reader.WaveFormat);
+            using WaveFileWriter writer = new WaveFileWriter(outputPath, reader.WaveFormat);
 
-            var buffer = new byte[reader.WaveFormat.AverageBytesPerSecond]; // 1 second buffer
+            byte[] buffer = new byte[reader.WaveFormat.AverageBytesPerSecond]; // 1 second buffer
             long totalBytesRead = 0;
 
             while (totalBytesRead < length)
             {
-                var bytesToRead = (int)Math.Min(buffer.Length, length - totalBytesRead);
-                var bytesRead = reader.Read(buffer, 0, bytesToRead);
+                int bytesToRead = (int)Math.Min(buffer.Length, length - totalBytesRead);
+                int bytesRead = reader.Read(buffer, 0, bytesToRead);
 
                 if (bytesRead == 0) break;
 
@@ -105,21 +105,21 @@ public class AudioClipService
 
     public async Task<List<string>> GenerateClipsForTopFiveAsync(MovieSession session, TopFiveList topFive)
     {
-        var clipUrls = new List<string>();
+        List<string> clipUrls = new List<string>();
 
         for (int i = 0; i < topFive.Entries.Count; i++)
         {
-            var entry = topFive.Entries[i];
+            TopFiveEntry entry = topFive.Entries[i];
 
             // Find the source audio file
-            var sourceFile = session.AudioFiles.FirstOrDefault(f => f.FileName == entry.SourceAudioFile);
+            AudioFile? sourceFile = session.AudioFiles.FirstOrDefault(f => f.FileName == entry.SourceAudioFile);
             if (sourceFile == null)
             {
                 _logger.LogWarning("Source audio file not found: {FileName}", entry.SourceAudioFile);
                 continue;
             }
 
-            var clipId = $"rank{entry.Rank}_{Guid.NewGuid():N}";
+            string clipId = $"rank{entry.Rank}_{Guid.NewGuid():N}";
 
             // Only generate clip if both start and end times are present
             if (entry.StartTimeSeconds.HasValue && entry.EndTimeSeconds.HasValue)
@@ -128,7 +128,7 @@ public class AudioClipService
                 double startTime = Math.Max(0, entry.StartTimeSeconds.Value - 2);
                 double endTime = entry.EndTimeSeconds.Value + 3;
 
-                var clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id.ToString(), clipId);
+                string? clipUrl = await GenerateAudioClipAsync(sourceFile.FilePath, startTime, endTime, session.Id.ToString(), clipId);
 
                 if (!string.IsNullOrEmpty(clipUrl))
                 {
@@ -150,7 +150,7 @@ public class AudioClipService
         try
         {
             // Handle formats like "1:23", "12:34", "1:23:45"
-            var parts = timestamp.Split(':');
+            string[] parts = timestamp.Split(':');
 
             return parts.Length switch
             {
@@ -169,7 +169,7 @@ public class AudioClipService
     {
         try
         {
-            var clipsDir = Path.Combine(_webHost.WebRootPath, "clips");
+            string clipsDir = Path.Combine(_webHost.WebRootPath, "clips");
             if (!Directory.Exists(clipsDir)) return;
 
             var cutoffDate = DateTime.UtcNow.AddDays(-daysOld);

@@ -37,7 +37,7 @@ public class PromptService
 
         try
         {
-            var formattedPrompt = string.Format(promptTemplate, parameters);
+            string formattedPrompt = string.Format(promptTemplate, parameters);
             return await ExecutePromptAsync(formattedPrompt);
         }
         catch (FormatException ex)
@@ -60,7 +60,7 @@ public class PromptService
             try
             {
                 _logger.LogInformation("Executing prompt using OpenAI (primary)");
-                var result = await _openAIService.ExecutePromptAsync(prompt);
+                string? result = await _openAIService.ExecutePromptAsync(prompt);
                 if (!string.IsNullOrEmpty(result))
                 {
                     _logger.LogInformation("Successfully executed prompt using OpenAI");
@@ -80,7 +80,7 @@ public class PromptService
             try
             {
                 _logger.LogInformation("Executing prompt using Claude (secondary)");
-                var result = await _claudeService.ExecutePromptAsync(prompt);
+                string? result = await _claudeService.ExecutePromptAsync(prompt);
                 if (!string.IsNullOrEmpty(result))
                 {
                     _logger.LogInformation("Successfully executed prompt using Claude");

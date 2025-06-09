@@ -14,11 +14,11 @@ namespace MovieReviewApp.Utilities
     {
         public static CommandLineArgs Parse(string[] args)
         {
-            var result = new CommandLineArgs();
+            CommandLineArgs result = new CommandLineArgs();
 
             for (int i = 0; i < args.Length; i++)
             {
-                var arg = args[i].ToLower();
+                string arg = args[i].ToLower();
 
                 switch (arg)
                 {
@@ -33,7 +33,7 @@ namespace MovieReviewApp.Utilities
 
                     case "--port":
                     case "-p":
-                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out var port))
+                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out int port))
                         {
                             result.Port = port;
                             i++; // Skip next argument since we consumed it
@@ -81,8 +81,8 @@ namespace MovieReviewApp.Utilities
 
         public static void ListInstances()
         {
-            var instanceManager = new InstanceManager();
-            var instances = instanceManager.GetAllInstances();
+            InstanceManager instanceManager = new InstanceManager();
+            List<string> instances = instanceManager.GetAllInstances();
 
             Console.WriteLine("Existing Movie Review App Instances:");
             Console.WriteLine();
@@ -98,8 +98,8 @@ namespace MovieReviewApp.Utilities
             {
                 try
                 {
-                    var tempInstanceManager = new InstanceManager(instanceName);
-                    var config = tempInstanceManager.GetInstanceConfig();
+                    InstanceManager tempInstanceManager = new InstanceManager(instanceName);
+                    dynamic config = tempInstanceManager.GetInstanceConfig();
                     
                     Console.WriteLine($"  📁 {instanceName}");
                     Console.WriteLine($"     Display Name: {config.DisplayName}");
@@ -126,8 +126,8 @@ namespace MovieReviewApp.Utilities
 
         public static string? SelectInstanceInteractively()
         {
-            var instanceManager = new InstanceManager();
-            var instances = instanceManager.GetAllInstances();
+            InstanceManager instanceManager = new InstanceManager();
+            List<string> instances = instanceManager.GetAllInstances();
 
             Console.WriteLine("🎬 Movie Review App - Instance Selector");
             Console.WriteLine();
@@ -138,7 +138,7 @@ namespace MovieReviewApp.Utilities
                 Console.WriteLine("Creating a new instance...");
                 Console.WriteLine();
                 Console.Write("Enter instance name (or press Enter for 'Default'): ");
-                var input = Console.ReadLine();
+                string? input = Console.ReadLine();
                 return string.IsNullOrWhiteSpace(input) ? "Default" : InstanceManager.SanitizeInstanceName(input.Trim());
             }
 
@@ -147,8 +147,8 @@ namespace MovieReviewApp.Utilities
             {
                 try
                 {
-                    var tempInstanceManager = new InstanceManager(instances[i]);
-                    var config = tempInstanceManager.GetInstanceConfig();
+                    InstanceManager tempInstanceManager = new InstanceManager(instances[i]);
+                    dynamic config = tempInstanceManager.GetInstanceConfig();
                     Console.WriteLine($"  {i + 1}. {instances[i]} - {config.DisplayName} ({config.Environment})");
                 }
                 catch
@@ -161,8 +161,8 @@ namespace MovieReviewApp.Utilities
             Console.WriteLine();
             Console.Write($"Select instance (1-{instances.Count + 1}): ");
 
-            var selection = Console.ReadLine();
-            if (int.TryParse(selection, out var index))
+            string? selection = Console.ReadLine();
+            if (int.TryParse(selection, out int index))
             {
                 if (index >= 1 && index <= instances.Count)
                 {
@@ -171,7 +171,7 @@ namespace MovieReviewApp.Utilities
                 else if (index == instances.Count + 1)
                 {
                     Console.Write("Enter new instance name: ");
-                    var newName = Console.ReadLine();
+                    string? newName = Console.ReadLine();
                     return string.IsNullOrWhiteSpace(newName) ? "Default" : InstanceManager.SanitizeInstanceName(newName.Trim());
                 }
             }

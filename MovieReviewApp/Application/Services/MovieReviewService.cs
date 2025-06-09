@@ -45,7 +45,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<MovieEvent>> GetPhaseEventsAsync(int phaseNumber)
         {
-            var events = await _db.FindAsync<MovieEvent>(x => x.PhaseNumber == phaseNumber);
+            List<MovieEvent> events = await _db.FindAsync<MovieEvent>(x => x.PhaseNumber == phaseNumber);
             
             // Ensure IsEditing is always false when loading from database
             foreach (var movieEvent in events)
@@ -63,7 +63,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<MovieEvent?> GetMovieEventByIdAsync(Guid id)
         {
-            var movieEvent = await _db.GetByIdAsync<MovieEvent>(id);
+            MovieEvent? movieEvent = await _db.GetByIdAsync<MovieEvent>(id);
             if (movieEvent != null)
             {
                 movieEvent.IsEditing = false;
@@ -100,7 +100,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<Person>> GetAllPeopleAsync(bool respectOrder)
         {
-            var people = await _db.GetAllAsync<Person>();
+            List<Person> people = await _db.GetAllAsync<Person>();
             return respectOrder
                 ? people.OrderBy(p => p.Order).ToList()
                 : people.ToList();
@@ -123,10 +123,10 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<bool> DeletePersonAsync(string name)
         {
-            var people = await _db.FindAsync<Person>(p => p.Name == name);
+            List<Person> people = await _db.FindAsync<Person>(p => p.Name == name);
             if (people.Any())
             {
-                var person = people.First();
+                Person person = people.First();
                 return await _db.DeleteByIdAsync<Person>(person.Id);
             }
             return false;
@@ -149,7 +149,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task UpdatePersonAsync(string oldName, Person updatedPerson)
         {
-            var existing = await _db.FindOneAsync<Person>(p => p.Name == oldName);
+            Person? existing = await _db.FindOneAsync<Person>(p => p.Name == oldName);
             if (existing != null)
             {
                 updatedPerson.Id = existing.Id; // Keep the same ID
@@ -181,7 +181,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task AddOrUpdateSettingAsync(Setting setting)
         {
-            var existing = await _db.FindOneAsync<Setting>(s => s.Key == setting.Key);
+            Setting? existing = await _db.FindOneAsync<Setting>(s => s.Key == setting.Key);
             if (existing != null)
             {
                 setting.Id = existing.Id; // Keep the same ID
@@ -189,10 +189,10 @@ namespace MovieReviewApp.Application.Services
             await _db.UpsertAsync(setting);
 
             // Remove duplicates if any exist
-            var duplicates = await _db.FindAsync<Setting>(s => s.Key == setting.Key);
+            List<Setting> duplicates = await _db.FindAsync<Setting>(s => s.Key == setting.Key);
             if (duplicates.Count > 1)
             {
-                var toDelete = duplicates.Skip(1);
+                IEnumerable<Setting> toDelete = duplicates.Skip(1);
                 foreach (var duplicate in toDelete)
                 {
                     await _db.DeleteByIdAsync<Setting>(duplicate.Id);
@@ -209,7 +209,7 @@ namespace MovieReviewApp.Application.Services
         #region Phases
         public async Task<List<Phase>> GetPhasesAsync()
         {
-            var phases = await _db.GetAllAsync<Phase>();
+            List<Phase> phases = await _db.GetAllAsync<Phase>();
             return phases.OrderBy(p => p.Number).ToList();
         }
 
@@ -247,7 +247,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<SiteUpdate>> GetRecentSiteUpdatesAsync(int count = 10)
         {
-            var updates = await _db.GetAllAsync<SiteUpdate>();
+            List<SiteUpdate> updates = await _db.GetAllAsync<SiteUpdate>();
             return updates.OrderByDescending(u => u.Timestamp).Take(count).ToList();
         }
 
@@ -280,7 +280,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task AddOrUpdateAwardQuestionAsync(AwardQuestion question)
         {
-            var existing = await _db.FindOneAsync<AwardQuestion>(q => q.Id == question.Id);
+            AwardQuestion? existing = await _db.FindOneAsync<AwardQuestion>(q => q.Id == question.Id);
             if (existing != null)
             {
                 question.Id = existing.Id; // Keep the same ID
@@ -347,11 +347,11 @@ namespace MovieReviewApp.Application.Services
         {
             if (phaseNumber.HasValue)
             {
-                var events = await _db.FindAsync<AwardEvent>(ae => ae.PhaseNumber == phaseNumber.Value);
+                List<AwardEvent> events = await _db.FindAsync<AwardEvent>(ae => ae.PhaseNumber == phaseNumber.Value);
                 return events.OrderByDescending(ae => ae.CreatedDate).ToList();
             }
 
-            var allEvents = await _db.GetAllAsync<AwardEvent>();
+            List<AwardEvent> allEvents = await _db.GetAllAsync<AwardEvent>();
             return allEvents.OrderByDescending(ae => ae.CreatedDate).ToList();
         }
 
@@ -362,17 +362,17 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<AwardEvent?> GetCurrentOrUpcomingAwardEventAsync()
         {
-            var now = DateTime.UtcNow;
+            DateTime now = DateTime.UtcNow;
 
             // First try to find a currently active event
-            var activeEvent = await _db.FindOneAsync<AwardEvent>(ae =>
+            AwardEvent? activeEvent = await _db.FindOneAsync<AwardEvent>(ae =>
                 ae.VotingStartDate <= now && ae.VotingEndDate >= now);
 
             if (activeEvent != null)
                 return activeEvent;
 
             // If no active event, find the next upcoming one
-            var upcomingEvents = await _db.FindAsync<AwardEvent>(ae => ae.VotingStartDate > now);
+            List<AwardEvent> upcomingEvents = await _db.FindAsync<AwardEvent>(ae => ae.VotingStartDate > now);
             return upcomingEvents.OrderBy(ae => ae.VotingStartDate).FirstOrDefault();
         }
 
@@ -383,13 +383,13 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<bool> ShouldCreateAwardEventAsync()
         {
-            var phases = await GetPhasesAsync();
-            var latestPhase = phases.OrderByDescending(p => p.Number).FirstOrDefault();
+            List<Phase> phases = await GetPhasesAsync();
+            Phase? latestPhase = phases.OrderByDescending(p => p.Number).FirstOrDefault();
 
             if (latestPhase == null)
                 return false;
 
-            var existingEvent = await _db.FindOneAsync<AwardEvent>(ae => ae.PhaseNumber == latestPhase.Number);
+            AwardEvent? existingEvent = await _db.FindOneAsync<AwardEvent>(ae => ae.PhaseNumber == latestPhase.Number);
             return existingEvent == null;
         }
 
@@ -417,7 +417,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<bool> SubmitVoteAsync(AwardVote vote)
         {
-            var existingVote = await _db.FindOneAsync<AwardVote>(v =>
+            AwardVote? existingVote = await _db.FindOneAsync<AwardVote>(v =>
                 v.AwardEventId == vote.AwardEventId &&
                 v.QuestionId == vote.QuestionId &&
                 v.VoterName == vote.VoterName &&
@@ -428,7 +428,7 @@ namespace MovieReviewApp.Application.Services
                 return false; // Vote already exists
             }
 
-            var userVoteCount = await _db.CountAsync<AwardVote>(v =>
+            long userVoteCount = await _db.CountAsync<AwardVote>(v =>
                 v.AwardEventId == vote.AwardEventId &&
                 v.QuestionId == vote.QuestionId &&
                 v.VoterName == vote.VoterName);
@@ -449,7 +449,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<bool> DeleteVoteAsync(Guid awardEventId, Guid questionId, string voterName, Guid movieEventId)
         {
-            var vote = await _db.FindOneAsync<AwardVote>(v =>
+            AwardVote? vote = await _db.FindOneAsync<AwardVote>(v =>
                 v.AwardEventId == awardEventId &&
                 v.QuestionId == questionId &&
                 v.VoterName == voterName &&
@@ -470,7 +470,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<long> DeleteAllVotesForEventAsync(Guid awardEventId)
         {
-            var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId);
+            List<AwardVote> votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId);
             long deletedCount = 0;
 
             foreach (var vote in votes)
@@ -491,7 +491,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<Dictionary<Guid, int>> GetVoteCountsAsync(Guid awardEventId, Guid questionId)
         {
-            var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
+            List<AwardVote> votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
             return votes.GroupBy(v => v.MovieEventId)
                        .ToDictionary(g => g.Key, g => g.Count());
         }
@@ -505,7 +505,7 @@ namespace MovieReviewApp.Application.Services
         #region Additional Award Methods
         public async Task<AwardSetting> GetAwardSettingsAsync()
         {
-            var setting = await GetSettingAsync("AwardSettings");
+            Setting? setting = await GetSettingAsync("AwardSettings");
             if (setting?.Value != null)
             {
                 return System.Text.Json.JsonSerializer.Deserialize<AwardSetting>(setting.Value) ?? new AwardSetting();
@@ -520,7 +520,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<AwardEvent?> GetAwardEventForDateAsync(DateTime date)
         {
-            var awardEvents = await _db.FindAsync<AwardEvent>(e => e.StartDate <= date && e.EndDate >= date);
+            List<AwardEvent> awardEvents = await _db.FindAsync<AwardEvent>(e => e.StartDate <= date && e.EndDate >= date);
             return awardEvents.FirstOrDefault();
         }
 
@@ -542,7 +542,7 @@ namespace MovieReviewApp.Application.Services
         public async Task<AwardEvent?> GetAwardEventByFilterAsync(FilterDefinition<AwardEvent> filter)
         {
             // Get all award events and filter in memory since MongoDbService doesn't have a direct FilterDefinition method
-            var allEvents = await _db.GetAllAsync<AwardEvent>();
+            List<AwardEvent> allEvents = await _db.GetAllAsync<AwardEvent>();
             // For now, just return the first event that matches basic criteria
             // This is a simplified implementation - in a real scenario, you'd want to implement proper FilterDefinition support
             return allEvents.FirstOrDefault();
@@ -555,16 +555,16 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<QuestionResult>> GetQuestionResultsAsync(Guid awardEventId, Guid questionId)
         {
-            var votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
-            var events = await GetAllMovieEventsAsync();
+            List<AwardVote> votes = await _db.FindAsync<AwardVote>(v => v.AwardEventId == awardEventId && v.QuestionId == questionId);
+            List<MovieEvent> events = await GetAllMovieEventsAsync();
 
-            var results = votes
+            List<QuestionResult> results = votes
                 .GroupBy(v => v.MovieEventId)
                 .Select(g =>
                 {
-                    var movieEvent = events.FirstOrDefault(e => e.Id == g.Key);
-                    var movieTitle = movieEvent?.Movie ?? "Unknown Movie";
-                    var voteCounts = g.GroupBy(v => v.Points).ToDictionary(pg => pg.Key, pg => pg.Count());
+                    MovieEvent? movieEvent = events.FirstOrDefault(e => e.Id == g.Key);
+                    string movieTitle = movieEvent?.Movie ?? "Unknown Movie";
+                    Dictionary<int, int> voteCounts = g.GroupBy(v => v.Points).ToDictionary(pg => pg.Key, pg => pg.Count());
 
                     return new QuestionResult
                     {
@@ -598,7 +598,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<Phase>> GetAllPhasesAsync()
         {
-            var phases = await _db.GetAllAsync<Phase>();
+            List<Phase> phases = await _db.GetAllAsync<Phase>();
             return phases.OrderBy(p => p.Number).ToList();
         }
 
@@ -620,7 +620,7 @@ namespace MovieReviewApp.Application.Services
         public async Task DeleteDefaultQuestionsAsync()
         {
             // This method would delete default questions
-            var defaultQuestions = await _db.FindAsync<AwardQuestion>(q => q.Question.Contains("Default"));
+            List<AwardQuestion> defaultQuestions = await _db.FindAsync<AwardQuestion>(q => q.Question.Contains("Default"));
             foreach (var question in defaultQuestions)
             {
                 await _db.DeleteByIdAsync<AwardQuestion>(question.Id);
@@ -676,7 +676,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<string>> GetAvailableVotersAsync(Guid awardEventId)
         {
-            var people = await GetAllPeopleAsync();
+            List<Person> people = await GetAllPeopleAsync();
             return people.Select(p => p.Name ?? "").Where(n => !string.IsNullOrEmpty(n)).ToList();
         }
 
@@ -687,14 +687,14 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<Dictionary<Guid, int>> GetRemainingVotesForUserAsync(string userName, Guid awardEventId)
         {
-            var votes = await GetVotesAsync(awardEventId);
-            var userVotes = votes.Where(v => v.VoterName == userName);
-            var questions = await GetActiveAwardQuestionsAsync();
+            List<AwardVote> votes = await GetVotesAsync(awardEventId);
+            IEnumerable<AwardVote> userVotes = votes.Where(v => v.VoterName == userName);
+            List<AwardQuestion> questions = await GetActiveAwardQuestionsAsync();
 
-            var result = new Dictionary<Guid, int>();
+            Dictionary<Guid, int> result = new Dictionary<Guid, int>();
             foreach (var question in questions)
             {
-                var voteCount = userVotes.Count(v => v.QuestionId == question.Id);
+                int voteCount = userVotes.Count(v => v.QuestionId == question.Id);
                 result[question.Id] = Math.Max(0, question.MaxVotes - voteCount);
             }
             return result;
@@ -707,8 +707,8 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<(AwardQuestion Question, int RemainingVotes)>> GetAvailableQuestionsForUserAsync(string userName, Guid awardEventId)
         {
-            var questions = await GetActiveAwardQuestionsAsync();
-            var remainingVotes = await GetRemainingVotesForUserAsync(userName, awardEventId);
+            List<AwardQuestion> questions = await GetActiveAwardQuestionsAsync();
+            Dictionary<Guid, int> remainingVotes = await GetRemainingVotesForUserAsync(userName, awardEventId);
 
             return questions
                 .Where(q => remainingVotes.GetValueOrDefault(q.Id, 0) > 0)
@@ -723,7 +723,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<List<AwardEvent>> GetPastAwardEventsAsync(Guid currentEventId)
         {
-            var allEvents = await _db.GetAllAsync<AwardEvent>();
+            List<AwardEvent> allEvents = await _db.GetAllAsync<AwardEvent>();
             return allEvents.Where(e => e.Id != currentEventId && e.EndDate < DateTime.UtcNow).ToList();
         }
 

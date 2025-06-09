@@ -33,12 +33,12 @@ namespace MovieReviewApp.Database
 
                 if (!string.IsNullOrEmpty(mongoConnection))
                 {
-                    var connectionBuilder = new MongoUrlBuilder(mongoConnection);
-                    var instanceDbName = $"{connectionBuilder.DatabaseName ?? "moviereview"}_{instanceManager.InstanceName.ToLower().Replace("-", "_")}";
+                    MongoUrlBuilder connectionBuilder = new MongoUrlBuilder(mongoConnection);
+                    string instanceDbName = $"{connectionBuilder.DatabaseName ?? "moviereview"}_{instanceManager.InstanceName.ToLower().Replace("-", "_")}";
                     connectionBuilder.DatabaseName = instanceDbName;
 
-                    var finalConnectionString = connectionBuilder.ToMongoUrl().ToString();
-                    var client = new MongoClient(finalConnectionString);
+                    string finalConnectionString = connectionBuilder.ToMongoUrl().ToString();
+                    MongoClient client = new MongoClient(finalConnectionString);
                     _database = client.GetDatabase(instanceDbName);
 
                     _logger.LogInformation("MongoDB connected successfully to instance database: {DatabaseName}", instanceDbName);
@@ -63,19 +63,19 @@ namespace MovieReviewApp.Database
         /// </summary>
         private string GetCollectionName<T>()
         {
-            var type = typeof(T);
+            Type type = typeof(T);
 
             return _collectionNameCache.GetOrAdd(type, t =>
             {
                 // Check for MongoCollection attribute
-                var attribute = t.GetCustomAttribute<MongoCollectionAttribute>();
+                MongoCollectionAttribute? attribute = t.GetCustomAttribute<MongoCollectionAttribute>();
                 if (attribute != null)
                 {
                     return attribute.CollectionName;
                 }
 
                 // Use convention: ClassName -> ClassNames (with proper pluralization)
-                var name = t.Name;
+                string name = t.Name;
 
                 // Handle special cases for English pluralization
                 if (name.EndsWith("y") && !name.EndsWith("ay") && !name.EndsWith("ey") && !name.EndsWith("oy") && !name.EndsWith("uy"))
@@ -104,7 +104,7 @@ namespace MovieReviewApp.Database
         {
             if (_database == null) return null;
 
-            var collectionName = GetCollectionName<T>();
+            string collectionName = GetCollectionName<T>();
             return _database.GetCollection<T>(collectionName);
         }
 
@@ -115,7 +115,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<List<T>> GetAllAsync<T>() where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return new List<T>();
 
             return await collection.Find(_ => true).ToListAsync();
@@ -134,7 +134,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<T?> GetByIdAsync<T>(object id) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return default;
 
             FilterDefinition<T> filter;
@@ -147,11 +147,11 @@ namespace MovieReviewApp.Database
             else if (id is string stringId)
             {
                 // For string IDs that contain GUIDs, try both the string and parsed GUID
-                if (Guid.TryParse(stringId, out var parsedGuid))
+                if (Guid.TryParse(stringId, out Guid parsedGuid))
                 {
                     // Try both formats - string and GUID - since MongoDB might store either
-                    var stringFilter = Builders<T>.Filter.Eq("_id", stringId);
-                    var guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
+                    FilterDefinition<T> stringFilter = Builders<T>.Filter.Eq("_id", stringId);
+                    FilterDefinition<T> guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
                     filter = Builders<T>.Filter.Or(stringFilter, guidFilter);
                 }
                 else
@@ -172,7 +172,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<List<T>> FindAsync<T>(Expression<Func<T, bool>> filter) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return new List<T>();
 
             return await collection.Find(filter).ToListAsync();
@@ -183,7 +183,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<T?> FindOneAsync<T>(Expression<Func<T, bool>> filter) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return default;
 
             return await collection.Find(filter).FirstOrDefaultAsync();
@@ -202,7 +202,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<T> InsertAsync<T>(T document) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
@@ -215,7 +215,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task InsertManyAsync<T>(IEnumerable<T> documents)
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
@@ -235,16 +235,16 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<T> UpsertAsync<T>(T document) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
             // Get ID value using reflection
-            var idProperty = typeof(T).GetProperty("Id") ?? typeof(T).GetProperty("_id");
+            PropertyInfo? idProperty = typeof(T).GetProperty("Id") ?? typeof(T).GetProperty("_id");
             if (idProperty == null)
                 throw new InvalidOperationException($"Type {typeof(T).Name} must have an Id or _id property");
 
-            var idValue = idProperty.GetValue(document);
+            object? idValue = idProperty.GetValue(document);
             if (idValue == null)
             {
                 // If no ID, just insert
@@ -264,7 +264,7 @@ namespace MovieReviewApp.Database
                 filter = Builders<T>.Filter.Eq("_id", idValue);
             }
             
-            var options = new ReplaceOptions { IsUpsert = true };
+            ReplaceOptions options = new ReplaceOptions { IsUpsert = true };
             await collection.ReplaceOneAsync(filter, document, options);
 
             return document;
@@ -277,10 +277,10 @@ namespace MovieReviewApp.Database
             Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return false;
 
-            var result = await collection.UpdateOneAsync(filter, update);
+            UpdateResult result = await collection.UpdateOneAsync(filter, update);
             return result.ModifiedCount > 0;
         }
 
@@ -291,10 +291,10 @@ namespace MovieReviewApp.Database
             Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return 0;
 
-            var result = await collection.UpdateManyAsync(filter, update);
+            UpdateResult result = await collection.UpdateManyAsync(filter, update);
             return result.ModifiedCount;
         }
 
@@ -303,11 +303,11 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<bool> DeleteByIdAsync<T>(Guid id) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return false;
 
-            var filter = Builders<T>.Filter.Eq("_id", id);
-            var result = await collection.DeleteOneAsync(filter);
+            FilterDefinition<T> filter = Builders<T>.Filter.Eq("_id", id);
+            DeleteResult result = await collection.DeleteOneAsync(filter);
             return result.DeletedCount > 0;
         }
 
@@ -332,7 +332,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<bool> DeleteAsync<T>(string id) where T : class
         {
-            if (!Guid.TryParse(id, out var guidId))
+            if (!Guid.TryParse(id, out Guid guidId))
             {
                 return false;
             }
@@ -344,10 +344,10 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<long> DeleteManyAsync<T>(Expression<Func<T, bool>> filter)
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return 0;
 
-            var result = await collection.DeleteManyAsync(filter);
+            DeleteResult result = await collection.DeleteManyAsync(filter);
             return result.DeletedCount;
         }
 
@@ -356,7 +356,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<long> CountAsync<T>(Expression<Func<T, bool>>? filter = null) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return 0;
 
             if (filter == null)
@@ -372,7 +372,7 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<bool> AnyAsync<T>(Expression<Func<T, bool>>? filter = null) where T : class
         {
-            var count = await CountAsync(filter);
+            long count = await CountAsync(filter);
             return count > 0;
         }
 
@@ -381,19 +381,19 @@ namespace MovieReviewApp.Database
         /// </summary>
         public async Task<List<T>> SearchTextAsync<T>(string searchTerm, params Expression<Func<T, object>>[] searchFields) where T : class
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return new List<T>();
 
-            var filters = new List<FilterDefinition<T>>();
+            List<FilterDefinition<T>> filters = new List<FilterDefinition<T>>();
 
             foreach (var field in searchFields)
             {
-                var fieldName = GetFieldName(field);
-                var filter = Builders<T>.Filter.Regex(fieldName, new BsonRegularExpression(searchTerm, "i"));
+                string fieldName = GetFieldName(field);
+                FilterDefinition<T> filter = Builders<T>.Filter.Regex(fieldName, new BsonRegularExpression(searchTerm, "i"));
                 filters.Add(filter);
             }
 
-            var combinedFilter = filters.Any()
+            FilterDefinition<T> combinedFilter = filters.Any()
                 ? Builders<T>.Filter.Or(filters)
                 : Builders<T>.Filter.Empty;
 
@@ -410,14 +410,14 @@ namespace MovieReviewApp.Database
             Expression<Func<T, object>>? orderBy = null,
             bool descending = false)
         {
-            var collection = GetCollection<T>();
+            IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return (new List<T>(), 0);
 
-            var query = filter == null
+            IFindFluent<T, T> query = filter == null
                 ? collection.Find(_ => true)
                 : collection.Find(filter);
 
-            var totalCount = await query.CountDocumentsAsync();
+            long totalCount = await query.CountDocumentsAsync();
 
             if (orderBy != null)
             {
@@ -426,7 +426,7 @@ namespace MovieReviewApp.Database
                     : query.SortBy(orderBy);
             }
 
-            var items = await query
+            List<T> items = await query
                 .Skip((page - 1) * pageSize)
                 .Limit(pageSize)
                 .ToListAsync();

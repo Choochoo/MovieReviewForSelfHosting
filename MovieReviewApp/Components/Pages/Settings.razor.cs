@@ -80,23 +80,23 @@ namespace MovieReviewApp.Components.Pages
 
 
             // Parse settings with defaults
-            var respectOrderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
-            RespectOrder = respectOrderSetting != null && bool.TryParse(respectOrderSetting.Value, out var respectOrderValue) ? respectOrderValue : false;
+            Setting? respectOrderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
+            RespectOrder = respectOrderSetting != null && bool.TryParse(respectOrderSetting.Value, out bool respectOrderValue) ? respectOrderValue : false;
 
-            var startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
-            if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out var parsedDate))
+            Setting? startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
+            if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out DateTime parsedDate))
                 StartDate = parsedDate;
 
-            var timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
-            if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out var parsedCount))
+            Setting? timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
+            if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out int parsedCount))
                 TimeCount = parsedCount;
 
-            var timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
+            Setting? timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
             if (timePeriodSetting != null)
                 TimePeriod = timePeriodSetting.Value;
 
             // Load group name
-            var instanceConfig = instanceManager.GetInstanceConfig();
+            dynamic? instanceConfig = instanceManager.GetInstanceConfig();
             GroupName = instanceConfig?.DisplayName ?? "";
 
             // Load people and questions
@@ -112,7 +112,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (string.IsNullOrWhiteSpace(NewPerson)) return;
 
-            var newPersonOrder = People.Count + 1;
+            int newPersonOrder = People.Count + 1;
             await movieReviewService.AddPersonAsync(new Person { Name = NewPerson, Order = newPersonOrder });
             NewPerson = "";
             People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
@@ -153,7 +153,7 @@ namespace MovieReviewApp.Components.Pages
         private async Task SaveGeneralSettings()
         {
             // Save Group Name
-            var instanceConfig = instanceManager.GetInstanceConfig();
+            dynamic instanceConfig = instanceManager.GetInstanceConfig();
             instanceConfig.DisplayName = GroupName;
             instanceManager.SaveInstanceConfig(instanceConfig);
 
@@ -173,7 +173,7 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task SaveOrCreateSetting(string key, string value)
         {
-            var setting = settings.FirstOrDefault(x => x.Key == key);
+            Setting? setting = settings.FirstOrDefault(x => x.Key == key);
             if (setting == null)
             {
                 setting = new Setting 
@@ -197,7 +197,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (person.Order <= 1) return;
 
-            var personAbove = People.FirstOrDefault(p => p.Order == person.Order - 1);
+            Person? personAbove = People.FirstOrDefault(p => p.Order == person.Order - 1);
             if (personAbove != null)
             {
                 personAbove.Order = person.Order;
@@ -213,7 +213,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (person.Order >= People.Count) return;
 
-            var personBelow = People.FirstOrDefault(p => p.Order == person.Order + 1);
+            Person? personBelow = People.FirstOrDefault(p => p.Order == person.Order + 1);
             if (personBelow != null)
             {
                 personBelow.Order = person.Order;
@@ -230,7 +230,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (string.IsNullOrWhiteSpace(NewQuestionText)) return;
 
-            var newQuestionOrder = DiscussionQuestions.Count + 1;
+            int newQuestionOrder = DiscussionQuestions.Count + 1;
             await discussionQuestionsService.CreateQuestionAsync(NewQuestionText, newQuestionOrder, NewQuestionIsActive);
             NewQuestionText = "";
             NewQuestionIsActive = true;
@@ -274,7 +274,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (question.Order <= 1) return;
 
-            var questionAbove = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order - 1);
+            DiscussionQuestion? questionAbove = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order - 1);
             if (questionAbove != null)
             {
                 questionAbove.Order = question.Order;
@@ -290,7 +290,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (question.Order >= DiscussionQuestions.Count) return;
 
-            var questionBelow = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order + 1);
+            DiscussionQuestion? questionBelow = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order + 1);
             if (questionBelow != null)
             {
                 questionBelow.Order = question.Order;
@@ -332,7 +332,7 @@ namespace MovieReviewApp.Components.Pages
                     return;
                 }
 
-                var secretKey = provider switch
+                string secretKey = provider switch
                 {
                     "OpenAI" => "OpenAI:ApiKey",
                     "Claude" => "Claude:ApiKey", 

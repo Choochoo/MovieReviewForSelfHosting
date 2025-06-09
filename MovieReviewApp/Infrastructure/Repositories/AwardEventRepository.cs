@@ -21,7 +21,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await GetAllAsync();
+                List<AwardEvent> events = await GetAllAsync();
                 return events
                     .Where(e => e.StartDate >= startDate && e.EndDate <= endDate)
                     .OrderByDescending(e => e.StartDate)
@@ -38,7 +38,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await GetAllAsync();
+                List<AwardEvent> events = await GetAllAsync();
                 return events
                     .Where(e => e.StartDate <= DateTime.UtcNow && e.EndDate >= DateTime.UtcNow)
                     .OrderByDescending(e => e.StartDate)
@@ -55,7 +55,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await GetAllAsync();
+                List<AwardEvent> events = await GetAllAsync();
                 return events
                     .Where(e => e.StartDate > DateTime.UtcNow)
                     .OrderBy(e => e.StartDate)
@@ -72,7 +72,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await GetAllAsync();
+                List<AwardEvent> events = await GetAllAsync();
                 return events
                     .Where(e => e.EndDate < DateTime.UtcNow)
                     .OrderByDescending(e => e.EndDate)

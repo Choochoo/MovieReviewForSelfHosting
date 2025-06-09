@@ -20,7 +20,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var updates = await _databaseService.GetAllAsync<SiteUpdate>();
+                IEnumerable<SiteUpdate> updates = await _databaseService.GetAllAsync<SiteUpdate>();
                 return updates.OrderByDescending(u => u.Timestamp).ToList();
             }
             catch (Exception ex)
@@ -47,7 +47,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var updates = await _databaseService.GetAllAsync<SiteUpdate>();
+                IEnumerable<SiteUpdate> updates = await _databaseService.GetAllAsync<SiteUpdate>();
                 return updates
                     .Where(u => u.Date >= startDate && u.Date <= endDate)
                     .OrderByDescending(u => u.Timestamp)
@@ -64,7 +64,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var updates = await _databaseService.GetAllAsync<SiteUpdate>();
+                IEnumerable<SiteUpdate> updates = await _databaseService.GetAllAsync<SiteUpdate>();
                 return updates
                     .Where(u => u.UpdateType == updateType)
                     .OrderByDescending(u => u.Timestamp)
@@ -114,7 +114,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var update = await GetByIdAsync(id);
+                SiteUpdate? update = await GetByIdAsync(id);
                 if (update == null)
                     return false;
 
@@ -133,7 +133,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var updates = await _databaseService.GetAllAsync<SiteUpdate>();
+                IEnumerable<SiteUpdate> updates = await _databaseService.GetAllAsync<SiteUpdate>();
                 return updates
                     .OrderByDescending(u => u.LastUpdateTime)
                     .FirstOrDefault()?.LastUpdateTime ?? DateTime.UtcNow;

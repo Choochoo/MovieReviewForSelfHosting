@@ -27,7 +27,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var people = await _databaseService.GetAllAsync<Person>();
+                IEnumerable<Person> people = await _databaseService.GetAllAsync<Person>();
                 return people.OrderBy(p => p.Order).ThenBy(p => p.Name).ToList();
             }
             catch (Exception ex)
@@ -41,18 +41,18 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "sounds");
+                string uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "sounds");
                 Directory.CreateDirectory(uploadsPath);
 
-                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
-                var filePath = Path.Combine(uploadsPath, fileName);
+                string fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+                string filePath = Path.Combine(uploadsPath, fileName);
 
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                using (FileStream stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
                 }
 
-                var soundClip = new SoundClip
+                SoundClip soundClip = new SoundClip
                 {
                     PersonId = personId,
                     FileName = fileName,
@@ -79,32 +79,32 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                using var httpClient = _httpClientFactory.CreateClient();
-                var response = await httpClient.GetAsync(url);
+                using HttpClient httpClient = _httpClientFactory.CreateClient();
+                HttpResponseMessage response = await httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
 
-                var uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "sounds");
+                string uploadsPath = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "sounds");
                 Directory.CreateDirectory(uploadsPath);
 
-                var uri = new Uri(url);
-                var originalFileName = Path.GetFileName(uri.LocalPath) ?? "sound.mp3";
-                var extension = Path.GetExtension(originalFileName);
+                Uri uri = new Uri(url);
+                string originalFileName = Path.GetFileName(uri.LocalPath) ?? "sound.mp3";
+                string extension = Path.GetExtension(originalFileName);
                 if (string.IsNullOrEmpty(extension))
                 {
                     extension = ".mp3";
                     originalFileName += extension;
                 }
 
-                var fileName = $"{Guid.NewGuid()}{extension}";
-                var filePath = Path.Combine(uploadsPath, fileName);
+                string fileName = $"{Guid.NewGuid()}{extension}";
+                string filePath = Path.Combine(uploadsPath, fileName);
 
-                await using var fileStream = new FileStream(filePath, FileMode.Create);
+                await using FileStream fileStream = new FileStream(filePath, FileMode.Create);
                 await response.Content.CopyToAsync(fileStream);
 
-                var fileInfo = new FileInfo(filePath);
-                var contentType = response.Content.Headers.ContentType?.MediaType ?? "audio/mpeg";
+                FileInfo fileInfo = new FileInfo(filePath);
+                string contentType = response.Content.Headers.ContentType?.MediaType ?? "audio/mpeg";
 
-                var soundClip = new SoundClip
+                SoundClip soundClip = new SoundClip
                 {
                     PersonId = personId,
                     FileName = fileName,
@@ -136,12 +136,12 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                if (!Guid.TryParse(id, out var soundId))
+                if (!Guid.TryParse(id, out Guid soundId))
                 {
                     return false;
                 }
 
-                var soundClip = await _databaseService.GetByIdAsync<SoundClip>(soundId);
+                SoundClip? soundClip = await _databaseService.GetByIdAsync<SoundClip>(soundId);
                 if (soundClip == null)
                 {
                     return false;
@@ -202,7 +202,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var allClips = await _databaseService.FindAsync<SoundClip>(s => s.IsActive);
+                IEnumerable<SoundClip> allClips = await _databaseService.FindAsync<SoundClip>(s => s.IsActive);
                 return allClips
                     .GroupBy(s => s.PersonId)
                     .ToDictionary(g => g.Key, g => g.Count());

@@ -19,9 +19,9 @@ namespace MovieReviewApp.Infrastructure.Services
             if (string.IsNullOrEmpty(_chatUrl))
                 return;
 
-            var message = $"---Automated Message--- \n{personName} just updated the site, adding the movie {movieName}\n------------End-------------";
+            string message = $"---Automated Message--- \n{personName} just updated the site, adding the movie {movieName}\n------------End-------------";
 
-            var content = new StringContent(
+            StringContent content = new StringContent(
                 JsonSerializer.Serialize(new { chatUrl = _chatUrl, message = message }),
                 Encoding.UTF8,
                 "application/json"

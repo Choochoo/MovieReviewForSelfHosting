@@ -14,7 +14,7 @@ namespace MovieReviewApp.Middleware
         public async Task InvokeAsync(HttpContext context, SecretsManager secretsManager, InstanceManager instanceManager)
         {
             // Skip setup check for setup page itself and static files
-            var path = context.Request.Path.Value?.ToLower();
+            string? path = context.Request.Path.Value?.ToLower();
             Console.WriteLine($"FirstRunSetupMiddleware: Processing path: {path}");
             
             if (path != null && (

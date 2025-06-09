@@ -46,7 +46,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await _databaseService.GetAllAsync<MovieEvent>();
+                IEnumerable<MovieEvent> events = await _databaseService.GetAllAsync<MovieEvent>();
                 return events.Where(e => e.PhaseNumber == phaseNumber).ToList();
             }
             catch (Exception ex)
@@ -90,7 +90,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var movieEvent = await GetByIdAsync(id);
+                MovieEvent? movieEvent = await GetByIdAsync(id);
                 if (movieEvent == null)
                     return false;
 
@@ -109,7 +109,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await _databaseService.GetAllAsync<MovieEvent>();
+                IEnumerable<MovieEvent> events = await _databaseService.GetAllAsync<MovieEvent>();
                 return events
                     .Where(e => e.StartDate > DateTime.UtcNow)
                     .OrderBy(e => e.StartDate)
@@ -126,7 +126,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var events = await _databaseService.GetAllAsync<MovieEvent>();
+                IEnumerable<MovieEvent> events = await _databaseService.GetAllAsync<MovieEvent>();
                 return events
                     .Where(e => e.EndDate < DateTime.UtcNow)
                     .OrderByDescending(e => e.EndDate)

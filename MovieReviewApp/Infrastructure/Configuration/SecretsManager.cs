@@ -41,7 +41,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public bool HasRequiredSecrets()
         {
-            var requiredKeys = new[]
+            string[] requiredKeys = new[]
             {
                 "TMDB:ApiKey",
                 "MongoDB:ConnectionString"
@@ -52,7 +52,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public List<string> GetMissingSecrets()
         {
-            var requiredKeys = new[]
+            string[] requiredKeys = new[]
             {
                 "TMDB:ApiKey",
                 "MongoDB:ConnectionString"
@@ -73,8 +73,8 @@ namespace MovieReviewApp.Infrastructure.Configuration
             try
             {
                 Console.WriteLine($"SecretsManager.LoadSecrets: Reading file");
-                var json = File.ReadAllText(_secretsFilePath);
-                var secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+                string json = File.ReadAllText(_secretsFilePath);
+                Dictionary<string, string> secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
                 Console.WriteLine($"SecretsManager.LoadSecrets: Successfully loaded {secrets.Count} secrets");
                 return secrets;
             }
@@ -89,7 +89,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         {
             try
             {
-                var json = JsonSerializer.Serialize(_secrets, new JsonSerializerOptions { WriteIndented = true });
+                string json = JsonSerializer.Serialize(_secrets, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(_secretsFilePath, json);
             }
             catch (Exception ex)

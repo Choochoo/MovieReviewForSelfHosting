@@ -20,7 +20,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var questions = await _databaseService.GetAllAsync<DiscussionQuestion>();
+                IEnumerable<DiscussionQuestion> questions = await _databaseService.GetAllAsync<DiscussionQuestion>();
                 return questions.OrderBy(q => q.Order).ToList();
             }
             catch (Exception ex)
@@ -34,7 +34,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var questions = await _databaseService.GetAllAsync<DiscussionQuestion>();
+                IEnumerable<DiscussionQuestion> questions = await _databaseService.GetAllAsync<DiscussionQuestion>();
                 return questions
                     .Where(q => q.IsActive)
                     .OrderBy(q => q.Order)
@@ -95,7 +95,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var question = await GetByIdAsync(id);
+                DiscussionQuestion? question = await GetByIdAsync(id);
                 if (question == null)
                     return false;
 
@@ -114,7 +114,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var question = await GetByIdAsync(id);
+                DiscussionQuestion? question = await GetByIdAsync(id);
                 if (question == null)
                     return false;
 
@@ -135,7 +135,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var question = await GetByIdAsync(id);
+                DiscussionQuestion? question = await GetByIdAsync(id);
                 if (question == null)
                     return false;
 

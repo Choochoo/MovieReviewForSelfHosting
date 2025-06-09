@@ -31,7 +31,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var soundClip = await _soundboardRepository.SaveSoundClipAsync(personId, file, description);
+                Models.SoundClip soundClip = await _soundboardRepository.SaveSoundClipAsync(personId, file, description);
                 return Ok(new { 
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
@@ -56,7 +56,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var soundClip = await _soundboardRepository.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
+                Models.SoundClip soundClip = await _soundboardRepository.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
                 return Ok(new { 
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
@@ -81,7 +81,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                var success = await _soundboardRepository.DeleteSoundClipAsync(id);
+                bool success = await _soundboardRepository.DeleteSoundClipAsync(id);
                 if (success)
                 {
                     return Ok();
@@ -100,7 +100,7 @@ namespace MovieReviewApp.Controllers
 
         private static bool IsAudioFile(IFormFile file)
         {
-            var allowedTypes = new[]
+            string[] allowedTypes = new[]
             {
                 "audio/mpeg",
                 "audio/wav", 
@@ -121,7 +121,7 @@ namespace MovieReviewApp.Controllers
             {
                 _logger.LogInformation("Serving sound file via API: {FileName}", fileName);
                 
-                var soundClip = (await _soundboardRepository.GetAllSoundClipsAsync()).FirstOrDefault(s => s.FileName == fileName);
+                Models.SoundClip? soundClip = (await _soundboardRepository.GetAllSoundClipsAsync()).FirstOrDefault(s => s.FileName == fileName);
                 if (soundClip == null || !soundClip.IsActive)
                 {
                     _logger.LogWarning("Sound clip not found or inactive: {FileName}", fileName);
@@ -134,7 +134,7 @@ namespace MovieReviewApp.Controllers
                     return NotFound();
                 }
 
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(soundClip.FilePath);
+                byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(soundClip.FilePath);
                 _logger.LogInformation("Successfully serving sound file: {FileName}, Size: {Size} bytes", fileName, fileBytes.Length);
                 
                 return File(fileBytes, soundClip.ContentType, enableRangeProcessing: true);
@@ -157,7 +157,7 @@ namespace MovieReviewApp.Controllers
         {
             try
             {
-                var allSounds = await _soundboardRepository.GetAllSoundClipsAsync();
+                List<Models.SoundClip> allSounds = await _soundboardRepository.GetAllSoundClipsAsync().ConfigureAwait(false);
                 var debugInfo = allSounds.Where(s => s.IsActive).Select(s => new
                 {
                     id = s.Id,

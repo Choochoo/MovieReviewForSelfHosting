@@ -17,7 +17,7 @@ namespace MovieReviewApp.Controllers
         [HttpGet("{imageId}")]
         public async Task<IActionResult> GetImage(Guid imageId)
         {
-            var image = await _imageService.GetImageAsync(imageId);
+            Models.ImageStorage? image = await _imageService.GetImageAsync(imageId);
             if (image == null)
             {
                 return NotFound();
@@ -41,9 +41,9 @@ namespace MovieReviewApp.Controllers
 
             using var memoryStream = new MemoryStream();
             await file.CopyToAsync(memoryStream);
-            var imageData = memoryStream.ToArray();
+            byte[] imageData = memoryStream.ToArray();
 
-            var imageId = await _imageService.SaveImageAsync(imageData, file.FileName);
+            Guid? imageId = await _imageService.SaveImageAsync(imageData, file.FileName);
             if (imageId == null)
             {
                 return BadRequest("Failed to save image");
@@ -60,7 +60,7 @@ namespace MovieReviewApp.Controllers
                 return BadRequest("URL is required");
             }
 
-            var imageId = await _imageService.SaveImageFromUrlAsync(request.Url);
+            Guid? imageId = await _imageService.SaveImageFromUrlAsync(request.Url);
             if (imageId == null)
             {
                 return BadRequest("Failed to download and save image from URL");

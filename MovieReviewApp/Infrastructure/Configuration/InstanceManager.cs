@@ -11,7 +11,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         public InstanceManager(string? instanceName = null)
         {
             // Check for custom data path from environment variable
-            var customDataPath = Environment.GetEnvironmentVariable("MOVIEREVIEW_DATA_PATH");
+            string? customDataPath = Environment.GetEnvironmentVariable("MOVIEREVIEW_DATA_PATH");
             string basePath;
             
             if (!string.IsNullOrEmpty(customDataPath))
@@ -99,7 +99,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
             try
             {
-                var json = File.ReadAllText(ConfigPath);
+                string json = File.ReadAllText(ConfigPath);
                 return JsonSerializer.Deserialize<InstanceConfig>(json) ?? new InstanceConfig
                 {
                     InstanceName = _instanceName,
@@ -126,7 +126,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         {
             try
             {
-                var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+                string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(ConfigPath, json);
             }
             catch (Exception ex)
@@ -141,8 +141,8 @@ namespace MovieReviewApp.Infrastructure.Configuration
                 return "Default";
 
             // Remove invalid filename characters
-            var invalidChars = Path.GetInvalidFileNameChars();
-            var sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray());
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            string sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray());
             
             // Replace spaces with hyphens
             sanitized = sanitized.Replace(' ', '-');
@@ -154,7 +154,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         private string GetDefaultInstanceName()
         {
             // Try to detect from environment or use default
-            var envInstance = Environment.GetEnvironmentVariable("MOVIEREVIEW_INSTANCE");
+            string? envInstance = Environment.GetEnvironmentVariable("MOVIEREVIEW_INSTANCE");
             if (!string.IsNullOrEmpty(envInstance))
                 return SanitizeInstanceName(envInstance);
 
@@ -164,7 +164,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         private int GetDefaultPort()
         {
             // Try to get port from environment variable or command line
-            var envPort = Environment.GetEnvironmentVariable("MOVIEREVIEW_PORT");
+            string? envPort = Environment.GetEnvironmentVariable("MOVIEREVIEW_PORT");
             if (!string.IsNullOrEmpty(envPort) && int.TryParse(envPort, out var port))
                 return port;
 
@@ -185,7 +185,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
             try
             {
                 // Try to create a test directory to check write permissions
-                var testPath = Path.Combine(path, ".moviereview_test_" + Guid.NewGuid().ToString("N"));
+                string testPath = Path.Combine(path, ".moviereview_test_" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(testPath);
                 Directory.Delete(testPath);
                 return true;

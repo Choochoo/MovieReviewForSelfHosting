@@ -31,7 +31,8 @@
       "Bash(mv:*)",
       "Bash(dotnet --version)",
       "Bash(dotnet clean:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

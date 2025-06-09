@@ -41,9 +41,9 @@ namespace MovieReviewApp.Extensions
 
         public static DateTime LastFridayOfMonth(this DateTime dateTime)
         {
-            var lastDayOfMonth = new DateTime(dateTime.Year, dateTime.Month, DateTime.DaysInMonth(dateTime.Year, dateTime.Month));
-            var dayOfWeek = (int)lastDayOfMonth.DayOfWeek;
-            var daysToSubtract = dayOfWeek == 5 ? 0 : (dayOfWeek + 2) % 7;
+            DateTime lastDayOfMonth = new DateTime(dateTime.Year, dateTime.Month, DateTime.DaysInMonth(dateTime.Year, dateTime.Month));
+            int dayOfWeek = (int)lastDayOfMonth.DayOfWeek;
+            int daysToSubtract = dayOfWeek == 5 ? 0 : (dayOfWeek + 2) % 7;
             return lastDayOfMonth.AddDays(-daysToSubtract);
         }
     }

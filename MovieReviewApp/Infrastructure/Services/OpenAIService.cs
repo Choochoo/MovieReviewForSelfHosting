@@ -51,7 +51,7 @@ public class OpenAIService
 
         try
         {
-            var requestBody = new
+            object requestBody = new
             {
                 model = "gpt-3.5-turbo",
                 messages = new[]
@@ -66,19 +66,19 @@ public class OpenAIService
                 temperature = 0.7
             };
 
-            var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            string json = JsonSerializer.Serialize(requestBody);
+            StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}/v1/chat/completions", content);
+            HttpResponseMessage response = await _httpClient.PostAsync($"{_baseUrl}/v1/chat/completions", content);
 
             if (response.IsSuccessStatusCode)
             {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                string responseContent = await response.Content.ReadAsStringAsync();
+                JsonElement responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
                 
                 if (responseJson.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
                 {
-                    var firstChoice = choices[0];
+                    JsonElement firstChoice = choices[0];
                     if (firstChoice.TryGetProperty("message", out var message) && 
                         message.TryGetProperty("content", out var contentElement))
                     {
@@ -89,7 +89,7 @@ public class OpenAIService
             else
             {
                 _logger.LogError("OpenAI API request failed with status: {StatusCode}", response.StatusCode);
-                var errorContent = await response.Content.ReadAsStringAsync();
+                string errorContent = await response.Content.ReadAsStringAsync();
                 _logger.LogError("OpenAI API error response: {ErrorContent}", errorContent);
             }
         }

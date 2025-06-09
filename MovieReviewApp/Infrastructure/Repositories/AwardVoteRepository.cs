@@ -21,7 +21,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var votes = await GetAllAsync();
+                List<AwardVote> votes = await GetAllAsync();
                 return votes
                     .Where(v => v.AwardEventId.ToString() == eventId)
                     .OrderByDescending(v => v.CreatedAt)
@@ -38,7 +38,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var votes = await GetAllAsync();
+                List<AwardVote> votes = await GetAllAsync();
                 return votes
                     .Where(v => v.VoterName == userId)
                     .OrderByDescending(v => v.CreatedAt)
@@ -55,7 +55,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var votes = await GetAllAsync();
+                List<AwardVote> votes = await GetAllAsync();
                 return votes
                     .Where(v => v.QuestionId.ToString() == categoryId)
                     .OrderByDescending(v => v.CreatedAt)
@@ -72,7 +72,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var votes = await GetAllAsync();
+                List<AwardVote> votes = await GetAllAsync();
                 return votes
                     .FirstOrDefault(v => v.VoterName == userId && v.QuestionId.ToString() == categoryId);
             }
@@ -87,8 +87,8 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var votes = await GetByEventIdAsync(eventId.ToString());
-                var results = votes
+                List<AwardVote> votes = await GetByEventIdAsync(eventId.ToString());
+                List<QuestionResult> results = votes
                     .GroupBy(v => v.MovieEventId)
                     .Select(g => new QuestionResult
                     {

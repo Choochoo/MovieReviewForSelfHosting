@@ -23,7 +23,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var phases = await _databaseService.GetAllAsync<Phase>();
+                IEnumerable<Phase> phases = await _databaseService.GetAllAsync<Phase>();
                 foreach (var phase in phases)
                 {
                     phase.Events = await _movieEventRepository.GetByPhaseAsync(phase.Number);
@@ -41,7 +41,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var phase = await _databaseService.GetByIdAsync<Phase>(id);
+                Phase? phase = await _databaseService.GetByIdAsync<Phase>(id);
                 if (phase != null)
                 {
                     phase.Events = await _movieEventRepository.GetByPhaseAsync(phase.Number);
@@ -59,8 +59,8 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var phases = await _databaseService.GetAllAsync<Phase>();
-                var phase = phases.FirstOrDefault(p => p.Number == number);
+                IEnumerable<Phase> phases = await _databaseService.GetAllAsync<Phase>();
+                Phase? phase = phases.FirstOrDefault(p => p.Number == number);
                 if (phase != null)
                 {
                     phase.Events = await _movieEventRepository.GetByPhaseAsync(phase.Number);
@@ -108,7 +108,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var phase = await GetByIdAsync(id);
+                Phase? phase = await GetByIdAsync(id);
                 if (phase == null)
                     return false;
 
@@ -127,8 +127,8 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var phases = await _databaseService.GetAllAsync<Phase>();
-                var currentPhase = phases
+                IEnumerable<Phase> phases = await _databaseService.GetAllAsync<Phase>();
+                Phase? currentPhase = phases
                     .Where(p => p.StartDate <= DateTime.UtcNow && p.EndDate >= DateTime.UtcNow)
                     .OrderByDescending(p => p.Number)
                     .FirstOrDefault();

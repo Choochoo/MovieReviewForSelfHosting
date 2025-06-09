@@ -15,10 +15,10 @@ namespace MovieReviewApp.Helpers
             }
 
             // Get all text files in the folder
-            var textFiles = Directory.GetFiles(folderPath, "*.txt");
+            string[] textFiles = Directory.GetFiles(folderPath, "*.txt");
 
             // Read the content of each file and return as a string array
-            var fileContents = textFiles.Select(File.ReadAllText).ToArray();
+            string[] fileContents = textFiles.Select(File.ReadAllText).ToArray();
 
             return fileContents;
         }

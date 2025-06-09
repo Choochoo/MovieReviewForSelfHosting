@@ -19,7 +19,7 @@ public class DiscussionQuestionsService
     {
         try
         {
-            var questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
+            List<DiscussionQuestion> questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
 
             // If no questions exist, create defaults
             if (!questions.Any())
@@ -44,7 +44,7 @@ public class DiscussionQuestionsService
     {
         try
         {
-            var questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
+            List<DiscussionQuestion> questions = await _mongoDbService.GetAllAsync<DiscussionQuestion>();
 
             // If no questions exist, create defaults
             if (!questions.Any())
@@ -79,7 +79,7 @@ public class DiscussionQuestionsService
     {
         try
         {
-            var question = new DiscussionQuestion
+            DiscussionQuestion question = new DiscussionQuestion
             {
                 Question = questionText,
                 Order = order,
@@ -135,7 +135,7 @@ public class DiscussionQuestionsService
         {
             for (int i = 0; i < questionIds.Count; i++)
             {
-                var question = await GetQuestionByIdAsync(questionIds[i]);
+                DiscussionQuestion? question = await GetQuestionByIdAsync(questionIds[i]);
                 if (question != null)
                 {
                     question.Order = i + 1;
@@ -157,7 +157,7 @@ public class DiscussionQuestionsService
     {
         try
         {
-            var defaultQuestions = new[]
+            string[] defaultQuestions = new[]
             {
                 "Did I like the movie?",
                 "Am I glad I watched the movie?",
@@ -170,7 +170,7 @@ public class DiscussionQuestionsService
 
             for (int i = 0; i < defaultQuestions.Length; i++)
             {
-                var question = new DiscussionQuestion
+                DiscussionQuestion question = new DiscussionQuestion
                 {
                     Question = defaultQuestions[i],
                     Order = i + 1,
@@ -192,7 +192,7 @@ public class DiscussionQuestionsService
 
     public async Task<List<string>> GetQuestionTextsForPromptAsync()
     {
-        var questions = await GetActiveQuestionsAsync();
+        List<DiscussionQuestion> questions = await GetActiveQuestionsAsync();
         return questions.Select(q => q.Question).ToList();
     }
 }

@@ -20,7 +20,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var people = await _databaseService.GetAllAsync<Person>();
+                IEnumerable<Person> people = await _databaseService.GetAllAsync<Person>();
                 return people.OrderBy(p => p.Order).ThenBy(p => p.Name).ToList();
             }
             catch (Exception ex)
@@ -78,7 +78,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var person = await GetByIdAsync(id);
+                Person? person = await GetByIdAsync(id);
                 if (person == null)
                     return false;
 

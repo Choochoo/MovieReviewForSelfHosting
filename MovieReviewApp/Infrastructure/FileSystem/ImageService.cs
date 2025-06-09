@@ -26,19 +26,19 @@ namespace MovieReviewApp.Infrastructure.FileSystem
         {
             try
             {
-                using var image = Image.Load(imageData);
-                var optimizedImageData = await OptimizeImageAsync(image);
-                var hash = ComputeHash(optimizedImageData);
+                using Image image = Image.Load(imageData);
+                byte[] optimizedImageData = await OptimizeImageAsync(image);
+                string hash = ComputeHash(optimizedImageData);
 
-                var existingImages = await _database.FindAsync<ImageStorage>(img => img.Hash == hash);
-                var existingImage = existingImages.FirstOrDefault();
+                IEnumerable<ImageStorage> existingImages = await _database.FindAsync<ImageStorage>(img => img.Hash == hash);
+                ImageStorage? existingImage = existingImages.FirstOrDefault();
 
                 if (existingImage != null)
                 {
                     return existingImage.Id;
                 }
 
-                var imageStorage = new ImageStorage
+                ImageStorage imageStorage = new ImageStorage
                 {
                     FileName = fileName,
                     ContentType = "image/jpeg",
@@ -64,14 +64,14 @@ namespace MovieReviewApp.Infrastructure.FileSystem
         {
             try
             {
-                using var httpClient = _httpClientFactory.CreateClient();
+                using HttpClient httpClient = _httpClientFactory.CreateClient();
                 httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-                var response = await httpClient.GetAsync(url);
+                HttpResponseMessage response = await httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
 
-                var imageData = await response.Content.ReadAsByteArrayAsync();
-                var fileName = Path.GetFileName(new Uri(url).LocalPath) ?? "downloaded-image.jpg";
+                byte[] imageData = await response.Content.ReadAsByteArrayAsync();
+                string fileName = Path.GetFileName(new Uri(url).LocalPath) ?? "downloaded-image.jpg";
 
                 return await SaveImageAsync(imageData, fileName, url);
             }
@@ -89,7 +89,7 @@ namespace MovieReviewApp.Infrastructure.FileSystem
 
         public async Task<byte[]?> GetImageDataAsync(Guid imageId)
         {
-            var image = await GetImageAsync(imageId);
+            ImageStorage? image = await GetImageAsync(imageId);
             return image?.ImageData;
         }
 
@@ -104,16 +104,16 @@ namespace MovieReviewApp.Infrastructure.FileSystem
                 }));
             }
 
-            using var memoryStream = new MemoryStream();
-            var encoder = new JpegEncoder { Quality = Quality };
+            using MemoryStream memoryStream = new MemoryStream();
+            JpegEncoder encoder = new JpegEncoder { Quality = Quality };
             await image.SaveAsync(memoryStream, encoder);
             return memoryStream.ToArray();
         }
 
         private static string ComputeHash(byte[] data)
         {
-            using var sha256 = SHA256.Create();
-            var hash = sha256.ComputeHash(data);
+            using SHA256 sha256 = SHA256.Create();
+            byte[] hash = sha256.ComputeHash(data);
             return Convert.ToBase64String(hash);
         }
 

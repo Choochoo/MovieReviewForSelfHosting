@@ -51,7 +51,7 @@ public class MovieSessionAnalysisService
 
     public async Task<CategoryResults> AnalyzeSessionAsync(MovieSession session)
     {
-        var results = await AnalyzeSessionsAsync(new[] { session });
+        List<(MovieSession session, CategoryResults categoryResults)> results = await AnalyzeSessionsAsync(new[] { session });
         return results.First().categoryResults;
     }
 
@@ -62,22 +62,22 @@ public class MovieSessionAnalysisService
             throw new InvalidOperationException("OpenAI API key not configured - cannot perform analysis");
         }
 
-        var sessionList = sessions.ToList();
+        List<MovieSession> sessionList = sessions.ToList();
         _logger.LogInformation("Starting parallel analysis of {SessionCount} sessions", sessionList.Count);
 
         // Configure parallelism - adjust based on your OpenAI rate limits
-        var maxConcurrency = Math.Min(sessionList.Count, 3); // Start with 3 concurrent requests
-        var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+        int maxConcurrency = Math.Min(sessionList.Count, 3); // Start with 3 concurrent requests
+        SemaphoreSlim semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
 
-        var analysisResults = new List<(MovieSession session, CategoryResults categoryResults)>();
-        var tasks = sessionList.Select(async session =>
+        List<(MovieSession session, CategoryResults categoryResults)> analysisResults = new List<(MovieSession session, CategoryResults categoryResults)>();
+        IEnumerable<Task<(MovieSession, CategoryResults)>> tasks = sessionList.Select(async session =>
         {
             await semaphore.WaitAsync();
             try
             {
                 _logger.LogInformation("Starting analysis for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
 
-                var categoryResults = await AnalyzeSingleSessionAsync(session);
+                CategoryResults categoryResults = await AnalyzeSingleSessionAsync(session);
 
                 lock (analysisResults)
                 {
@@ -92,7 +92,7 @@ public class MovieSessionAnalysisService
                 _logger.LogError(ex, "Failed to analyze session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
 
                 // Return empty results for failed sessions rather than failing the entire batch
-                var emptyResults = new CategoryResults();
+                CategoryResults emptyResults = new CategoryResults();
                 lock (analysisResults)
                 {
                     analysisResults.Add((session, emptyResults));
@@ -114,14 +114,14 @@ public class MovieSessionAnalysisService
     private async Task<CategoryResults> AnalyzeSingleSessionAsync(MovieSession session)
     {
         // Combine all transcripts with speaker information
-        var combinedTranscript = BuildCombinedTranscript(session);
+        string? combinedTranscript = BuildCombinedTranscript(session);
 
         _logger.LogDebug("Built combined transcript for session {SessionId}: {Length} characters",
             session.Id, combinedTranscript?.Length ?? 0);
 
         if (string.IsNullOrEmpty(combinedTranscript))
         {
-            var fileInfo = session.AudioFiles.Select(f => $"{f.FileName}: HasTranscript={!string.IsNullOrEmpty(f.TranscriptText)}, Status={f.ProcessingStatus}").ToList();
+            List<string> fileInfo = session.AudioFiles.Select(f => $"{f.FileName}: HasTranscript={!string.IsNullOrEmpty(f.TranscriptText)}, Status={f.ProcessingStatus}").ToList();
             _logger.LogWarning("No transcript content available for analysis. Audio files: {FileInfo}", string.Join(", ", fileInfo));
             throw new Exception("No transcript content available for analysis");
         }
@@ -132,20 +132,20 @@ public class MovieSessionAnalysisService
         }
 
         // Create the analysis prompt based on processaudio.md specifications
-        var analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
+        string analysisPrompt = await CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.ParticipantsPresent, combinedTranscript);
 
         // Log prompt size before sending to OpenAI
         _logger.LogDebug("Sending prompt to OpenAI: {PromptSize:N0} characters, {TranscriptSize:N0} transcript chars",
             analysisPrompt.Length, combinedTranscript.Length);
 
         // Call OpenAI to analyze the transcript
-        var analysisResult = await CallOpenAIForAnalysisWithRetry(analysisPrompt);
+        string analysisResult = await CallOpenAIForAnalysisWithRetry(analysisPrompt);
 
         // Save OpenAI response to movie session folder
         await SaveOpenAIResponseAsync(session, analysisPrompt, analysisResult);
 
         // Parse the AI response into CategoryResults
-        var categoryResults = ParseAnalysisResult(analysisResult);
+        CategoryResults categoryResults = ParseAnalysisResult(analysisResult);
 
         // Generate audio clips for highlights
         await GenerateAudioClipsAsync(session, categoryResults);
@@ -164,8 +164,8 @@ public class MovieSessionAnalysisService
                 return jsonTranscript;
             }
 
-            var transcriptData = JsonSerializer.Deserialize<TranscriptData>(jsonTranscript);
-            var sb = new StringBuilder();
+            TranscriptData? transcriptData = JsonSerializer.Deserialize<TranscriptData>(jsonTranscript);
+            StringBuilder sb = new StringBuilder();
 
             if (transcriptData?.utterances != null)
             {
@@ -199,7 +199,7 @@ public class MovieSessionAnalysisService
     }
     private string BuildCombinedTranscript(MovieSession session)
     {
-        var transcriptBuilder = new StringBuilder();
+        StringBuilder transcriptBuilder = new StringBuilder();
 
         // Add session context (this stays the same size)
         transcriptBuilder.AppendLine("=== TRANSCRIPT ANALYSIS CONTEXT ===");
@@ -209,8 +209,8 @@ public class MovieSessionAnalysisService
         transcriptBuilder.AppendLine();
 
         // Get master recording and individual files
-        var masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText));
-        var individualFiles = session.AudioFiles.Where(f => !f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+        AudioFile? masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText));
+        List<AudioFile> individualFiles = session.AudioFiles.Where(f => !f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText)).ToList();
 
         _logger.LogInformation("Building transcript from {TotalFiles} audio files: Master={MasterFile}, Individual={IndividualCount}",
             session.AudioFiles.Count,
@@ -227,8 +227,8 @@ public class MovieSessionAnalysisService
         }
 
         // Calculate available space for transcripts (reserve space for context and instructions)
-        var contextSize = transcriptBuilder.Length;
-        var maxTranscriptSpace = MAX_TRANSCRIPT_SIZE - contextSize - 2000; // Reserve 2K for instructions and truncation warnings
+        int contextSize = transcriptBuilder.Length;
+        int maxTranscriptSpace = MAX_TRANSCRIPT_SIZE - contextSize - 2000; // Reserve 2K for instructions and truncation warnings
 
         // Strategy: Prioritize master recording to avoid duplication, fall back to individual mics if needed
         if (masterFile != null)
@@ -242,7 +242,7 @@ public class MovieSessionAnalysisService
             transcriptBuilder.AppendLine("All audio clips will be generated from this file, so timestamps must match this timeline.");
             transcriptBuilder.AppendLine();
 
-            var masterTranscript = masterFile.TranscriptText;
+            string masterTranscript = masterFile.TranscriptText;
 
             // Convert JSON format to plain text
             masterTranscript = ConvertJsonTranscriptToPlainText(masterTranscript, "Speaker", session.ParticipantsPresent);
@@ -250,12 +250,12 @@ public class MovieSessionAnalysisService
             if (masterTranscript.Length > maxTranscriptSpace)
             {
                 // Smart truncation: keep beginning and end, skip middle
-                var keepSize = maxTranscriptSpace - 500; // Reserve space for truncation message
-                var beginningSize = (int)(keepSize * 0.6); // 60% from beginning
-                var endingSize = keepSize - beginningSize; // 40% from end
+                int keepSize = maxTranscriptSpace - 500; // Reserve space for truncation message
+                int beginningSize = (int)(keepSize * 0.6); // 60% from beginning
+                int endingSize = keepSize - beginningSize; // 40% from end
 
-                var beginning = masterTranscript.Substring(0, beginningSize);
-                var ending = masterTranscript.Substring(masterTranscript.Length - endingSize);
+                string beginning = masterTranscript.Substring(0, beginningSize);
+                string ending = masterTranscript.Substring(masterTranscript.Length - endingSize);
 
                 masterTranscript = beginning +
                     $"\n\n[TRANSCRIPT TRUNCATED - SHOWING FIRST {beginningSize:N0} AND LAST {endingSize:N0} CHARACTERS]\n" +
@@ -281,14 +281,14 @@ public class MovieSessionAnalysisService
             transcriptBuilder.AppendLine("Use these ONLY for speaker identification and quote verification.");
             transcriptBuilder.AppendLine();
 
-            var remainingSpace = maxTranscriptSpace;
-            var filesAdded = 0;
+            int remainingSpace = maxTranscriptSpace;
+            int filesAdded = 0;
 
             foreach (var audioFile in individualFiles.OrderBy(f => f.SpeakerNumber ?? 99))
             {
                 // Determine the speaker name based on mic number
-                var participantIndex = (audioFile.SpeakerNumber ?? 1) - 1;
-                var participantName = session.ParticipantsPresent.ElementAtOrDefault(participantIndex);
+                int participantIndex = (audioFile.SpeakerNumber ?? 1) - 1;
+                string? participantName = session.ParticipantsPresent.ElementAtOrDefault(participantIndex);
 
                 if (participantName == null)
                 {
@@ -296,9 +296,9 @@ public class MovieSessionAnalysisService
                     continue;
                 }
 
-                var speakerLabel = participantName;
-                var fileName = Path.GetFileNameWithoutExtension(audioFile.FilePath);
-                var headerSize = $"--- {speakerLabel} ({fileName}) ---\n".Length;
+                string speakerLabel = participantName;
+                string fileName = Path.GetFileNameWithoutExtension(audioFile.FilePath);
+                int headerSize = $"--- {speakerLabel} ({fileName}) ---\n".Length;
 
                 if (headerSize + 500 > remainingSpace) // Need at least 500 chars for meaningful content
                 {
@@ -310,7 +310,7 @@ public class MovieSessionAnalysisService
                 transcriptBuilder.AppendLine($"--- {speakerLabel} ({fileName}) ---");
                 remainingSpace -= headerSize;
 
-                var transcript = audioFile.TranscriptText;
+                string transcript = audioFile.TranscriptText;
 
                 // Convert JSON format to plain text using the participant's name
                 transcript = ConvertJsonTranscriptToPlainText(transcript, participantName, session.ParticipantsPresent);
@@ -335,7 +335,7 @@ public class MovieSessionAnalysisService
             _logger.LogWarning("No transcript content found for session {SessionId}", session.Id);
         }
 
-        var finalTranscript = transcriptBuilder.ToString();
+        string finalTranscript = transcriptBuilder.ToString();
         _logger.LogInformation("Final combined transcript size: {Size} characters (max: {Max})",
             finalTranscript.Length, MAX_TRANSCRIPT_SIZE);
 
@@ -344,9 +344,9 @@ public class MovieSessionAnalysisService
 
     private async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime sessionDate, List<string> participants, string transcript)
     {
-        var participantsList = string.Join(", ", participants);
-        var discussionQuestions = await GetFormattedDiscussionQuestionsAsync();
-        var jsonSchema = GenerateJsonSchema();
+        string participantsList = string.Join(", ", participants);
+        string discussionQuestions = await GetFormattedDiscussionQuestionsAsync();
+        string jsonSchema = GenerateJsonSchema();
 
         return $@"
 You are analyzing a movie discussion group's recorded conversation for maximum entertainment value. This is a group of friends having an UNFILTERED discussion about ""{movieTitle}"" on {sessionDate:MMMM dd, yyyy}. Your job is to find the most outrageous, hilarious, and memorable moments - the stuff people will want to replay and share.
@@ -462,7 +462,7 @@ TRANSCRIPT TO ANALYZE:
     private async Task<string> CallOpenAIForAnalysisWithRetry(string prompt)
     {
         const int maxRetries = 3;
-        var baseDelayMs = 1000;
+        int baseDelayMs = 1000;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
@@ -478,7 +478,7 @@ TRANSCRIPT TO ANALYZE:
                     throw;
                 }
 
-                var delayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
+                int delayMs = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
                 _logger.LogWarning("OpenAI rate limit hit on attempt {Attempt}/{MaxRetries}, retrying in {DelayMs}ms",
                     attempt, maxRetries, delayMs);
 
@@ -498,7 +498,7 @@ TRANSCRIPT TO ANALYZE:
 
     private async Task<string> CallOpenAIForAnalysis(string prompt)
     {
-        var requestBody = new
+        object requestBody = new
         {
             model = "gpt-4o-mini",
             messages = new[]
@@ -510,14 +510,14 @@ TRANSCRIPT TO ANALYZE:
             temperature = 0.7
         };
 
-        var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        string json = JsonSerializer.Serialize(requestBody);
+        StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
+        HttpResponseMessage response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
         response.EnsureSuccessStatusCode();
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var responseObj = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
+        string responseJson = await response.Content.ReadAsStringAsync();
+        OpenAIResponse? responseObj = JsonSerializer.Deserialize<OpenAIResponse>(responseJson);
 
         return responseObj?.choices?.FirstOrDefault()?.message?.content ??
                throw new Exception("No response content from OpenAI");
@@ -528,13 +528,13 @@ TRANSCRIPT TO ANALYZE:
         try
         {
             // Extract JSON from the response (in case there's additional text)
-            var jsonMatch = Regex.Match(analysisResult, @"\{[\s\S]*\}", RegexOptions.Multiline);
-            var jsonContent = jsonMatch.Success ? jsonMatch.Value : analysisResult;
+            Match jsonMatch = Regex.Match(analysisResult, @"\{[\s\S]*\}", RegexOptions.Multiline);
+            string jsonContent = jsonMatch.Success ? jsonMatch.Value : analysisResult;
 
             _logger.LogDebug("Parsing analysis result JSON: {JsonContent}", jsonContent.Substring(0, Math.Min(jsonContent.Length, 500)));
 
             // Try to parse as nested structure first, then fall back to flat structure
-            var categoryResults = TryParseNestedStructure(jsonContent) ?? TryParseFlatStructure(jsonContent);
+            CategoryResults? categoryResults = TryParseNestedStructure(jsonContent) ?? TryParseFlatStructure(jsonContent);
 
             if (categoryResults == null)
             {
@@ -560,17 +560,17 @@ TRANSCRIPT TO ANALYZE:
         {
             _logger.LogDebug("Attempting to parse nested JSON structure");
 
-            var jsonDoc = JsonDocument.Parse(jsonContent);
-            var root = jsonDoc.RootElement;
+            JsonDocument jsonDoc = JsonDocument.Parse(jsonContent);
+            JsonElement root = jsonDoc.RootElement;
 
             // Log the top-level sections found
-            var topLevelSections = root.EnumerateObject().Select(p => p.Name).ToList();
+            List<string> topLevelSections = root.EnumerateObject().Select(p => p.Name).ToList();
             _logger.LogInformation("Found top-level JSON sections: {Sections}", string.Join(", ", topLevelSections));
 
             // Log detailed structure for debugging
             LogJsonStructure(root);
 
-            var categoryResults = new CategoryResults();
+            CategoryResults categoryResults = new CategoryResults();
 
             // Parse CONTROVERSIAL & SPICY TAKES section
             if (TryGetNestedCategory(root, "CONTROVERSIAL & SPICY TAKES", "Most Offensive Take", out var mostOffensive))
@@ -630,7 +630,7 @@ TRANSCRIPT TO ANALYZE:
                 TryGetNestedCategory(root, "INITIAL DISCUSSION QUESTIONS", "Questions", out questions))
             {
                 _logger.LogInformation("Found INITIAL DISCUSSION QUESTIONS with 'questions' property");
-                var parsedQuestions = ParseInitialQuestionsFromElement(questions);
+                List<QuestionAnswer>? parsedQuestions = ParseInitialQuestionsFromElement(questions);
                 _logger.LogInformation("Parsed {Count} initial questions", parsedQuestions?.Count ?? 0);
                 categoryResults.InitialQuestions = parsedQuestions;
             }
@@ -662,7 +662,7 @@ TRANSCRIPT TO ANALYZE:
             }
 
             // Log summary of what was parsed
-            var parsedCategories = new List<string>();
+            List<string> parsedCategories = new List<string>();
             if (categoryResults.MostOffensiveTake != null) parsedCategories.Add("MostOffensiveTake");
             if (categoryResults.HottestTake != null) parsedCategories.Add("HottestTake");
             if (categoryResults.BiggestArgumentStarter != null) parsedCategories.Add("BiggestArgumentStarter");
@@ -697,7 +697,7 @@ TRANSCRIPT TO ANALYZE:
             _logger.LogDebug("Attempting to parse flat JSON structure");
 
             // Simply deserialize to the strongly typed model
-            var response = JsonSerializer.Deserialize<OpenAIAnalysisResponse>(jsonContent);
+            OpenAIAnalysisResponse? response = JsonSerializer.Deserialize<OpenAIAnalysisResponse>(jsonContent);
 
             if (response == null)
             {
@@ -706,7 +706,7 @@ TRANSCRIPT TO ANALYZE:
             }
 
             // Map from DTO to your domain model
-            var categoryResults = MapToCategoryResults(response);
+            CategoryResults categoryResults = MapToCategoryResults(response);
 
             // Extract initial questions to session stats (will be set later)
             if (response.OpeningQuestions != null)
@@ -737,7 +737,7 @@ TRANSCRIPT TO ANALYZE:
             // Log what's in this section
             if (section.ValueKind == JsonValueKind.Object)
             {
-                var sectionProperties = section.EnumerateObject().Select(p => p.Name).ToList();
+                List<string> sectionProperties = section.EnumerateObject().Select(p => p.Name).ToList();
                 _logger.LogDebug("Section '{SectionName}' contains: {Properties}", sectionName, string.Join(", ", sectionProperties));
             }
             else if (section.ValueKind == JsonValueKind.Array)
@@ -794,7 +794,7 @@ TRANSCRIPT TO ANALYZE:
                     property.Name.ToLower().Contains("category") ||
                     property.Name.ToLower().Contains("type"))
                 {
-                    var value = property.Value.GetString() ?? "";
+                    string value = property.Value.GetString() ?? "";
                     if (value.Contains(expectedCategoryName, StringComparison.OrdinalIgnoreCase))
                         return true;
                 }
@@ -839,12 +839,12 @@ TRANSCRIPT TO ANALYZE:
             if (element.ValueKind == JsonValueKind.Null)
                 return null;
 
-            var entriesElement = element.TryGetProperty("entries", out var entries) ? entries : element;
+            JsonElement entriesElement = element.TryGetProperty("entries", out JsonElement entries) ? entries : element;
 
             if (entriesElement.ValueKind != JsonValueKind.Array)
                 return null;
 
-            var list = new TopFiveList();
+            TopFiveList list = new TopFiveList();
             list.Entries = entriesElement.EnumerateArray()
                 .Select(ParseTopFiveEntryFromElement)
                 .Where(e => e != null)
@@ -910,12 +910,12 @@ TRANSCRIPT TO ANALYZE:
                 else
                 {
                     // Check if the object directly contains numbered entries like "1", "2", etc.
-                    var numberedQuestions = new List<QuestionAnswer>();
+                    List<QuestionAnswer> numberedQuestions = new List<QuestionAnswer>();
                     foreach (var property in element.EnumerateObject())
                     {
                         if (int.TryParse(property.Name, out _))
                         {
-                            var qa = ParseQuestionAnswerFromElement(property.Value);
+                            QuestionAnswer qa = ParseQuestionAnswerFromElement(property.Value);
                             if (qa != null)
                             {
                                 numberedQuestions.Add(qa);
@@ -941,7 +941,7 @@ TRANSCRIPT TO ANALYZE:
                 // If it's an object, try to parse it as a single question
                 if (questionsElement.ValueKind == JsonValueKind.Object)
                 {
-                    var singleQuestion = ParseQuestionAnswerFromElement(questionsElement);
+                    QuestionAnswer singleQuestion = ParseQuestionAnswerFromElement(questionsElement);
                     if (singleQuestion != null)
                     {
                         _logger.LogInformation("Parsed single question from object");
@@ -952,10 +952,10 @@ TRANSCRIPT TO ANALYZE:
                 return new List<QuestionAnswer>();
             }
 
-            var arrayLength = questionsElement.GetArrayLength();
+            int arrayLength = questionsElement.GetArrayLength();
             _logger.LogInformation("Found {Length} questions in array", arrayLength);
 
-            var results = questionsElement.EnumerateArray()
+            List<QuestionAnswer> results = questionsElement.EnumerateArray()
                 .Select(ParseQuestionAnswerFromElement)
                 .Where(qa => qa != null)
                 .Cast<QuestionAnswer>()
@@ -1117,7 +1117,7 @@ TRANSCRIPT TO ANALYZE:
     {
         if (dto == null || !dto.Entries.Any()) return null;
 
-        var list = new TopFiveList();
+        TopFiveList list = new TopFiveList();
         list.Entries = dto.Entries.Select(e => new TopFiveEntry
         {
             Rank = e.Rank,
@@ -1161,7 +1161,7 @@ TRANSCRIPT TO ANALYZE:
 
     public SessionStats GenerateSessionStats(MovieSession session, CategoryResults categoryResults)
     {
-        var stats = new SessionStats
+        SessionStats stats = new SessionStats
         {
             TotalDuration = CalculateTotalDuration(session),
             TechnicalQuality = AssessTechnicalQuality(session),
@@ -1169,7 +1169,7 @@ TRANSCRIPT TO ANALYZE:
         };
 
         // Calculate energy level based on categories found
-        var highlightCount = CountHighlights(categoryResults);
+        int highlightCount = CountHighlights(categoryResults);
         stats.HighlightMoments = highlightCount;
 
         stats.EnergyLevel = highlightCount switch
@@ -1193,7 +1193,7 @@ TRANSCRIPT TO ANALYZE:
 
     private string CalculateTotalDuration(MovieSession session)
     {
-        var maxDuration = session.AudioFiles
+        double maxDuration = session.AudioFiles
             .Where(f => f.Duration.HasValue)
             .Select(f => f.Duration!.Value.TotalMinutes)
             .DefaultIfEmpty(0)
@@ -1201,8 +1201,8 @@ TRANSCRIPT TO ANALYZE:
 
         if (maxDuration >= 60)
         {
-            var hours = (int)(maxDuration / 60);
-            var minutes = (int)(maxDuration % 60);
+            int hours = (int)(maxDuration / 60);
+            int minutes = (int)(maxDuration % 60);
             return $"{hours}h {minutes}m";
         }
 
@@ -1211,11 +1211,11 @@ TRANSCRIPT TO ANALYZE:
 
     private string AssessTechnicalQuality(MovieSession session)
     {
-        var totalFiles = session.AudioFiles.Count;
+        int totalFiles = session.AudioFiles.Count;
         if (totalFiles == 0) return "Unknown";
 
-        var clearFiles = session.AudioFiles.Count(f => !string.IsNullOrEmpty(f.TranscriptText));
-        var percentage = (double)clearFiles / totalFiles * 100;
+        int clearFiles = session.AudioFiles.Count(f => !string.IsNullOrEmpty(f.TranscriptText));
+        double percentage = (double)clearFiles / totalFiles * 100;
 
         return percentage switch
         {
@@ -1228,7 +1228,7 @@ TRANSCRIPT TO ANALYZE:
 
     private int CountHighlights(CategoryResults results)
     {
-        var count = 0;
+        int count = 0;
 
         if (results.BestJoke != null) count++;
         if (results.HottestTake != null) count++;
@@ -1251,8 +1251,8 @@ TRANSCRIPT TO ANALYZE:
 
     private string GenerateBestMomentsSummary(CategoryResults results, EnergyLevel energyLevel)
     {
-        var highlights = new List<string>();
-        var spiceLevel = 0;
+        List<string> highlights = new List<string>();
+        int spiceLevel = 0;
 
         if (results.BestJoke != null) { highlights.Add("comedy gold"); spiceLevel++; }
         if (results.BiggestArgumentStarter != null) { highlights.Add("heated drama"); spiceLevel += 2; }
@@ -1262,7 +1262,7 @@ TRANSCRIPT TO ANALYZE:
         if (results.MostOffensiveTake != null) { highlights.Add("offensive commentary"); spiceLevel += 3; }
         if (results.MostPassionateDefense != null) { highlights.Add("passionate rants"); spiceLevel += 2; }
 
-        var energyDescription = energyLevel switch
+        string energyDescription = energyLevel switch
         {
             EnergyLevel.High when spiceLevel >= 8 => "🔥 ABSOLUTE CHAOS with",
             EnergyLevel.High when spiceLevel >= 5 => "🚀 Wild energy featuring",
@@ -1276,14 +1276,14 @@ TRANSCRIPT TO ANALYZE:
 
         if (highlights.Any())
         {
-            var joinedHighlights = highlights.Count switch
+            string joinedHighlights = highlights.Count switch
             {
                 1 => highlights[0],
                 2 => $"{highlights[0]} and {highlights[1]}",
                 >= 3 => $"{string.Join(", ", highlights.Take(highlights.Count - 1))}, and {highlights.Last()}"
             };
 
-            var enthusiasm = spiceLevel switch
+            string enthusiasm = spiceLevel switch
             {
                 >= 10 => " This one's going in the hall of fame! 🏆",
                 >= 7 => " Definitely replay worthy! 🎬",
@@ -1322,7 +1322,7 @@ TRANSCRIPT TO ANALYZE:
             }
 
             // Analyze transcripts for conversation patterns
-            var transcriptFiles = session.AudioFiles.Where(f => !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+            List<AudioFile> transcriptFiles = session.AudioFiles.Where(f => !string.IsNullOrEmpty(f.TranscriptText)).ToList();
             _logger.LogInformation("Analyzing {FileCount} transcript files for conversation patterns", transcriptFiles.Count);
 
             foreach (var audioFile in transcriptFiles)
@@ -1333,7 +1333,7 @@ TRANSCRIPT TO ANALYZE:
                 if (!string.IsNullOrEmpty(audioFile.TranscriptText))
                 {
                     // Log first few lines of transcript for debugging
-                    var firstLines = audioFile.TranscriptText.Split('\n').Take(5);
+                    IEnumerable<string> firstLines = audioFile.TranscriptText.Split('\n').Take(5);
                     _logger.LogDebug("First few lines of {FileName}: {Lines}",
                         audioFile.FileName, string.Join(" | ", firstLines));
                 }
@@ -1344,10 +1344,10 @@ TRANSCRIPT TO ANALYZE:
             // Calculate summary statistics
             if (stats.WordCounts.Any())
             {
-                var mostTalkative = stats.WordCounts.OrderByDescending(kvp => kvp.Value).First();
+                KeyValuePair<string, int> mostTalkative = stats.WordCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.MostTalkativePerson = $"{mostTalkative.Key} ({mostTalkative.Value:N0} words)";
 
-                var quietest = stats.WordCounts.OrderBy(kvp => kvp.Value).First();
+                KeyValuePair<string, int> quietest = stats.WordCounts.OrderBy(kvp => kvp.Value).First();
                 stats.QuietestPerson = $"{quietest.Key} ({quietest.Value:N0} words)";
 
                 _logger.LogInformation("Word counts: {WordCounts}",
@@ -1356,28 +1356,28 @@ TRANSCRIPT TO ANALYZE:
 
             if (stats.QuestionCounts.Any())
             {
-                var mostInquisitive = stats.QuestionCounts.OrderByDescending(kvp => kvp.Value).First();
+                KeyValuePair<string, int> mostInquisitive = stats.QuestionCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.MostInquisitivePerson = $"{mostInquisitive.Key} ({mostInquisitive.Value} questions)";
                 stats.TotalQuestions = stats.QuestionCounts.Values.Sum();
             }
 
             if (stats.InterruptionCounts.Any())
             {
-                var biggestInterruptor = stats.InterruptionCounts.OrderByDescending(kvp => kvp.Value).First();
+                KeyValuePair<string, int> biggestInterruptor = stats.InterruptionCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.BiggestInterruptor = $"{biggestInterruptor.Key} ({biggestInterruptor.Value} interruptions)";
                 stats.TotalInterruptions = stats.InterruptionCounts.Values.Sum();
             }
 
             if (stats.LaughterCounts.Any())
             {
-                var funniest = stats.LaughterCounts.OrderByDescending(kvp => kvp.Value).First();
+                KeyValuePair<string, int> funniest = stats.LaughterCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.FunniestPerson = $"{funniest.Key} ({funniest.Value} laughs triggered)";
                 stats.TotalLaughterMoments = stats.LaughterCounts.Values.Sum();
             }
 
             if (stats.CurseWordCounts.Any())
             {
-                var mostProfane = stats.CurseWordCounts.OrderByDescending(kvp => kvp.Value).First();
+                KeyValuePair<string, int> mostProfane = stats.CurseWordCounts.OrderByDescending(kvp => kvp.Value).First();
                 stats.MostProfanePerson = $"{mostProfane.Key} ({mostProfane.Value} curse words)";
                 stats.TotalCurseWords = stats.CurseWordCounts.Values.Sum();
 
@@ -1386,8 +1386,8 @@ TRANSCRIPT TO ANALYZE:
             }
 
             // Determine conversation tone
-            var totalWords = stats.WordCounts.Values.Sum();
-            var wordsPerMinute = CalculateWordsPerMinute(session, totalWords);
+            int totalWords = stats.WordCounts.Values.Sum();
+            double wordsPerMinute = CalculateWordsPerMinute(session, totalWords);
 
             stats.ConversationTone = wordsPerMinute switch
             {
@@ -1412,8 +1412,8 @@ TRANSCRIPT TO ANALYZE:
             return;
         }
 
-        var lines = transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var processedLines = 0;
+        string[] lines = transcript.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        int processedLines = 0;
         var totalLines = lines.Length;
 
         _logger.LogInformation("Analyzing transcript with {TotalLines} lines for participants: {Participants}",
@@ -1527,7 +1527,7 @@ TRANSCRIPT TO ANALYZE:
 
     private double CalculateWordsPerMinute(MovieSession session, int totalWords)
     {
-        var maxDuration = session.AudioFiles
+        double maxDuration = session.AudioFiles
             .Where(f => f.Duration.HasValue)
             .Select(f => f.Duration!.Value.TotalMinutes)
             .DefaultIfEmpty(1)
@@ -1553,7 +1553,7 @@ TRANSCRIPT TO ANALYZE:
             .Split(new char[] { ' ', '.', ',', '!', '?', ';', ':', '"', '\'', '-', '(', ')', '[', ']' },
                    StringSplitOptions.RemoveEmptyEntries);
 
-        var count = 0;
+        int count = 0;
 
         // Check individual words
         foreach (var word in words)

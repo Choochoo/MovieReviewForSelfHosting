@@ -49,7 +49,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var soundClips = await _databaseService.GetAllAsync<SoundClip>();
+                IEnumerable<SoundClip> soundClips = await _databaseService.GetAllAsync<SoundClip>();
                 return soundClips
                     .Where(s => s.PersonId == personId && s.IsActive)
                     .OrderBy(s => s.CreatedAt)
@@ -66,18 +66,18 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var uploadsPath = GetUploadsPath();
+                string uploadsPath = GetUploadsPath();
                 Directory.CreateDirectory(uploadsPath);
 
-                var fileName = $"{Guid.NewGuid()}_{file.FileName}";
-                var filePath = Path.Combine(uploadsPath, fileName);
+                string fileName = $"{Guid.NewGuid()}_{file.FileName}";
+                string filePath = Path.Combine(uploadsPath, fileName);
 
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                using (FileStream stream = new FileStream(filePath, FileMode.Create))
                 {
                     await file.CopyToAsync(stream);
                 }
 
-                var soundClip = new SoundClip
+                SoundClip soundClip = new SoundClip
                 {
                     PersonId = personId,
                     FileName = fileName,
@@ -105,26 +105,26 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
                     throw new ArgumentException("Invalid URL format", nameof(url));
 
-                using var httpClient = new HttpClient();
+                using HttpClient httpClient = new HttpClient();
                 httpClient.DefaultRequestHeaders.Add("User-Agent", "MovieReviewApp/1.0");
                 
-                var response = await httpClient.GetAsync(url);
+                HttpResponseMessage response = await httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
 
-                var uploadsPath = GetUploadsPath();
+                string uploadsPath = GetUploadsPath();
                 Directory.CreateDirectory(uploadsPath);
 
-                var contentType = response.Content.Headers.ContentType?.MediaType;
+                string? contentType = response.Content.Headers.ContentType?.MediaType;
                 
                 if (!string.IsNullOrEmpty(contentType) && contentType.Contains("text/html"))
                     throw new InvalidOperationException("The URL points to an HTML page, not an audio file. Please use a direct link to an audio file.");
                 
                 if (string.IsNullOrEmpty(contentType) || !contentType.StartsWith("audio/"))
                 {
-                    var urlExtension = Path.GetExtension(uri.LocalPath).ToLower();
+                    string urlExtension = Path.GetExtension(uri.LocalPath).ToLower();
                     contentType = urlExtension switch
                     {
                         ".mp3" => "audio/mpeg",
@@ -136,20 +136,20 @@ namespace MovieReviewApp.Infrastructure.Repositories
                     };
                 }
 
-                var extension = GetExtensionFromContentType(contentType);
-                var fileName = $"{Guid.NewGuid()}{extension}";
-                var filePath = Path.Combine(uploadsPath, fileName);
+                string extension = GetExtensionFromContentType(contentType);
+                string fileName = $"{Guid.NewGuid()}{extension}";
+                string filePath = Path.Combine(uploadsPath, fileName);
 
-                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                byte[] fileBytes = await response.Content.ReadAsByteArrayAsync();
                 
                 if (fileBytes.Length < 1024)
                     throw new InvalidOperationException("Downloaded file is too small to be valid audio");
 
                 await File.WriteAllBytesAsync(filePath, fileBytes);
 
-                var originalFileName = GetCleanFileName(uri);
+                string originalFileName = GetCleanFileName(uri);
 
-                var soundClip = new SoundClip
+                SoundClip soundClip = new SoundClip
                 {
                     PersonId = personId,
                     FileName = fileName,
@@ -177,7 +177,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var soundClip = await GetByIdAsync(id);
+                SoundClip? soundClip = await GetByIdAsync(id);
                 if (soundClip == null)
                     return false;
 
@@ -202,7 +202,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var soundClips = await _databaseService.GetAllAsync<SoundClip>();
+                IEnumerable<SoundClip> soundClips = await _databaseService.GetAllAsync<SoundClip>();
                 return soundClips
                     .Where(s => s.IsActive)
                     .GroupBy(s => s.PersonId)
@@ -242,12 +242,12 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var fileName = Path.GetFileName(uri.LocalPath);
+                string fileName = Path.GetFileName(uri.LocalPath);
                 
                 if (string.IsNullOrEmpty(fileName))
                     fileName = uri.Segments.LastOrDefault()?.Trim('/') ?? "audio";
                 
-                var cleanName = fileName.Split('?')[0].Split('#')[0];
+                string cleanName = fileName.Split('?')[0].Split('#')[0];
                 
                 if (string.IsNullOrEmpty(cleanName) || cleanName.StartsWith('.'))
                     cleanName = $"audio_{DateTime.Now:yyyyMMdd_HHmmss}";

@@ -46,7 +46,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var questions = await _databaseService.GetAllAsync<AwardQuestion>();
+                IEnumerable<AwardQuestion> questions = await _databaseService.GetAllAsync<AwardQuestion>();
                 return questions.Where(q => q.IsActive).ToList();
             }
             catch (Exception ex)
@@ -90,7 +90,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var question = await GetByIdAsync(id);
+                AwardQuestion? question = await GetByIdAsync(id);
                 if (question == null)
                     return false;
 
@@ -109,7 +109,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var question = await GetByIdAsync(id);
+                AwardQuestion? question = await GetByIdAsync(id);
                 if (question == null)
                     return false;
 
@@ -129,7 +129,7 @@ namespace MovieReviewApp.Infrastructure.Repositories
         {
             try
             {
-                var questions = await _databaseService.GetAllAsync<AwardQuestion>();
+                IEnumerable<AwardQuestion> questions = await _databaseService.GetAllAsync<AwardQuestion>();
                 return questions
                     .Where(q => q.MaxVotes == maxVotes)
                     .ToList();

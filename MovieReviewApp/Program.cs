@@ -20,7 +20,7 @@ using MovieReviewApp.Utilities;
 BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLegacy));
 
 // Configure MongoDB to ignore extra elements (for properties that were removed or have [BsonIgnore])
-var conventionPack = new ConventionPack { new IgnoreExtraElementsConvention(true) };
+ConventionPack conventionPack = new ConventionPack { new IgnoreExtraElementsConvention(true) };
 ConventionRegistry.Register("IgnoreExtraElements", conventionPack, type => true);
 
 
@@ -42,17 +42,17 @@ if (cmdArgs.ListInstances)
 
 
 // Initialize instance manager with command line instance name or default to "Default"
-var instanceName = cmdArgs.InstanceName;
+string? instanceName = cmdArgs.InstanceName;
 if (string.IsNullOrEmpty(instanceName))
 {
     instanceName = "Default";
 }
 
-var instanceManager = new InstanceManager(instanceName);
+InstanceManager instanceManager = new InstanceManager(instanceName);
 Console.WriteLine($"Starting Movie Review App instance: {instanceManager.InstanceName}");
 
 // Get instance configuration
-var instanceConfig = instanceManager.GetInstanceConfig();
+InstanceConfig instanceConfig = instanceManager.GetInstanceConfig();
 
 // Override port if specified in command line
 if (cmdArgs.Port.HasValue)
@@ -65,13 +65,13 @@ if (cmdArgs.Port.HasValue)
 instanceConfig.LastUsed = DateTime.UtcNow;
 instanceManager.SaveInstanceConfig(instanceConfig);
 
-var builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
+WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
 
 // Set the port from instance configuration
 builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
 
 // Initialize secure configuration
-var secretsManager = new SecretsManager(instanceManager);
+SecretsManager secretsManager = new SecretsManager(instanceManager);
 builder.Services.AddSingleton(instanceManager);
 builder.Services.AddSingleton(secretsManager);
 
@@ -79,8 +79,8 @@ builder.Services.AddSingleton(secretsManager);
 ((IConfigurationBuilder)builder.Configuration).Add(new SecureConfigurationSource(secretsManager));
 
 // Use base configuration (no more separate Adult/Kid configs)
-var configFile = "appsettings.json";
-var templateFile = "appsettings.json.template";
+string configFile = "appsettings.json";
+string templateFile = "appsettings.json.template";
 
 // Use template file if main config doesn't exist (for public distribution)  
 if (!File.Exists(configFile) && File.Exists(templateFile))
@@ -163,7 +163,7 @@ builder.Services.AddScoped<SoundboardRepository>();
 // Configure Facebook settings from secure config  
 builder.Services.Configure<FacebookSettings>(options =>
 {
-    var chatUrl = secretsManager.GetSecret("Facebook:ChatUrl");
+    string chatUrl = secretsManager.GetSecret("Facebook:ChatUrl");
 
     if (!string.IsNullOrEmpty(chatUrl))
     {
@@ -183,7 +183,7 @@ builder.Services.Configure<CookiePolicyOptions>(options =>
     options.MinimumSameSitePolicy = SameSiteMode.Strict;
 });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -196,7 +196,7 @@ if (!app.Environment.IsDevelopment())
 app.UseFirstRunSetup();
 
 // Configure static files with proper MIME types for audio
-var provider = new FileExtensionContentTypeProvider();
+FileExtensionContentTypeProvider provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".mp3"] = "audio/mpeg";
 provider.Mappings[".wav"] = "audio/wav";
 provider.Mappings[".ogg"] = "audio/ogg";

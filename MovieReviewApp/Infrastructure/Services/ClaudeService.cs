@@ -52,7 +52,7 @@ public class ClaudeService
 
         try
         {
-            var requestBody = new
+            object requestBody = new
             {
                 model = "claude-3-haiku-20240307",
                 max_tokens = 1000,
@@ -66,19 +66,19 @@ public class ClaudeService
                 }
             };
 
-            var json = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            string json = JsonSerializer.Serialize(requestBody);
+            StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}/v1/messages", content);
+            HttpResponseMessage response = await _httpClient.PostAsync($"{_baseUrl}/v1/messages", content);
 
             if (response.IsSuccessStatusCode)
             {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
+                string responseContent = await response.Content.ReadAsStringAsync();
+                JsonElement responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
                 
                 if (responseJson.TryGetProperty("content", out var contentArray) && contentArray.GetArrayLength() > 0)
                 {
-                    var firstContent = contentArray[0];
+                    JsonElement firstContent = contentArray[0];
                     if (firstContent.TryGetProperty("text", out var textElement))
                     {
                         return textElement.GetString();
@@ -88,7 +88,7 @@ public class ClaudeService
             else
             {
                 _logger.LogError("Claude API request failed with status: {StatusCode}", response.StatusCode);
-                var errorContent = await response.Content.ReadAsStringAsync();
+                string errorContent = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Claude API error response: {ErrorContent}", errorContent);
             }
         }

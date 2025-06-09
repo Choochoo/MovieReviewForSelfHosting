@@ -37,7 +37,7 @@ namespace MovieReviewApp.Utilities
         /// <returns>MarkupString containing the HTML</returns>
         public MarkupString ConvertToMarkupString(string? markdown)
         {
-            var html = ConvertToHtml(markdown);
+            string html = ConvertToHtml(markdown);
             return new MarkupString(html);
         }
 
@@ -50,7 +50,7 @@ namespace MovieReviewApp.Utilities
                 return string.Empty;
 
             // Replace line breaks with <br/>
-            var result = text.Replace("\r\n", "<br/>").Replace("\n", "<br/>").Replace("\r", "<br/>");
+            string result = text.Replace("\r\n", "<br/>").Replace("\n", "<br/>").Replace("\r", "<br/>");
             
             // Add double <br/> at the end if not already present
             if (!result.EndsWith("<br/><br/>"))

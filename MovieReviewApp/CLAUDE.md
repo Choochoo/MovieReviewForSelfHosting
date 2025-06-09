@@ -167,6 +167,48 @@ No formal test suite currently implemented. Manual testing through:
 
 ## Important Development Guidelines
 
+### Coding Standards
+
+#### Explicit Type Declarations
+- **NEVER use `var` keyword**: All variable declarations must use explicit types
+- **Enforced by .editorconfig**: The `.editorconfig` file enforces this as an error-level rule
+- **Examples**:
+  ```csharp
+  // CORRECT
+  List<MovieSession> sessions = await _database.GetAllAsync<MovieSession>();
+  string fileName = Path.GetFileName(filePath);
+  Dictionary<string, int> counts = new Dictionary<string, int>();
+  
+  // INCORRECT - Will cause build errors
+  var sessions = await _database.GetAllAsync<MovieSession>();
+  var fileName = Path.GetFileName(filePath);
+  var counts = new Dictionary<string, int>();
+  ```
+
+#### Architecture Principles
+- **Clean Architecture**: Organized into Application, Infrastructure, Core, and Utilities layers
+- **Repository Pattern**: Data access through repositories implementing interfaces
+- **Dependency Injection**: All services use interface abstraction (e.g., IDatabaseService)
+- **SOLID Principles**: Especially Dependency Inversion with interface-based design
+- **DRY & KISS**: Enforce "Don't Repeat Yourself" and "Keep It Simple Stupid" concepts
+- **Base Services**: Common functionality shared through base classes and interfaces
+
+### Project Structure (Clean Architecture)
+
+```
+Application/
+├── Services/           # Business logic services
+Infrastructure/
+├── Configuration/      # App configuration
+├── Database/          # Data access layer
+├── FileSystem/        # File operations
+├── Repositories/      # Data repositories
+└── Services/          # External service integrations
+Core/
+└── Interfaces/        # Domain interfaces
+Utilities/             # Helper classes and extensions
+```
+
 ### Git Commit Standards
 - **Never mention Claude**: Do not include any references to Claude, AI assistance, or automated generation in commit messages
 - **Focus on functionality**: Describe what was changed and why, not how it was created
