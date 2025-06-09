@@ -45,8 +45,15 @@ public class SessionAnalysisService
             foreach (AudioFile file in transcribedFiles)
             {
                 file.ProcessingStatus = AudioProcessingStatus.ProcessingWithAI;
-                file.CurrentStep = "AI analysis in progress";
+                file.CurrentStep = "Waiting for OpenAI response";
                 file.ProgressPercentage = 50;
+            }
+
+            // Update status to show processing has begun
+            foreach (AudioFile file in transcribedFiles)
+            {
+                file.CurrentStep = "Processing with AI...";
+                file.ProgressPercentage = 75;
             }
 
             // Run analysis using existing service
@@ -62,7 +69,7 @@ public class SessionAnalysisService
             foreach (AudioFile file in transcribedFiles)
             {
                 file.ProcessingStatus = AudioProcessingStatus.Complete;
-                file.CurrentStep = "Processing complete";
+                file.CurrentStep = "Complete";
                 file.ProgressPercentage = 100;
                 file.CanRetry = false;
             }

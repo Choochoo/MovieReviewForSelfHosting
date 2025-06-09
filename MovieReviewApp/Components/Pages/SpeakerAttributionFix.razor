@@ -1,0 +1,616 @@
+@page "/speaker-attribution-fix"
+@using MovieReviewApp.Application.Services.Analysis
+@using MovieReviewApp.Application.Services.Session
+@inject SpeakerAttributionFixService SpeakerFixService
+@inject SessionRepositoryService SessionRepo
+@inject ILogger<SpeakerAttributionFix> Logger
+
+<PageTitle>Speaker Attribution Fix</PageTitle>
+
+<div class="container-fluid">
+    <h1>Speaker Attribution Fix Tool</h1>
+    <p>This tool fixes speaker attribution in transcription files by matching utterances between master mix and individual mic files.</p>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h3>Available Sessions</h3>
+            @if (sessions == null)
+            {
+                <p>Loading sessions...</p>
+            }
+            else if (!sessions.Any())
+            {
+                <p>No sessions found with transcription files.</p>
+            }
+            else
+            {
+                <div class="list-group">
+                    @foreach (var session in sessions)
+                    {
+                        <button class="list-group-item list-group-item-action @(selectedSession?.Id == session.Id ? "active" : "")"
+                                @onclick="() => SelectSession(session)">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">@session.MovieTitle</h5>
+                                <small>@session.Date.ToString("yyyy-MM-dd")</small>
+                            </div>
+                            <p class="mb-1">
+                                <span class="badge bg-info">@session.AudioFiles.Count files</span>
+                                @if (session.AudioFiles.Any(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText)))
+                                {
+                                    <span class="badge bg-success">Master Mix</span>
+                                }
+                            </p>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="col-md-6">
+            @if (selectedSession != null)
+            {
+                <h3>Session Details</h3>
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@selectedSession.MovieTitle</h5>
+                        <p class="card-text">
+                            <strong>Date:</strong> @selectedSession.Date.ToString("yyyy-MM-dd")<br />
+                            <strong>Participants:</strong> @string.Join(", ", selectedSession.ParticipantsPresent)<br />
+                            <strong>Folder:</strong> @selectedSession.FolderPath
+                        </p>
+
+                        <h6>Audio Files:</h6>
+                        <ul class="list-unstyled"><a href="~/uploads/sessions/2024-11-01_Solaris/master_mix_with_speakers.json">~/uploads/sessions/2024-11-01_Solaris/master_mix_with_speakers.json</a>
+                            @foreach (var file in selectedSession.AudioFiles.OrderBy(f => f.FileName))
+                            {
+                                <li>
+                                    <i class="bi @(file.IsMasterRecording ? "bi-mic-fill" : "bi-mic") text-primary"></i>
+                                    @file.FileName
+                                    @if (!string.IsNullOrEmpty(file.TranscriptText))
+                                    {
+                                        <span class="badge bg-success ms-2">Transcribed</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+
+                        @if (!isProcessing)
+                        {
+                            <button class="btn btn-primary" @onclick="RunAnalysis" disabled="@(analysisReport != null)">
+                                <i class="bi bi-search"></i> Analyze Files
+                            </button>
+
+                            @if (analysisReport != null && analysisReport.MasterMixFound)
+                            {
+                                <button class="btn btn-success ms-2" @onclick="RunFix">
+                                    <i class="bi bi-tools"></i> Fix Speaker Attribution
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            <span>@processingMessage</span>
+                        }
+                    </div>
+                </div>
+
+                @if (analysisReport != null)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5>Analysis Report</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Master Mix File</h6>
+                                    @if (analysisReport.MasterMixFound)
+                                    {
+                                        <p class="text-success">
+                                            <i class="bi bi-check-circle"></i> Found<br />
+                                            Utterances: @analysisReport.MasterMixUtteranceCount
+                                        </p>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-danger">
+                                            <i class="bi bi-x-circle"></i> Not found
+                                        </p>
+                                    }
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Individual Mic Files</h6>
+                                    <p>Found: @analysisReport.TotalMicFilesFound of 6</p>
+                                    <ul class="list-unstyled">
+                                        @for (int i = 1; i <= 6; i++)
+                                        {
+                                            var micNumber = i;
+                                            @if (analysisReport.MicFilesFound.ContainsKey(micNumber))
+                                            {
+                                                <li class="text-success">
+                                                    <i class="bi bi-check-circle"></i> MIC@(micNumber): @analysisReport.MicFileUtteranceCounts[micNumber] utterances
+                                                    @if (analysisReport.MicFileSpeakerAlwaysZero.GetValueOrDefault(micNumber))
+                                                    {
+                                                        <span class="badge bg-warning text-dark ms-2">All speaker=0</span>
+                                                    }
+                                                </li>
+                                            }
+                                            else
+                                            {
+                                                <li class="text-muted">
+                                                    <i class="bi bi-dash-circle"></i> MIC@(micNumber): Not found
+                                                </li>
+                                            }
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+
+                            @if (analysisReport.Errors.Any())
+                            {
+                                <div class="alert alert-danger mt-3">
+                                    <h6>Errors:</h6>
+                                    <ul class="mb-0">
+                                        @foreach (var error in analysisReport.Errors)
+                                        {
+                                            <li>@error</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (fixResult != null)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h5>Speaker Attribution Results</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (fixResult.Success)
+                            {
+                                <div class="alert alert-success">
+                                    <i class="bi bi-check-circle"></i> Successfully fixed speaker attribution!
+                                    <br />
+                                    <small>Output file: @Path.GetFileName(fixResult.OutputFilePath)</small>
+                                </div>
+
+                                <h6>Statistics</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <canvas id="matchChart" width="200" height="200"></canvas>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Total Utterances:</strong> @fixResult.TotalUtterances</p>
+                                        <p><strong>Matched:</strong> @fixResult.MatchedUtterances (@($"{(double)fixResult.MatchedUtterances / fixResult.TotalUtterances * 100:F1}")%)</p>
+                                        <p><strong>Unmatched:</strong> @fixResult.UnmatchedUtterances (@($"{(double)fixResult.UnmatchedUtterances / fixResult.TotalUtterances * 100:F1}")%)</p>
+                                    </div>
+                                </div>
+
+                                <h6 class="mt-3">Conversation Statistics</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>Utterances per Person</h6>
+                                        <ul class="list-group">
+                                            @foreach (var kvp in fixResult.UtterancesPerPerson.OrderByDescending(x => x.Value))
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    @kvp.Key
+                                                    <span class="badge bg-primary rounded-pill">@kvp.Value</span>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>Word Counts per Person</h6>
+                                        <ul class="list-group">
+                                            @foreach (var kvp in fixResult.WordCountsPerSpeaker.OrderByDescending(x => x.Value))
+                                            {
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    @kvp.Key
+                                                    <span class="badge bg-info rounded-pill">@kvp.Value words</span>
+                                                </li>
+                                            }
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                @if (fixResult.QuestionCountsPerSpeaker.Any() || fixResult.LaughterCountsPerSpeaker.Any() || fixResult.CurseWordCountsPerSpeaker.Any() || fixResult.PejorativeCountsPerSpeaker.Any())
+                                {
+                                    <div class="row mt-3">
+                                        @if (fixResult.QuestionCountsPerSpeaker.Any())
+                                        {
+                                            <div class="col-md-3">
+                                                <h6>Questions per Person</h6>
+                                                <ul class="list-group">
+                                                    @foreach (var kvp in fixResult.QuestionCountsPerSpeaker.OrderByDescending(x => x.Value))
+                                                    {
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <div class="w-100">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    @kvp.Key
+                                                                    <span class="badge bg-warning rounded-pill">@kvp.Value ?</span>
+                                                                </div>
+                                                                @if (fixResult.QuestionPhrasesPerSpeaker.ContainsKey(kvp.Key) && fixResult.QuestionPhrasesPerSpeaker[kvp.Key].Any())
+                                                                {
+                                                                    <details class="mt-2">
+                                                                        <summary class="cursor-pointer text-muted small">
+                                                                            <i class="bi bi-question-circle"></i> Show questions (@fixResult.QuestionPhrasesPerSpeaker[kvp.Key].Count phrases)
+                                                                        </summary>
+                                                                        <div class="mt-2 small">
+                                                                            @foreach (var question in fixResult.QuestionPhrasesPerSpeaker[kvp.Key].Take(10))
+                                                                            {
+                                                                                <div class="p-2 mb-1 bg-light rounded">
+                                                                                    <i class="bi bi-question-circle text-warning"></i> @question
+                                                                                </div>
+                                                                            }
+                                                                            @if (fixResult.QuestionPhrasesPerSpeaker[kvp.Key].Count > 10)
+                                                                            {
+                                                                                <div class="text-muted">... and @(fixResult.QuestionPhrasesPerSpeaker[kvp.Key].Count - 10) more questions</div>
+                                                                            }
+                                                                        </div>
+                                                                    </details>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                        @if (fixResult.LaughterCountsPerSpeaker.Any())
+                                        {
+                                            <div class="col-md-3">
+                                                <h6>Laughter per Person</h6>
+                                                <ul class="list-group">
+                                                    @foreach (var kvp in fixResult.LaughterCountsPerSpeaker.OrderByDescending(x => x.Value))
+                                                    {
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <div class="w-100">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    @kvp.Key
+                                                                    <span class="badge bg-success rounded-pill">@kvp.Value 😂</span>
+                                                                </div>
+                                                                @if (fixResult.LaughterWordsPerSpeaker.ContainsKey(kvp.Key) && fixResult.LaughterWordsPerSpeaker[kvp.Key].Any())
+                                                                {
+                                                                    <details class="mt-2">
+                                                                        <summary class="cursor-pointer text-muted small">
+                                                                            <i class="bi bi-list-ul"></i> Show details (@fixResult.LaughterWordsPerSpeaker[kvp.Key].Count words)
+                                                                        </summary>
+                                                                        <div class="mt-2 small">
+                                                                            @foreach (var word in fixResult.LaughterWordsPerSpeaker[kvp.Key].Take(20))
+                                                                            {
+                                                                                <span class="badge bg-light text-dark me-1 mb-1">@word</span>
+                                                                            }
+                                                                            @if (fixResult.LaughterWordsPerSpeaker[kvp.Key].Count > 20)
+                                                                            {
+                                                                                <div class="text-muted">... and @(fixResult.LaughterWordsPerSpeaker[kvp.Key].Count - 20) more</div>
+                                                                            }
+                                                                        </div>
+                                                                    </details>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                        @if (fixResult.CurseWordCountsPerSpeaker.Any())
+                                        {
+                                            <div class="col-md-3">
+                                                <h6>Curse Words per Person</h6>
+                                                <ul class="list-group">
+                                                    @foreach (var kvp in fixResult.CurseWordCountsPerSpeaker.OrderByDescending(x => x.Value))
+                                                    {
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <div class="w-100">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    @kvp.Key
+                                                                    <span class="badge bg-danger rounded-pill">@kvp.Value 🤬</span>
+                                                                </div>
+                                                                @if (fixResult.CurseWordsPerSpeaker.ContainsKey(kvp.Key) && fixResult.CurseWordsPerSpeaker[kvp.Key].Any())
+                                                                {
+                                                                    <details class="mt-2">
+                                                                        <summary class="cursor-pointer text-muted small">
+                                                                            <i class="bi bi-list-ul"></i> Show details (@fixResult.CurseWordsPerSpeaker[kvp.Key].Count words)
+                                                                        </summary>
+                                                                        <div class="mt-2 small">
+                                                                            @foreach (var word in fixResult.CurseWordsPerSpeaker[kvp.Key].Take(20))
+                                                                            {
+                                                                                @if (word.Contains("(mild)"))
+                                                                                {
+                                                                                    <span class="badge bg-warning text-dark me-1 mb-1">@word</span>
+                                                                                }
+                                                                                else if (word.Contains("(strong)"))
+                                                                                {
+                                                                                    <span class="badge bg-danger me-1 mb-1">@word</span>
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    <span class="badge bg-secondary me-1 mb-1">@word</span>
+                                                                                }
+                                                                            }
+                                                                            @if (fixResult.CurseWordsPerSpeaker[kvp.Key].Count > 20)
+                                                                            {
+                                                                                <div class="text-muted">... and @(fixResult.CurseWordsPerSpeaker[kvp.Key].Count - 20) more</div>
+                                                                            }
+                                                                        </div>
+                                                                    </details>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                        @if (fixResult.PejorativeCountsPerSpeaker.Any())
+                                        {
+                                            <div class="col-md-3">
+                                                <h6>Pejoratives per Person</h6>
+                                                <ul class="list-group">
+                                                    @foreach (var kvp in fixResult.PejorativeCountsPerSpeaker.OrderByDescending(x => x.Value))
+                                                    {
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <div class="w-100">
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    @kvp.Key
+                                                                    <span class="badge bg-warning text-dark rounded-pill">@kvp.Value 😤</span>
+                                                                </div>
+                                                                @if (fixResult.PejorativeWordsPerSpeaker.ContainsKey(kvp.Key) && fixResult.PejorativeWordsPerSpeaker[kvp.Key].Any())
+                                                                {
+                                                                    <details class="mt-2">
+                                                                        <summary class="cursor-pointer text-muted small">
+                                                                            <i class="bi bi-exclamation-triangle"></i> Show details (@fixResult.PejorativeWordsPerSpeaker[kvp.Key].Count words)
+                                                                        </summary>
+                                                                        <div class="mt-2 small">
+                                                                            @foreach (var word in fixResult.PejorativeWordsPerSpeaker[kvp.Key].Take(20))
+                                                                            {
+                                                                                <span class="badge bg-warning text-dark me-1 mb-1">@word</span>
+                                                                            }
+                                                                            @if (fixResult.PejorativeWordsPerSpeaker[kvp.Key].Count > 20)
+                                                                            {
+                                                                                <div class="text-muted">... and @(fixResult.PejorativeWordsPerSpeaker[kvp.Key].Count - 20) more</div>
+                                                                            }
+                                                                        </div>
+                                                                    </details>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                @if (!string.IsNullOrEmpty(fixResult.ConversationTone))
+                                {
+                                    <div class="mt-3">
+                                        <h6>Conversation Tone</h6>
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-chat-quote"></i> @fixResult.ConversationTone
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (fixResult.TotalWords > 0 || fixResult.TotalQuestions > 0 || fixResult.TotalLaughterMoments > 0 || fixResult.TotalCurseWords > 0 || fixResult.TotalPejoratives > 0)
+                                {
+                                    <div class="mt-3">
+                                        <h6>Overall Totals</h6>
+                                        <div class="row">
+                                            @if (fixResult.TotalWords > 0)
+                                            {
+                                                <div class="col-md-2">
+                                                    <div class="card text-center">
+                                                        <div class="card-body">
+                                                            <h5 class="card-title">@fixResult.TotalWords</h5>
+                                                            <p class="card-text">Total Words</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (fixResult.TotalQuestions > 0)
+                                            {
+                                                <div class="col-md-2">
+                                                    <div class="card text-center">
+                                                        <div class="card-body">
+                                                            <h5 class="card-title">@fixResult.TotalQuestions</h5>
+                                                            <p class="card-text">Total Questions</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (fixResult.TotalLaughterMoments > 0)
+                                            {
+                                                <div class="col-md-2">
+                                                    <div class="card text-center">
+                                                        <div class="card-body">
+                                                            <h5 class="card-title">@fixResult.TotalLaughterMoments</h5>
+                                                            <p class="card-text">Laughter Moments</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (fixResult.TotalCurseWords > 0)
+                                            {
+                                                <div class="col-md-2">
+                                                    <div class="card text-center">
+                                                        <div class="card-body">
+                                                            <h5 class="card-title">@fixResult.TotalCurseWords</h5>
+                                                            <p class="card-text">Curse Words</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                            @if (fixResult.TotalPejoratives > 0)
+                                            {
+                                                <div class="col-md-2">
+                                                    <div class="card text-center">
+                                                        <div class="card-body">
+                                                            <h5 class="card-title">@fixResult.TotalPejoratives</h5>
+                                                            <p class="card-text">Pejoratives</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (fixResult.UnmatchedTexts.Any())
+                                {
+                                    <details class="mt-3">
+                                        <summary class="text-warning cursor-pointer">
+                                            <i class="bi bi-exclamation-triangle"></i> Unmatched Utterances (@fixResult.UnmatchedTexts.Count)
+                                        </summary>
+                                        <div class="mt-2 small">
+                                            @foreach (var text in fixResult.UnmatchedTexts.Take(10))
+                                            {
+                                                <p class="mb-1 text-muted">@text</p>
+                                            }
+                                            @if (fixResult.UnmatchedTexts.Count > 10)
+                                            {
+                                                <p class="text-muted">... and @(fixResult.UnmatchedTexts.Count - 10) more</p>
+                                            }
+                                        </div>
+                                    </details>
+                                }
+                            }
+                            else
+                            {
+                                <div class="alert alert-danger">
+                                    <i class="bi bi-x-circle"></i> Failed to fix speaker attribution
+                                    <br />
+                                    <small>@fixResult.ErrorMessage</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else if (sessions?.Any() == true)
+            {
+                <div class="alert alert-info">
+                    <i class="bi bi-arrow-left"></i> Select a session from the list to begin
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private List<MovieReviewApp.Models.MovieSession>? sessions;
+    private MovieReviewApp.Models.MovieSession? selectedSession;
+    private TranscriptionAnalysisReport? analysisReport;
+    private SpeakerAttributionResult? fixResult;
+    private bool isProcessing;
+    private string processingMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessions();
+    }
+
+    private async Task LoadSessions()
+    {
+        try
+        {
+            var allSessions = await SessionRepo.GetAllSessionsAsync();
+            // Filter to sessions that have at least one transcribed file
+            sessions = allSessions
+                .Where(s => s.AudioFiles.Any(f => !string.IsNullOrEmpty(f.TranscriptText)))
+                .OrderByDescending(s => s.Date)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading sessions");
+            sessions = new List<MovieReviewApp.Models.MovieSession>();
+        }
+    }
+
+    private void SelectSession(MovieReviewApp.Models.MovieSession session)
+    {
+        selectedSession = session;
+        analysisReport = null;
+        fixResult = null;
+    }
+
+    private async Task RunAnalysis()
+    {
+        if (selectedSession == null || string.IsNullOrEmpty(selectedSession.FolderPath))
+            return;
+
+        isProcessing = true;
+        processingMessage = "Analyzing transcription files...";
+        
+        try
+        {
+            analysisReport = await SpeakerFixService.AnalyzeTranscriptionFiles(selectedSession.FolderPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error running analysis");
+            analysisReport = new TranscriptionAnalysisReport
+            {
+                Errors = new List<string> { ex.Message }
+            };
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task RunFix()
+    {
+        if (selectedSession == null || string.IsNullOrEmpty(selectedSession.FolderPath))
+            return;
+
+        isProcessing = true;
+        processingMessage = "Fixing speaker attribution...";
+        
+        try
+        {
+            fixResult = await SpeakerFixService.FixSpeakerAttributionForSession(selectedSession);
+
+            if (fixResult.Success)
+            {
+                // Draw the pie chart
+                await DrawMatchChart();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error fixing speaker attribution");
+            fixResult = new SpeakerAttributionResult
+            {
+                Success = false,
+                ErrorMessage = ex.Message
+            };
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task DrawMatchChart()
+    {
+        if (fixResult == null || !fixResult.Success)
+            return;
+
+        // This would typically use JavaScript interop to draw a chart
+        // For now, we'll just log the intention
+        Logger.LogInformation("Would draw chart with {Matched} matched and {Unmatched} unmatched",
+            fixResult.MatchedUtterances, fixResult.UnmatchedUtterances);
+    }
+}

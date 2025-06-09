@@ -116,8 +116,8 @@ public class MovieSessionAnalysisOrchestrator
     /// </summary>
     private async Task<CategoryResults> AnalyzeSingleSessionAsync(MovieSession session)
     {
-        // Step 1: Build combined transcript
-        string? combinedTranscript = _transcriptProcessingService.BuildCombinedTranscript(session);
+        // Step 1: Build enhanced transcript with speaker attribution (runs BEFORE OpenAI analysis)
+        string? combinedTranscript = await _transcriptProcessingService.BuildEnhancedTranscriptForAI(session);
 
         _logger.LogDebug("Built combined transcript for session {SessionId}: {Length} characters",
             session.Id, combinedTranscript?.Length ?? 0);

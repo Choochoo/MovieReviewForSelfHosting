@@ -155,6 +155,7 @@ builder.Services.AddScoped<TranscriptProcessingService>();
 builder.Services.AddScoped<PromptGenerationService>();
 builder.Services.AddScoped<ResponseParsingService>();
 builder.Services.AddScoped<SimpleSessionStatsService>();
+builder.Services.AddScoped<SpeakerAttributionFixService>();
 builder.Services.AddHttpClient<OpenAIApiService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis

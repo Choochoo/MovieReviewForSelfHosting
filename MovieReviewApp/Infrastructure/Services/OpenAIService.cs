@@ -53,7 +53,7 @@ public class OpenAIService
         {
             object requestBody = new
             {
-                model = "gpt-3.5-turbo",
+                model = "GPT-4o",
                 messages = new[]
                 {
                     new
@@ -75,11 +75,11 @@ public class OpenAIService
             {
                 string responseContent = await response.Content.ReadAsStringAsync();
                 JsonElement responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                
+
                 if (responseJson.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
                 {
                     JsonElement firstChoice = choices[0];
-                    if (firstChoice.TryGetProperty("message", out var message) && 
+                    if (firstChoice.TryGetProperty("message", out var message) &&
                         message.TryGetProperty("content", out var contentElement))
                     {
                         return contentElement.GetString()?.Trim();

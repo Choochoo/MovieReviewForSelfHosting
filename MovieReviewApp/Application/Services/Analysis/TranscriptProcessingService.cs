@@ -12,10 +12,37 @@ namespace MovieReviewApp.Application.Services.Analysis;
 public class TranscriptProcessingService
 {
     private readonly ILogger<TranscriptProcessingService> _logger;
+    private readonly SpeakerAttributionFixService _speakerFixService;
 
-    public TranscriptProcessingService(ILogger<TranscriptProcessingService> logger)
+    public TranscriptProcessingService(ILogger<TranscriptProcessingService> logger, SpeakerAttributionFixService speakerFixService)
     {
         _logger = logger;
+        _speakerFixService = speakerFixService;
+    }
+
+    /// <summary>
+    /// Builds an enhanced transcript with corrected speaker attribution for AI analysis.
+    /// This method runs speaker attribution fix and provides name accuracy guidance to OpenAI.
+    /// </summary>
+    /// <param name="session">The movie session containing audio files with transcripts.</param>
+    /// <returns>A formatted transcript with corrected speaker names and AI guidance.</returns>
+    public async Task<string> BuildEnhancedTranscriptForAI(MovieSession session)
+    {
+        try
+        {
+            _logger.LogInformation("Building enhanced transcript with speaker attribution for session {SessionId}", session.Id);
+            
+            // Use speaker attribution fix to get corrected transcript
+            string enhancedTranscript = await _speakerFixService.CreateCorrectedTranscriptForAI(session);
+            
+            _logger.LogInformation("Successfully created enhanced transcript for AI analysis (length: {Length} chars)", enhancedTranscript.Length);
+            return enhancedTranscript;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create enhanced transcript, falling back to standard method");
+            return BuildCombinedTranscript(session);
+        }
     }
 
     /// <summary>

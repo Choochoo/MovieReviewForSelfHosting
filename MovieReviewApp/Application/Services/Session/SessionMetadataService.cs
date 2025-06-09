@@ -169,7 +169,7 @@ public class SessionMetadataService
                 FilePath = filePath,
                 FileSize = new FileInfo(filePath).Length,
                 ProcessingStatus = AudioProcessingStatus.Pending,
-                CurrentStep = "Ready to process",
+                CurrentStep = "Waiting to upload",
                 ProgressPercentage = 0,
                 LastUpdated = DateTime.UtcNow,
                 CanRetry = true

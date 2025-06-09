@@ -70,7 +70,7 @@ public class AudioProcessingWorkflowService
         {
             AudioFile file = wavFiles[i];
             file.ProcessingStatus = AudioProcessingStatus.ConvertingToMp3;
-            file.CurrentStep = "Converting to MP3";
+            file.CurrentStep = "Converting to MP3...";
             file.ProgressPercentage = 0;
 
             try
@@ -88,7 +88,7 @@ public class AudioProcessingWorkflowService
                 if (result.success)
                 {
                     file.ProcessingStatus = AudioProcessingStatus.PendingMp3;
-                    file.CurrentStep = "MP3 conversion complete";
+                    file.CurrentStep = "Ready to upload to Gladia";
                     file.ProgressPercentage = 100;
                     file.CanRetry = true;
                 }
@@ -129,7 +129,7 @@ public class AudioProcessingWorkflowService
         {
             AudioFile file = filesToUpload[i];
             file.ProcessingStatus = AudioProcessingStatus.UploadingToGladia;
-            file.CurrentStep = "Uploading to Gladia";
+            file.CurrentStep = "Uploading to Gladia...";
             file.ProgressPercentage = 0;
 
             try
@@ -149,7 +149,7 @@ public class AudioProcessingWorkflowService
                 if (result.success)
                 {
                     file.ProcessingStatus = AudioProcessingStatus.UploadedToGladia;
-                    file.CurrentStep = "Upload complete";
+                    file.CurrentStep = "Ready to download transcriptions";
                     file.ProgressPercentage = 100;
                     file.CanRetry = true;
                 }
@@ -178,12 +178,32 @@ public class AudioProcessingWorkflowService
     /// </summary>
     public async Task ProcessTranscriptionsAsync(MovieSession session, Action<string, int>? progressCallback = null)
     {
+        // Debug: Log all files and their status before filtering
+        Console.WriteLine($"DEBUG TRANSCRIPTION: ProcessTranscriptionsAsync called with {session.AudioFiles.Count} files:");
+        foreach (var file in session.AudioFiles)
+        {
+            Console.WriteLine($"  File: {file.FileName}");
+            Console.WriteLine($"    Status: {file.ProcessingStatus}");
+            Console.WriteLine($"    AudioUrl: {(string.IsNullOrEmpty(file.AudioUrl) ? "EMPTY" : "SET")}");
+            Console.WriteLine($"    TranscriptText: {(string.IsNullOrEmpty(file.TranscriptText) ? "EMPTY" : "HAS_TEXT")}");
+        }
+
         List<AudioFile> filesToTranscribe = session.AudioFiles.Where(f => 
             f.ProcessingStatus == AudioProcessingStatus.UploadedToGladia && 
             !string.IsNullOrEmpty(f.AudioUrl) &&
             string.IsNullOrEmpty(f.TranscriptText)).ToList();
 
-        if (!filesToTranscribe.Any()) return;
+        Console.WriteLine($"DEBUG TRANSCRIPTION: After filtering, {filesToTranscribe.Count} files qualify for transcription:");
+        foreach (var file in filesToTranscribe)
+        {
+            Console.WriteLine($"  - {file.FileName}");
+        }
+
+        if (!filesToTranscribe.Any()) 
+        {
+            Console.WriteLine("DEBUG TRANSCRIPTION: No files to transcribe, returning early");
+            return;
+        }
 
         progressCallback?.Invoke("Processing transcriptions", 60);
 
@@ -191,7 +211,7 @@ public class AudioProcessingWorkflowService
         {
             AudioFile file = filesToTranscribe[i];
             file.ProcessingStatus = AudioProcessingStatus.Transcribing;
-            file.CurrentStep = "Starting transcription";
+            file.CurrentStep = "Downloading transcriptions...";
             file.ProgressPercentage = 0;
 
             try
@@ -202,7 +222,7 @@ public class AudioProcessingWorkflowService
                     file.AudioUrl!, numSpeakers, true, file.FileName);
                 
                 file.TranscriptId = transcriptionId;
-                file.CurrentStep = "Transcription in progress";
+                file.CurrentStep = "Processing transcripts...";
                 file.ProgressPercentage = 50;
 
                 // Wait for completion
@@ -215,7 +235,7 @@ public class AudioProcessingWorkflowService
                     : rawTranscript;
 
                 file.ProcessingStatus = AudioProcessingStatus.TranscriptionComplete;
-                file.CurrentStep = "Transcription complete";
+                file.CurrentStep = "Ready to process transcriptions";
                 file.ProgressPercentage = 100;
                 file.ProcessedAt = DateTime.UtcNow;
                 file.CanRetry = true;
@@ -230,6 +250,59 @@ public class AudioProcessingWorkflowService
 
             progressCallback?.Invoke($"Transcribed {i + 1}/{filesToTranscribe.Count} files", 60 + (i + 1) * 20 / filesToTranscribe.Count);
         }
+        
+        // Validate that ALL files are now transcribed before allowing transcript processing
+        await ValidateAllFilesTranscribed(session, progressCallback);
+    }
+    
+    /// <summary>
+    /// Validates that ALL audio files have been successfully transcribed before proceeding to transcript processing.
+    /// </summary>
+    private async Task ValidateAllFilesTranscribed(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        Console.WriteLine($"DEBUG VALIDATION: Checking if all files are transcribed for session {session.Id}");
+        
+        List<AudioFile> allFiles = session.AudioFiles.ToList();
+        List<AudioFile> transcribedFiles = allFiles.Where(f => 
+            f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete &&
+            !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+        
+        List<AudioFile> pendingFiles = allFiles.Where(f => 
+            f.ProcessingStatus != AudioProcessingStatus.TranscriptionComplete ||
+            string.IsNullOrEmpty(f.TranscriptText)).ToList();
+        
+        Console.WriteLine($"DEBUG VALIDATION: Total files: {allFiles.Count}, Transcribed: {transcribedFiles.Count}, Pending: {pendingFiles.Count}");
+        
+        foreach (var file in pendingFiles)
+        {
+            Console.WriteLine($"DEBUG VALIDATION: Pending file: {file.FileName}, Status: {file.ProcessingStatus}, HasTranscript: {!string.IsNullOrEmpty(file.TranscriptText)}");
+        }
+        
+        if (pendingFiles.Any())
+        {
+            string pendingFileNames = string.Join(", ", pendingFiles.Select(f => f.FileName));
+            string message = $"Cannot proceed to transcript processing: {pendingFiles.Count} files still need transcription: {pendingFileNames}";
+            
+            Console.WriteLine($"DEBUG VALIDATION: {message}");
+            progressCallback?.Invoke(message, 80);
+            
+            // Mark all files as waiting for transcript processing
+            foreach (var file in transcribedFiles)
+            {
+                file.CurrentStep = "Waiting for all files to be transcribed";
+            }
+            
+            throw new InvalidOperationException(message);
+        }
+        
+        // All files are transcribed - mark them as ready for transcript processing
+        foreach (var file in transcribedFiles)
+        {
+            file.CurrentStep = "Ready to process transcriptions";
+        }
+        
+        Console.WriteLine($"DEBUG VALIDATION: All {transcribedFiles.Count} files are transcribed and ready for transcript processing");
+        progressCallback?.Invoke("All files transcribed - ready for transcript processing", 90);
     }
 
     /// <summary>

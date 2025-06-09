@@ -44,7 +44,7 @@ namespace MovieReviewApp.Models
         public DateTime? ProcessedAt { get; set; }
         public string? JsonFilePath { get; set; }
         public int ProgressPercentage { get; set; } = 0;
-        public string? CurrentStep { get; set; } = "Waiting to start";
+        public string? CurrentStep { get; set; } = "Waiting to upload";
         public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
         public bool CanRetry { get; set; } = false;
     }

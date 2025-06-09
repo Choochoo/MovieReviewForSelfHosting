@@ -54,7 +54,7 @@ public class ClaudeService
         {
             object requestBody = new
             {
-                model = "claude-3-haiku-20240307",
+                model = "claude-sonnet-4-20250514",
                 max_tokens = 1000,
                 messages = new[]
                 {
@@ -75,7 +75,7 @@ public class ClaudeService
             {
                 string responseContent = await response.Content.ReadAsStringAsync();
                 JsonElement responseJson = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                
+
                 if (responseJson.TryGetProperty("content", out var contentArray) && contentArray.GetArrayLength() > 0)
                 {
                     JsonElement firstContent = contentArray[0];
