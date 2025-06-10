@@ -37,7 +37,22 @@
       "Bash(dotnet restore)",
       "Bash(dotnet clean:*)",
       "Bash(dotnet restore:*)",
-      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"PHONE|SOUND_PAD|phone|sound.*pad\" --type cs -A 3 -B 3)"
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"PHONE|SOUND_PAD|phone|sound.*pad\" --type cs -A 3 -B 3)",
+      "Bash(timeout:*)",
+      "Bash(dotnet nuget locals:*)",
+      "Bash(DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet restore --force --no-cache)",
+      "Bash(DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet build --verbosity minimal)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults.*=\" MovieReviewApp/Application/Services/Session/SessionAnalysisService.cs -A 2 -B 2)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"_analysisService\\.AnalyzeSessionAsync\" MovieReviewApp/Application/Services/Session/SessionOrchestrationService.cs -A 5 -B 5)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"ClearAnalysisResults\" MovieReviewApp/Application/Services/Session/SessionOrchestrationService.cs -A 5 -B 2)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"AnalyzeSessionWithFallbackAsync\" MovieReviewApp/ -A 5 -B 2)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"AnalyzeSessionWithFallbackAsync\" MovieReviewApp/ --type cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/Partials/UnifiedAudioProcessor.razor.cs -A 2 -B 2)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"await.*AnalyzeSessionAsync.*;\" MovieReviewApp/ --type cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --type cs)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --type html)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ -t razor)",
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --glob \"*.razor\")"
     ],
     "deny": []
   }

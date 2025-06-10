@@ -46,6 +46,7 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
     [Inject] private IWebHostEnvironment WebHostEnvironment { get; set; } = default!;
     [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
     [Inject] private AudioProcessingWorkflowService WorkflowService { get; set; } = default!;
+    [Inject] private ILogger<UnifiedAudioProcessor> _logger { get; set; } = default!;
     #endregion
 
     #region Properties
@@ -454,6 +455,19 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
             // Update UI to show processing has started
             await InvokeAsync(StateHasChanged);
 
+            // Start a timer to refresh UI every 500ms during processing to show progress updates
+            using Timer uiRefreshTimer = new Timer(async _ =>
+            {
+                try
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch
+                {
+                    // Ignore timer exceptions during disposal
+                }
+            }, null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+
             // Start processing based on the specified status
             switch (status)
             {
@@ -465,8 +479,12 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
                     await ProcessFromGladiaUpload();
                     break;
                     
-                case AudioProcessingStatus.Transcribing:
+                case AudioProcessingStatus.DownloadingTranscripts:
                     await ProcessFromTranscription();
+                    break;
+                    
+                case AudioProcessingStatus.ProcessingWithAI:
+                    await ProcessFromAIAnalysis();
                     break;
                     
                 default:
@@ -510,25 +528,22 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
     {
         if (selectedSession == null) return;
 
-        // Convert audio files
-        await WorkflowService.ConvertAudioFilesAsync(selectedSession, (message, progress) =>
+        // Use the enhanced workflow that does conversion → upload → transcription automatically
+        await WorkflowService.ProcessSessionEnhancedAsync(selectedSession, (message, progress) =>
         {
-            // Update UI with progress
-            InvokeAsync(() =>
+            // Update UI with progress - this will trigger the parallel processing of all files
+            InvokeAsync(async () =>
             {
-                // Find files that are currently converting and update their status
-                foreach (var file in selectedSession.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.ConvertingToMp3))
+                // Update overall progress message
+                if (!string.IsNullOrEmpty(message))
                 {
-                    file.CurrentStep = message;
-                    file.ProgressPercentage = progress;
+                    _logger.LogDebug("Enhanced workflow progress: {Message} - {Progress}%", message, progress);
                 }
-                StateHasChanged();
-                return Task.CompletedTask;
+                
+                // Ensure UI is refreshed to show individual file progress
+                await InvokeAsync(StateHasChanged);
             });
         });
-
-        // Continue to upload after conversion
-        await ProcessFromGladiaUpload();
     }
 
     /// <summary>
@@ -542,16 +557,16 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
         await WorkflowService.UploadAudioFilesAsync(selectedSession, (message, progress) =>
         {
             // Update UI with progress
-            InvokeAsync(() =>
+            InvokeAsync(async () =>
             {
-                // Find files that are currently uploading and update their status
-                foreach (var file in selectedSession.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.UploadingToGladia))
+                // Update overall progress message
+                if (!string.IsNullOrEmpty(message))
                 {
-                    file.CurrentStep = message;
-                    file.ProgressPercentage = progress;
+                    _logger.LogDebug("Upload progress: {Message}", message);
                 }
-                StateHasChanged();
-                return Task.CompletedTask;
+                
+                // Ensure UI is refreshed
+                await InvokeAsync(StateHasChanged);
             });
         });
 
@@ -560,28 +575,128 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
     }
 
     /// <summary>
-    /// Processes files starting from transcription.
+    /// Processes files starting from transcription and continues through AI analysis.
     /// </summary>
     private async Task ProcessFromTranscription()
     {
         if (selectedSession == null) return;
 
-        // Process transcriptions
-        await WorkflowService.ProcessTranscriptionsAsync(selectedSession, (message, progress) =>
+        _logger.LogInformation("Starting transcription processing for session with {FileCount} files", selectedSession.AudioFiles.Count);
+        
+        // Step 1: Download JSONs and process transcriptions
+        await WorkflowService.ProcessTranscriptionsFromUploadedFilesAsync(selectedSession, (message, progress) =>
         {
             // Update UI with progress
             InvokeAsync(() =>
             {
-                // Find files that are currently transcribing and update their status
-                foreach (var file in selectedSession.AudioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.Transcribing))
-                {
-                    file.CurrentStep = message;
-                    file.ProgressPercentage = progress;
-                }
+                // Update overall progress message and refresh UI
                 StateHasChanged();
                 return Task.CompletedTask;
             });
         });
+
+        // Step 2: Continue to AI analysis using the orchestration service
+        await ContinueToAIAnalysis();
+    }
+
+    /// <summary>
+    /// Processes files starting from AI analysis (restart from OpenAI analysis).
+    /// </summary>
+    private async Task ProcessFromAIAnalysis()
+    {
+        await ContinueToAIAnalysis();
+    }
+
+    /// <summary>
+    /// Continues to AI analysis using the orchestration service.
+    /// </summary>
+    private async Task ContinueToAIAnalysis()
+    {
+        if (selectedSession == null) return;
+
+        _logger.LogInformation("Starting AI analysis for session {SessionId} - {MovieTitle}", selectedSession.Id, selectedSession.MovieTitle);
+
+        try
+        {
+            // Update file statuses to indicate AI processing is starting
+            List<AudioFile> transcribedFiles = selectedSession.AudioFiles.Where(f =>
+                !string.IsNullOrEmpty(f.TranscriptText)).ToList();
+
+            foreach (AudioFile file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.SendingToOpenAI;
+                file.CurrentStep = "Preparing for AI analysis";
+                file.ProgressPercentage = 80;
+                file.LastUpdated = DateTime.UtcNow;
+            }
+
+            await InvokeAsync(StateHasChanged);
+
+            // Update status to processing with AI
+            foreach (AudioFile file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.ProcessingWithAI;
+                file.CurrentStep = "Analyzing with AI";
+                file.ProgressPercentage = 85;
+                file.LastUpdated = DateTime.UtcNow;
+            }
+
+            await InvokeAsync(StateHasChanged);
+
+            // Use the orchestration service for AI analysis
+            selectedSession.Status = ProcessingStatus.Analyzing;
+            await DatabaseService.UpsertAsync(selectedSession);
+
+            // Clear any existing analysis results
+            selectedSession.CategoryResults = null;
+
+            // Run the AI analysis using the injected analysis service
+            CategoryResults analysisResults = await AnalysisService.AnalyzeSessionAsync(selectedSession);
+            selectedSession.CategoryResults = analysisResults;
+
+            // Mark files as complete
+            foreach (AudioFile file in transcribedFiles)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Complete;
+                file.CurrentStep = "Processing complete";
+                file.ProgressPercentage = 100;
+                file.LastUpdated = DateTime.UtcNow;
+            }
+
+            // Update session status
+            selectedSession.Status = ProcessingStatus.Complete;
+            selectedSession.ProcessedAt = DateTime.UtcNow;
+            await DatabaseService.UpsertAsync(selectedSession);
+
+            await InvokeAsync(StateHasChanged);
+
+            _logger.LogInformation("Successfully completed AI analysis for session {SessionId}", selectedSession.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to run AI analysis for session {SessionId}", selectedSession.Id);
+            
+            // Mark files as failed
+            List<AudioFile> files = selectedSession.AudioFiles.Where(f =>
+                f.ProcessingStatus == AudioProcessingStatus.SendingToOpenAI ||
+                f.ProcessingStatus == AudioProcessingStatus.ProcessingWithAI).ToList();
+
+            foreach (AudioFile file in files)
+            {
+                file.ProcessingStatus = AudioProcessingStatus.Failed;
+                file.CurrentStep = $"AI analysis failed: {ex.Message}";
+                file.ConversionError = ex.Message;
+                file.CanRetry = true;
+                file.LastUpdated = DateTime.UtcNow;
+            }
+
+            selectedSession.Status = ProcessingStatus.Failed;
+            selectedSession.ErrorMessage = ex.Message;
+            await DatabaseService.UpsertAsync(selectedSession);
+
+            await InvokeAsync(StateHasChanged);
+            throw;
+        }
     }
 
     /// <summary>
@@ -663,13 +778,16 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
         AudioProcessingStatus.Pending => "⏳",
         AudioProcessingStatus.Uploading => "📤",
         AudioProcessingStatus.ConvertingToMp3 => "🔄",
-        AudioProcessingStatus.PendingMp3 => "⏳",
+        AudioProcessingStatus.FinishedConvertingToMp3 => "✅",
         AudioProcessingStatus.FailedMp3 => "❌",
-        AudioProcessingStatus.ProcessedMp3 => "✅",
         AudioProcessingStatus.UploadingToGladia => "☁️",
-        AudioProcessingStatus.UploadedToGladia => "☁️",
-        AudioProcessingStatus.Transcribing => "✍️",
-        AudioProcessingStatus.TranscriptionComplete => "📝",
+        AudioProcessingStatus.FinishedUploadingToGladia => "✅",
+        AudioProcessingStatus.WaitingToDownloadTranscripts => "⏳",
+        AudioProcessingStatus.DownloadingTranscripts => "⬇️",
+        AudioProcessingStatus.TranscriptsDownloaded => "📝",
+        AudioProcessingStatus.WaitingForOtherFiles => "⏳",
+        AudioProcessingStatus.ProcessingTranscriptions => "📋",
+        AudioProcessingStatus.SendingToOpenAI => "📤",
         AudioProcessingStatus.ProcessingWithAI => "🤖",
         AudioProcessingStatus.Complete => "✅",
         AudioProcessingStatus.Failed => "❌",
@@ -678,16 +796,19 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
 
     private string GetStatusText(AudioProcessingStatus status) => status switch
     {
-        AudioProcessingStatus.Pending => "Waiting to upload",
+        AudioProcessingStatus.Pending => "Waiting to start",
         AudioProcessingStatus.Uploading => "Uploading...",
         AudioProcessingStatus.ConvertingToMp3 => "Converting to MP3...",
-        AudioProcessingStatus.PendingMp3 => "Ready to upload to Gladia",
+        AudioProcessingStatus.FinishedConvertingToMp3 => "Converting complete, uploading...",
         AudioProcessingStatus.FailedMp3 => "MP3 conversion failed",
-        AudioProcessingStatus.ProcessedMp3 => "Ready to upload to Gladia",
         AudioProcessingStatus.UploadingToGladia => "Uploading to Gladia...",
-        AudioProcessingStatus.UploadedToGladia => "Ready to download transcriptions",
-        AudioProcessingStatus.Transcribing => "Downloading transcriptions...",
-        AudioProcessingStatus.TranscriptionComplete => "Ready to process transcriptions",
+        AudioProcessingStatus.FinishedUploadingToGladia => "Upload complete, transcribing...",
+        AudioProcessingStatus.WaitingToDownloadTranscripts => "Starting transcription...",
+        AudioProcessingStatus.DownloadingTranscripts => "Downloading transcripts...",
+        AudioProcessingStatus.TranscriptsDownloaded => "Transcripts ready",
+        AudioProcessingStatus.WaitingForOtherFiles => "Waiting for other files",
+        AudioProcessingStatus.ProcessingTranscriptions => "Processing transcriptions...",
+        AudioProcessingStatus.SendingToOpenAI => "Sending to OpenAI...",
         AudioProcessingStatus.ProcessingWithAI => "Processing with AI...",
         AudioProcessingStatus.Complete => "Complete",
         AudioProcessingStatus.Failed => "Processing failed",
@@ -698,7 +819,9 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
         AudioProcessingStatus.Uploading or
         AudioProcessingStatus.ConvertingToMp3 or 
         AudioProcessingStatus.UploadingToGladia or 
-        AudioProcessingStatus.Transcribing or 
+        AudioProcessingStatus.DownloadingTranscripts or
+        AudioProcessingStatus.ProcessingTranscriptions or
+        AudioProcessingStatus.SendingToOpenAI or
         AudioProcessingStatus.ProcessingWithAI;
 
     private int GetOverallProgress()
@@ -706,28 +829,71 @@ public partial class UnifiedAudioProcessor : ComponentBase, IDisposable
         if (selectedSession?.AudioFiles.Any() != true)
             return 0;
 
-        var audioFiles = selectedSession.AudioFiles;
-        var totalFiles = audioFiles.Count;
+        List<AudioFile> audioFiles = selectedSession.AudioFiles;
+        int totalFiles = audioFiles.Count;
         
-        // Calculate progress by considering both completed files and individual file progress
-        var totalProgress = 0.0;
+        // Calculate weighted progress with detailed status progress values
+        double totalProgress = 0.0;
         
-        foreach (var file in audioFiles)
+        foreach (AudioFile file in audioFiles)
         {
-            if (file.ProcessingStatus == AudioProcessingStatus.Complete)
+            double fileProgress = GetFileProgressValue(file.ProcessingStatus);
+            
+            // Blend status progress with individual file progress for smooth transitions
+            if (IsInProgress(file.ProcessingStatus) && file.ProgressPercentage > 0)
             {
-                // Completed files contribute 100% of their weight
-                totalProgress += 100.0;
+                double statusProgress = fileProgress;
+                double nextStatusProgress = GetNextStatusProgressValue(file.ProcessingStatus);
+                double progressRange = nextStatusProgress - statusProgress;
+                double blendedProgress = statusProgress + (progressRange * file.ProgressPercentage / 100.0);
+                totalProgress += blendedProgress;
             }
-            else if (IsInProgress(file.ProcessingStatus))
+            else
             {
-                // Files in progress contribute their individual progress percentage
-                totalProgress += file.ProgressPercentage;
+                totalProgress += fileProgress;
             }
-            // Pending/failed files contribute 0% (no need to explicitly handle)
         }
         
         return (int)(totalProgress / totalFiles);
+    }
+
+    private double GetFileProgressValue(AudioProcessingStatus status)
+    {
+        return status switch
+        {
+            AudioProcessingStatus.Pending => 0,
+            AudioProcessingStatus.Uploading => 5,
+            AudioProcessingStatus.ConvertingToMp3 => 10,
+            AudioProcessingStatus.FinishedConvertingToMp3 => 20,
+            AudioProcessingStatus.UploadingToGladia => 25,
+            AudioProcessingStatus.FinishedUploadingToGladia => 35,
+            AudioProcessingStatus.WaitingToDownloadTranscripts => 40,
+            AudioProcessingStatus.DownloadingTranscripts => 45,
+            AudioProcessingStatus.TranscriptsDownloaded => 55,
+            AudioProcessingStatus.WaitingForOtherFiles => 70,
+            AudioProcessingStatus.ProcessingTranscriptions => 80,
+            AudioProcessingStatus.SendingToOpenAI => 85,
+            AudioProcessingStatus.ProcessingWithAI => 90,
+            AudioProcessingStatus.Complete => 100,
+            AudioProcessingStatus.Failed => 0,
+            AudioProcessingStatus.FailedMp3 => 0,
+            _ => 0
+        };
+    }
+
+    private double GetNextStatusProgressValue(AudioProcessingStatus status)
+    {
+        return status switch
+        {
+            AudioProcessingStatus.Uploading => GetFileProgressValue(AudioProcessingStatus.ConvertingToMp3),
+            AudioProcessingStatus.ConvertingToMp3 => GetFileProgressValue(AudioProcessingStatus.FinishedConvertingToMp3),
+            AudioProcessingStatus.UploadingToGladia => GetFileProgressValue(AudioProcessingStatus.FinishedUploadingToGladia),
+            AudioProcessingStatus.DownloadingTranscripts => GetFileProgressValue(AudioProcessingStatus.TranscriptsDownloaded),
+            AudioProcessingStatus.ProcessingTranscriptions => GetFileProgressValue(AudioProcessingStatus.SendingToOpenAI),
+            AudioProcessingStatus.SendingToOpenAI => GetFileProgressValue(AudioProcessingStatus.ProcessingWithAI),
+            AudioProcessingStatus.ProcessingWithAI => GetFileProgressValue(AudioProcessingStatus.Complete),
+            _ => GetFileProgressValue(status) // Fallback to current status value
+        };
     }
 
     private string GetActionButtonText(AudioProcessingStatus status) => status switch

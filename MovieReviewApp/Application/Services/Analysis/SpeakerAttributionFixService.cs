@@ -544,6 +544,9 @@ public class SpeakerAttributionFixService
                 enhancedUtterances.Add(enhanced);
             }
 
+            // Apply smart speaker deduction for remaining unknown utterances
+            ApplySmartSpeakerDeduction(enhancedUtterances, micAssignments, result);
+
             // Create the enhanced transcription response
             EnhancedTranscriptionResponse enhancedResponse = new()
             {
@@ -999,6 +1002,80 @@ public class SpeakerAttributionFixService
 
         int totalWords = Math.Max(words1.Length, words2.Length);
         return totalWords > 0 ? (double)matchingWords / totalWords : 0;
+    }
+
+    /// <summary>
+    /// Applies smart speaker deduction to map remaining "Unknown" utterances to unassigned participants.
+    /// If there's only one person not found in mic assignments and there are unknown utterances, 
+    /// deduce that they belong to that missing person.
+    /// </summary>
+    private void ApplySmartSpeakerDeduction(List<EnhancedUtterance> enhancedUtterances, Dictionary<int, string> micAssignments, SpeakerAttributionResult result)
+    {
+        try
+        {
+            // Find utterances that are still marked as "Unknown"
+            List<EnhancedUtterance> unknownUtterances = enhancedUtterances.Where(u => u.speaker == "Unknown").ToList();
+            
+            if (!unknownUtterances.Any())
+            {
+                _logger.LogDebug("No unknown utterances found, skipping smart speaker deduction");
+                return;
+            }
+
+            // Get all assigned participants
+            HashSet<string> assignedParticipants = new(micAssignments.Values.Where(v => !string.IsNullOrWhiteSpace(v)));
+            
+            // Get all participants mentioned in the session (this would need to come from session data)
+            // For now, we'll look for participants that have been matched to see if there's a pattern
+            HashSet<string> matchedParticipants = new(result.UtterancesPerPerson.Keys);
+            
+            _logger.LogInformation("Smart speaker deduction: {UnknownCount} unknown utterances, {AssignedCount} assigned participants: {Assigned}, {MatchedCount} matched participants: {Matched}",
+                unknownUtterances.Count, assignedParticipants.Count, string.Join(", ", assignedParticipants),
+                matchedParticipants.Count, string.Join(", ", matchedParticipants));
+
+            // If we have exactly one more participant in assignments than we have matched,
+            // and that participant isn't already matched, assign unknown utterances to them
+            List<string> unassignedParticipants = assignedParticipants.Except(matchedParticipants).ToList();
+            
+            if (unassignedParticipants.Count == 1)
+            {
+                string missingParticipant = unassignedParticipants.First();
+                _logger.LogInformation("Smart deduction: Found exactly one unmatched participant '{MissingParticipant}', assigning {UnknownCount} unknown utterances to them",
+                    missingParticipant, unknownUtterances.Count);
+
+                // Assign all unknown utterances to this participant
+                foreach (EnhancedUtterance unknownUtterance in unknownUtterances)
+                {
+                    unknownUtterance.speaker = missingParticipant;
+                    unknownUtterance.match_score = 0.8; // High confidence for deduction
+                    unknownUtterance.matched_from_mic = null; // No specific mic match, but deduced
+                    
+                    // Update statistics
+                    result.MatchedUtterances++;
+                    result.UnmatchedUtterances--;
+                    result.UtterancesPerPerson[missingParticipant] = result.UtterancesPerPerson.GetValueOrDefault(missingParticipant, 0) + 1;
+                }
+
+                // Remove these from unmatched texts since they're now matched
+                List<string> timesToRemove = unknownUtterances.Select(u => $"[{u.start:F2}-{u.end:F2}]").ToList();
+                result.UnmatchedTexts.RemoveAll(text => timesToRemove.Any(time => text.StartsWith(time)));
+
+                _logger.LogInformation("Smart deduction complete: Assigned {AssignedCount} utterances to {Participant}. New stats: {Matched} matched, {Unmatched} unmatched",
+                    unknownUtterances.Count, missingParticipant, result.MatchedUtterances, result.UnmatchedUtterances);
+            }
+            else
+            {
+                _logger.LogInformation("Smart deduction not applicable: Found {UnassignedCount} unassigned participants, need exactly 1 for deduction", unassignedParticipants.Count);
+                if (unassignedParticipants.Any())
+                {
+                    _logger.LogInformation("Unassigned participants: {Unassigned}", string.Join(", ", unassignedParticipants));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during smart speaker deduction");
+        }
     }
 
     /// <summary>

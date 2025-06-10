@@ -288,19 +288,19 @@
                                                                 @if (CanStartStep(file, AudioProcessingStatus.ConvertingToMp3))
                                                                 {
                                                                     <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.ConvertingToMp3)">
-                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.ProcessedMp3 ? "Re-convert to MP3" : "Convert to MP3")
+                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.FinishedConvertingToMp3 ? "Re-convert to MP3" : "Convert to MP3")
                                                                     </a></li>
                                                                 }
                                                                 @if (CanStartStep(file, AudioProcessingStatus.UploadingToGladia))
                                                                 {
                                                                     <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.UploadingToGladia)">
-                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.UploadedToGladia ? "Re-upload to Gladia" : "Upload to Gladia")
+                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.FinishedUploadingToGladia ? "Re-upload to Gladia" : "Upload to Gladia")
                                                                     </a></li>
                                                                 }
-                                                                @if (CanStartStep(file, AudioProcessingStatus.Transcribing))
+                                                                @if (CanStartStep(file, AudioProcessingStatus.DownloadingTranscripts))
                                                                 {
-                                                                    <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.Transcribing)">
-                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.TranscriptionComplete ? "Re-transcribe" : "Start Transcription")
+                                                                    <li><a class="dropdown-item" @onclick="() => StartProcess(file, AudioProcessingStatus.DownloadingTranscripts)">
+                                                                        @(file.ProcessingStatus >= AudioProcessingStatus.TranscriptsDownloaded ? "Re-transcribe" : "Start Transcription")
                                                                     </a></li>
                                                                 }
                                                                 @if (CanStartStep(file, AudioProcessingStatus.ProcessingWithAI))
@@ -376,7 +376,7 @@
                                             <li><a class="dropdown-item" @onclick="() => StartBulkProcessing(AudioProcessingStatus.UploadingToGladia)">
                                                 <i class="bi bi-cloud-upload"></i> Start from Upload to Gladia
                                             </a></li>
-                                            <li><a class="dropdown-item" @onclick="() => StartBulkProcessing(AudioProcessingStatus.Transcribing)">
+                                            <li><a class="dropdown-item" @onclick="() => StartBulkProcessing(AudioProcessingStatus.DownloadingTranscripts)">
                                                 <i class="bi bi-mic"></i> Start from Transcription
                                             </a></li>
                                             <li><a class="dropdown-item" @onclick="() => StartBulkProcessing(AudioProcessingStatus.ProcessingWithAI)">

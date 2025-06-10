@@ -31,7 +31,7 @@ public class SessionAnalysisService
         progressCallback?.Invoke("Running AI analysis", 80);
 
         List<AudioFile> transcribedFiles = session.AudioFiles.Where(f => 
-            f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete &&
+            f.ProcessingStatus == AudioProcessingStatus.TranscriptsDownloaded &&
             !string.IsNullOrEmpty(f.TranscriptText)).ToList();
 
         if (!transcribedFiles.Any())

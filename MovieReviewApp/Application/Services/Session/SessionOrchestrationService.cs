@@ -1,5 +1,4 @@
 using MovieReviewApp.Models;
-using MovieReviewApp.Core.Interfaces;
 
 namespace MovieReviewApp.Application.Services.Session;
 
@@ -69,44 +68,11 @@ public class SessionOrchestrationService
     /// </summary>
     public async Task<MovieSession> ProcessSessionEnhancedAsync(MovieSession session, Action<string, int>? progressCallback = null)
     {
-        try
-        {
-            _logger.LogInformation("Starting enhanced processing for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
-
-            // Update session status and save
-            session.Status = ProcessingStatus.Validating;
-            await _repositoryService.UpdateSessionAsync(session);
-
-            // Run audio processing workflow
-            session = await _audioWorkflowService.ProcessSessionEnhancedAsync(session, progressCallback);
-            await _repositoryService.UpdateSessionAsync(session);
-
-            // Run AI analysis
-            progressCallback?.Invoke("Running AI analysis", 80);
-            session.Status = ProcessingStatus.Analyzing;
-            await _repositoryService.UpdateSessionAsync(session);
-
-            CategoryResults analysisResults = await _analysisService.AnalyzeSessionWithFallbackAsync(session);
-            session.CategoryResults = analysisResults;
-
-            // Mark as complete
-            session.Status = ProcessingStatus.Complete;
-            session.ProcessedAt = DateTime.UtcNow;
-            await _repositoryService.UpdateSessionAsync(session);
-
-            progressCallback?.Invoke("Processing complete", 100);
-            _logger.LogInformation("Successfully completed enhanced processing for session {SessionId}", session.Id);
-
-            return session;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Enhanced processing failed for session {SessionId}", session.Id);
-            session.Status = ProcessingStatus.Failed;
-            session.ErrorMessage = ex.Message;
-            await _repositoryService.UpdateSessionAsync(session);
-            throw;
-        }
+        return await ProcessSessionCoreAsync(
+            session,
+            async (sess, callback) => await _audioWorkflowService.ProcessSessionEnhancedAsync(sess, callback),
+            progressCallback,
+            "enhanced");
     }
 
     /// <summary>
@@ -114,75 +80,67 @@ public class SessionOrchestrationService
     /// </summary>
     public async Task ProcessSessionStandardAsync(MovieSession session, Action<ProcessingStatus, int, string>? progressCallback = null)
     {
+        await ProcessSessionCoreAsync(
+            session,
+            async (sess, _) =>
+            {
+                await _audioWorkflowService.ProcessSessionStandardAsync(sess, progressCallback);
+                return sess;
+            },
+            (message, progress) => progressCallback?.Invoke(ProcessingStatus.Analyzing, progress, message),
+            "standard",
+            progressCallback);
+    }
+
+    /// <summary>
+    /// Core processing logic shared between standard and enhanced workflows.
+    /// </summary>
+    private async Task<MovieSession> ProcessSessionCoreAsync(
+        MovieSession session,
+        Func<MovieSession, Action<string, int>?, Task<MovieSession>> audioProcessor,
+        Action<string, int>? progressCallback,
+        string workflowType,
+        Action<ProcessingStatus, int, string>? detailedProgressCallback = null)
+    {
         try
         {
-            _logger.LogInformation("Starting standard processing for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
+            _logger.LogInformation("Starting {WorkflowType} processing for session {SessionId} - {MovieTitle}",
+                workflowType, session.Id, session.MovieTitle);
 
             // Step 1: Validation
-            progressCallback?.Invoke(ProcessingStatus.Validating, 10, "Validating session data");
-            session.Status = ProcessingStatus.Validating;
-            await _repositoryService.UpdateSessionAsync(session);
+            await UpdateSessionStatusAsync(session, ProcessingStatus.Validating);
+            detailedProgressCallback?.Invoke(ProcessingStatus.Validating, 10, "Validating session data");
 
-            if (!session.AudioFiles.Any())
-            {
-                throw new Exception("No audio files found in session");
-            }
+            ValidateSessionData(session);
 
             // Step 2: Audio Processing
-            progressCallback?.Invoke(ProcessingStatus.Transcribing, 20, "Starting audio processing");
-            session.Status = ProcessingStatus.Transcribing;
-            await _repositoryService.UpdateSessionAsync(session);
+            detailedProgressCallback?.Invoke(ProcessingStatus.Transcribing, 20, "Starting audio processing");
+            await UpdateSessionStatusAsync(session, ProcessingStatus.Transcribing);
 
-            await _audioWorkflowService.ProcessSessionStandardAsync(session, progressCallback);
+            session = await audioProcessor(session, progressCallback);
             await _repositoryService.UpdateSessionAsync(session);
 
             // Step 3: AI Analysis
-            progressCallback?.Invoke(ProcessingStatus.Analyzing, 75, "Analyzing transcripts for entertainment moments");
-            session.Status = ProcessingStatus.Analyzing;
-            await _repositoryService.UpdateSessionAsync(session);
+            detailedProgressCallback?.Invoke(ProcessingStatus.Analyzing, 75, "Analyzing transcripts for entertainment moments");
+            await RunAIAnalysisAsync(session, progressCallback);
 
-            CategoryResults analysisResults = await _analysisService.AnalyzeSessionWithFallbackAsync(session);
-            session.CategoryResults = analysisResults;
+            // Step 4: Final Validation
+            ValidateProcessingResults(session);
 
-            // Step 4: Validation and Completion
-            int successfulTranscripts = session.AudioFiles.Count(f =>
-                f.ProcessingStatus == AudioProcessingStatus.TranscriptionComplete &&
-                !string.IsNullOrEmpty(f.TranscriptText));
+            // Step 5: Mark Complete
+            progressCallback?.Invoke("Processing complete", 100);
+            detailedProgressCallback?.Invoke(ProcessingStatus.Complete, 100, "Processing complete");
 
-            int totalFiles = session.AudioFiles.Count;
+            await MarkSessionCompleteAsync(session);
 
-            if (successfulTranscripts == 0)
-            {
-                throw new Exception($"No successful transcripts generated from {totalFiles} audio files. Session not saved.");
-            }
+            _logger.LogInformation("Successfully completed {WorkflowType} processing for session {SessionId}",
+                workflowType, session.Id);
 
-            if (successfulTranscripts < totalFiles)
-            {
-                _logger.LogWarning("Only {SuccessCount}/{TotalCount} files successfully transcribed for session {SessionId}",
-                    successfulTranscripts, totalFiles, session.Id);
-            }
-
-            // Final validation: ensure we have analysis results
-            if (session.CategoryResults == null)
-            {
-                throw new Exception("Session analysis not completed. Session not saved.");
-            }
-
-            progressCallback?.Invoke(ProcessingStatus.Complete, 100, "Processing complete");
-            session.Status = ProcessingStatus.Complete;
-            session.ProcessedAt = DateTime.UtcNow;
-
-            await _repositoryService.UpdateSessionAsync(session);
-
-            _logger.LogInformation("Successfully processed session {SessionId} with {SuccessCount}/{TotalCount} successful transcripts",
-                session.Id, successfulTranscripts, totalFiles);
+            return session;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process session {SessionId}", session.Id);
-            session.Status = ProcessingStatus.Failed;
-            session.ErrorMessage = ex.Message;
-            await _repositoryService.UpdateSessionAsync(session);
+            await HandleProcessingErrorAsync(session, ex);
             throw;
         }
     }
@@ -370,45 +328,40 @@ public class SessionOrchestrationService
     /// </summary>
     public async Task<bool> RerunAnalysisAsync(string sessionId)
     {
+        MovieSession? session = await _repositoryService.GetSessionAsync(sessionId);
+        if (session == null)
+        {
+            _logger.LogWarning("Session {SessionId} not found for analysis rerun", sessionId);
+            return false;
+        }
+
+        return await RerunAnalysisForSessionAsync(session);
+    }
+
+    /// <summary>
+    /// Reruns analysis for a given session object.
+    /// </summary>
+    private async Task<bool> RerunAnalysisForSessionAsync(MovieSession session)
+    {
         try
         {
-            MovieSession? session = await _repositoryService.GetSessionAsync(sessionId);
-            if (session == null)
+            if (!HasTranscripts(session))
             {
-                _logger.LogWarning("Session {SessionId} not found for analysis rerun", sessionId);
+                _logger.LogWarning("Session {SessionId} has no transcripts available for analysis", session.Id);
                 return false;
             }
 
-            // Ensure session has transcripts
-            if (!session.AudioFiles.Any(f => !string.IsNullOrEmpty(f.TranscriptText)))
-            {
-                _logger.LogWarning("Session {SessionId} has no transcripts available for analysis", sessionId);
-                return false;
-            }
+            _logger.LogInformation("Rerunning analysis for session {SessionId} - {MovieTitle}", session.Id, session.MovieTitle);
 
-            _logger.LogInformation("Rerunning analysis for session {SessionId} - {MovieTitle}", sessionId, session.MovieTitle);
+            ClearAnalysisResults(session);
+            await RunAIAnalysisAsync(session);
 
-            // Clear existing analysis results
-            session.CategoryResults = null;
-            session.SessionStats = null;
-            session.Status = ProcessingStatus.Analyzing;
-            await _repositoryService.UpdateSessionAsync(session);
-
-            // Run analysis
-            CategoryResults analysisResults = await _analysisService.AnalyzeSessionWithFallbackAsync(session);
-            session.CategoryResults = analysisResults;
-            session.Status = ProcessingStatus.Complete;
-            session.ProcessedAt = DateTime.UtcNow;
-
-            // Save updated session
-            await _repositoryService.UpdateSessionAsync(session);
-
-            _logger.LogInformation("Successfully reran analysis for session {SessionId}", sessionId);
+            _logger.LogInformation("Successfully reran analysis for session {SessionId}", session.Id);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to rerun analysis for session {SessionId}", sessionId);
+            _logger.LogError(ex, "Failed to rerun analysis for session {SessionId}", session.Id);
             return false;
         }
     }
@@ -439,6 +392,94 @@ public class SessionOrchestrationService
     public void DetermineParticipants(MovieSession session)
     {
         _metadataService.DetermineParticipants(session);
+    }
+
+    #endregion
+
+    #region Private Helper Methods
+
+    private async Task UpdateSessionStatusAsync(MovieSession session, ProcessingStatus status)
+    {
+        session.Status = status;
+        await _repositoryService.UpdateSessionAsync(session);
+    }
+
+    private void ValidateSessionData(MovieSession session)
+    {
+        if (!session.AudioFiles.Any())
+        {
+            throw new Exception("No audio files found in session");
+        }
+    }
+
+    private void ValidateProcessingResults(MovieSession session)
+    {
+        int successfulTranscripts = session.AudioFiles.Count(f =>
+            f.ProcessingStatus == AudioProcessingStatus.TranscriptsDownloaded &&
+            !string.IsNullOrEmpty(f.TranscriptText));
+
+        int totalFiles = session.AudioFiles.Count;
+
+        if (successfulTranscripts == 0)
+        {
+            throw new Exception($"No successful transcripts generated from {totalFiles} audio files. Session not saved.");
+        }
+
+        if (successfulTranscripts < totalFiles)
+        {
+            _logger.LogWarning("Only {SuccessCount}/{TotalCount} files successfully transcribed for session {SessionId}",
+                successfulTranscripts, totalFiles, session.Id);
+        }
+
+        if (session.CategoryResults == null)
+        {
+            throw new Exception("Session analysis not completed. Session not saved.");
+        }
+    }
+
+    private async Task MarkSessionCompleteAsync(MovieSession session)
+    {
+        session.Status = ProcessingStatus.Complete;
+        session.ProcessedAt = DateTime.UtcNow;
+        await _repositoryService.UpdateSessionAsync(session);
+    }
+
+    private async Task HandleProcessingErrorAsync(MovieSession session, Exception ex)
+    {
+        _logger.LogError(ex, "Processing failed for session {SessionId}", session.Id);
+        session.Status = ProcessingStatus.Failed;
+        session.ErrorMessage = ex.Message;
+        await _repositoryService.UpdateSessionAsync(session);
+    }
+
+    private bool HasTranscripts(MovieSession session)
+    {
+        return session.AudioFiles.Any(f => !string.IsNullOrEmpty(f.TranscriptText));
+    }
+
+    private void ClearAnalysisResults(MovieSession session)
+    {
+        session.CategoryResults = null;
+        session.SessionStats = null;
+    }
+
+    /// <summary>
+    /// Runs AI analysis on the session - centralizes all analysis operations.
+    /// </summary>
+    private async Task RunAIAnalysisAsync(MovieSession session, Action<string, int>? progressCallback = null)
+    {
+        // Clear existing results to ensure fresh analysis
+        ClearAnalysisResults(session);
+
+        // Update status
+        session.Status = ProcessingStatus.Analyzing;
+        await _repositoryService.UpdateSessionAsync(session);
+
+        // Run the analysis
+        session.CategoryResults = await _analysisService.AnalyzeSessionAsync(session, progressCallback);
+
+        // Save the results
+        await _repositoryService.UpdateSessionAsync(session);
     }
 
     #endregion

@@ -64,20 +64,35 @@ namespace MovieReviewApp.Models
         public Dictionary<string, int> InterruptionCounts { get; set; } = new();
         public Dictionary<string, int> LaughterCounts { get; set; } = new();
         public Dictionary<string, int> CurseWordCounts { get; set; } = new();
+        public Dictionary<string, int> PejorativeWordCounts { get; set; } = new();
         public string MostTalkativePerson { get; set; } = string.Empty;
         public string QuietestPerson { get; set; } = string.Empty;
         public string MostInquisitivePerson { get; set; } = string.Empty;
         public string BiggestInterruptor { get; set; } = string.Empty;
         public string FunniestPerson { get; set; } = string.Empty;
         public string MostProfanePerson { get; set; } = string.Empty;
+        public string MostPejorativePerson { get; set; } = string.Empty;
         public int TotalInterruptions { get; set; }
         public int TotalQuestions { get; set; }
         public int TotalLaughterMoments { get; set; }
         public int TotalCurseWords { get; set; }
+        public int TotalPejorativeWords { get; set; }
         public string ConversationTone { get; set; } = string.Empty;
+
+        // Detailed word usage lists
+        public List<DetailedWordUsage> DetailedCurseWords { get; set; } = new();
+        public List<DetailedWordUsage> DetailedPejorativeWords { get; set; } = new();
 
         // Initial discussion questions and answers
         public List<QuestionAnswer> InitialQuestions { get; set; } = new();
+    }
+
+    public class DetailedWordUsage
+    {
+        public string Word { get; set; } = string.Empty;
+        public string Speaker { get; set; } = string.Empty;
+        public int Count { get; set; }
+        public List<string> ContextExamples { get; set; } = new();
     }
 
     public enum ProcessingStatus
@@ -99,19 +114,22 @@ namespace MovieReviewApp.Models
 
     public enum AudioProcessingStatus
     {
-        Pending,              // Just uploaded, not processed yet
-        Uploading,           // Currently uploading the file
-        ConvertingToMp3,      // Currently converting WAV to MP3
-        PendingMp3,           // MP3 conversion complete, ready for upload
-        FailedMp3,            // MP3 conversion failed
-        ProcessedMp3,         // Successfully converted to MP3
-        UploadingToGladia,    // Currently uploading to Gladia
-        UploadedToGladia,     // Uploaded to Gladia for transcription
-        Transcribing,         // Gladia is processing transcription
-        TranscriptionComplete, // Gladia transcription successful
-        ProcessingWithAI,     // OpenAI analysis in progress
-        Complete,             // All processing complete
-        Failed                // General processing failure
+        Pending,                        // Just uploaded, not processed yet
+        Uploading,                     // Currently uploading the file
+        ConvertingToMp3,               // Currently converting WAV to MP3
+        FinishedConvertingToMp3,       // MP3 conversion complete, ready for upload
+        FailedMp3,                     // MP3 conversion failed
+        UploadingToGladia,             // Currently uploading to Gladia
+        FinishedUploadingToGladia,     // Uploaded to Gladia successfully
+        WaitingToDownloadTranscripts,  // Waiting for Gladia processing to complete
+        DownloadingTranscripts,        // Downloading transcript from Gladia
+        TranscriptsDownloaded,         // Transcript successfully downloaded
+        WaitingForOtherFiles,          // Individual processing complete, waiting for other files
+        ProcessingTranscriptions,      // All files ready, processing transcriptions together
+        SendingToOpenAI,               // Sending combined transcripts to OpenAI for analysis
+        ProcessingWithAI,              // OpenAI analysis in progress
+        Complete,                      // All processing complete
+        Failed                         // General processing failure
     }
 
     public class ProcessingQueueItem : BaseModel

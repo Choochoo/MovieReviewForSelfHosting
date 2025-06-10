@@ -11,8 +11,9 @@ public class PromptGenerationService
     private readonly DiscussionQuestionsService _discussionQuestionsService;
     private readonly ILogger<PromptGenerationService> _logger;
 
-    // Maximum transcript size to prevent OpenAI timeouts
-    private const int MAX_TRANSCRIPT_SIZE = 60000;
+    // Maximum transcript size to prevent OpenAI timeouts  
+    // GPT-4 can handle ~128K tokens (500K+ characters), so increased significantly
+    private const int MAX_TRANSCRIPT_SIZE = 400000;
     private const string TRUNCATION_WARNING = "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH - ANALYSIS BASED ON FIRST {0:N0} CHARACTERS FOR OPTIMAL PROCESSING]";
 
     public PromptGenerationService(
@@ -65,102 +66,265 @@ ANALYSIS REQUIREMENTS:
 Please provide a comprehensive analysis in the following JSON format. For each category, identify the single best moment that fits the criteria:
 
 {{
-  ""comedy_categories"": {{
-    ""best_joke"": {{
-      ""category"": ""best_joke"",
-      ""speaker"": ""[Name of person who made the joke]"",
-      ""timestamp"": ""[MM:SS format]"",
-      ""quote"": ""[Exact words that made it funny]"",
-      ""setup"": ""[What led to this moment]"",
-      ""group_reaction"": ""[How others responded]"",
-      ""why_its_great"": ""[What makes it entertaining]"",
-      ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-      ""entertainment_score"": [1-10 numeric rating]
-    }},
-    ""most_unintentionally_funny"": {{
-      ""category"": ""most_unintentionally_funny"",
-      ""speaker"": ""[Name]"",
-      ""timestamp"": ""[MM:SS]"",
-      ""quote"": ""[What they said]"",
-      ""setup"": ""[Context]"",
-      ""group_reaction"": ""[Others' response]"",
-      ""why_its_great"": ""[Why it was funny despite not intending to be]"",
-      ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-      ""entertainment_score"": [1-10]
-    }}
+  ""MostOffensiveTake"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The offensive/controversial statement]"",
+    ""Setup"": ""[Context leading to this moment]"",
+    ""GroupReaction"": ""[How others reacted]"",
+    ""WhyItsGreat"": ""[What makes it entertaining/memorable]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
   }},
-  ""opinion_categories"": {{
-    ""hottest_take"": {{
-      ""category"": ""hottest_take"",
-      ""speaker"": ""[Name]"",
-      ""timestamp"": ""[MM:SS]"",
-      ""quote"": ""[The controversial opinion]"",
-      ""setup"": ""[What prompted this take]"",
-      ""group_reaction"": ""[How others reacted]"",
-      ""why_its_great"": ""[What makes it a hot take]"",
-      ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-      ""entertainment_score"": [1-10]
-    }}
+  ""HottestTake"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The controversial opinion]"",
+    ""Setup"": ""[What prompted this take]"",
+    ""GroupReaction"": ""[How others reacted]"",
+    ""WhyItsGreat"": ""[What makes it a hot take]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
   }},
-  ""insight_categories"": {{
-    ""best_movie_insight"": {{
-      ""category"": ""best_movie_insight"",
-      ""speaker"": ""[Name]"",
-      ""timestamp"": ""[MM:SS]"",
-      ""quote"": ""[The insightful comment]"",
-      ""setup"": ""[Context of the insight]"",
-      ""group_reaction"": ""[Others' response]"",
-      ""why_its_great"": ""[What makes it insightful]"",
-      ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-      ""entertainment_score"": [1-10]
-    }}
+  ""BiggestArgumentStarter"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[Statement that started argument]"",
+    ""Setup"": ""[Context before the argument]"",
+    ""GroupReaction"": ""[How the argument developed]"",
+    ""WhyItsGreat"": ""[What made it entertaining]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
   }},
-  ""discussion_categories"": {{
-    ""best_argument_moment"": {{
-      ""category"": ""best_argument_moment"",
-      ""speaker"": ""[Primary speaker in the argument]"",
-      ""timestamp"": ""[MM:SS]"",
-      ""quote"": ""[Key part of the argument]"",
-      ""setup"": ""[What started the disagreement]"",
-      ""group_reaction"": ""[How the argument developed]"",
-      ""why_its_great"": ""[What made it entertaining]"",
-      ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-      ""entertainment_score"": [1-10]
-    }}
+  ""BestJoke"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The joke or funny comment]"",
+    ""Setup"": ""[What led to this moment]"",
+    ""GroupReaction"": ""[How others responded/laughed]"",
+    ""WhyItsGreat"": ""[What makes it funny]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
   }},
-  ""top_5_lists"": {{
-    ""funniest_sentences"": {{
-      ""title"": ""Top 5 Funniest Sentences"",
-      ""entries"": [
-        {{
-          ""speaker"": ""[Name]"",
-          ""timestamp"": ""[MM:SS]"",
-          ""quote"": ""[Funny sentence]"",
-          ""setup"": ""[Context]"",
-          ""group_reaction"": ""[Response]"",
-          ""why_its_great"": ""[Why it's funny]"",
-          ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-          ""entertainment_score"": [1-10],
-          ""source_audio_file"": ""[filename if identifiable]""
-        }}
-      ]
-    }},
-    ""most_bland_comments"": {{
-      ""title"": ""Top 5 Most Bland Comments"",
-      ""entries"": [
-        {{
-          ""speaker"": ""[Name]"",
-          ""timestamp"": ""[MM:SS]"",
-          ""quote"": ""[Bland comment]"",
-          ""setup"": ""[Context]"",
-          ""group_reaction"": ""[Lack of response]"",
-          ""why_its_great"": ""[Why it was memorably boring]"",
-          ""audio_quality"": ""[clear/muffled/distorted/background_noise]"",
-          ""entertainment_score"": [1-10],
-          ""source_audio_file"": ""[filename if identifiable]""
-        }}
-      ]
-    }}
+  ""BestRoast"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The roast/burn]"",
+    ""Setup"": ""[Context of the roast]"",
+    ""GroupReaction"": ""[Others' reaction to the burn]"",
+    ""WhyItsGreat"": ""[What made it a good roast]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""FunniestRandomTangent"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The random tangent]"",
+    ""Setup"": ""[What they were originally talking about]"",
+    ""GroupReaction"": ""[How others responded to the tangent]"",
+    ""WhyItsGreat"": ""[What made the tangent entertaining]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""MostPassionateDefense"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The passionate defense]"",
+    ""Setup"": ""[What they were defending]"",
+    ""GroupReaction"": ""[Others' reaction to the passion]"",
+    ""WhyItsGreat"": ""[What made it memorable]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""BiggestUnanimousReaction"": {{
+    ""Speaker"": ""[Person who caused the reaction]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[What caused everyone to react]"",
+    ""Setup"": ""[Context before the moment]"",
+    ""GroupReaction"": ""[The unanimous reaction from everyone]"",
+    ""WhyItsGreat"": ""[Why everyone reacted the same way]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""MostBoringStatement"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The boring statement]"",
+    ""Setup"": ""[Context]"",
+    ""GroupReaction"": ""[Lack of reaction or boredom]"",
+    ""WhyItsGreat"": ""[Why it was memorably boring]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""BestPlotTwistRevelation"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The revelation or insight]"",
+    ""Setup"": ""[What led to this revelation]"",
+    ""GroupReaction"": ""[Others' surprise or interest]"",
+    ""WhyItsGreat"": ""[What made it a good plot twist/revelation]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""MovieSnobMoment"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The snobbish film comment]"",
+    ""Setup"": ""[Context of the snobbery]"",
+    ""GroupReaction"": ""[Others' reaction to the snobbishness]"",
+    ""WhyItsGreat"": ""[What made it peak movie snob behavior]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""GuiltyPleasureAdmission"": {{
+    ""Speaker"": ""[Name]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[The guilty pleasure admission]"",
+    ""Setup"": ""[What led to this admission]"",
+    ""GroupReaction"": ""[Others' reaction to the confession]"",
+    ""WhyItsGreat"": ""[What made it a good guilty pleasure moment]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""QuietestPersonBestMoment"": {{
+    ""Speaker"": ""[Name of quietest person]"",
+    ""Timestamp"": ""[MM:SS]"",
+    ""Quote"": ""[Their best contribution]"",
+    ""Setup"": ""[Context of when they spoke up]"",
+    ""GroupReaction"": ""[Others' reaction to them speaking]"",
+    ""WhyItsGreat"": ""[What made this their standout moment]"",
+    ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+    ""EntertainmentScore"": [1-10]
+  }},
+  ""Top5FunniestSentences"": {{
+    ""Entries"": [
+      {{
+        ""Rank"": 1,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Funny sentence]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it's funny]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 2,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Funny sentence]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it's funny]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 3,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Funny sentence]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it's funny]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 4,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Funny sentence]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it's funny]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 5,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Funny sentence]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it's funny]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }}
+    ]
+  }},
+  ""Top5MostBlandComments"": {{
+    ""Entries"": [
+      {{
+        ""Rank"": 1,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Bland comment]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it was bland/boring]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 2,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Bland comment]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it was bland/boring]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 3,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Bland comment]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it was bland/boring]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 4,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Bland comment]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it was bland/boring]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 5,
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Bland comment]"",
+        ""Context"": ""[Setup/context]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[Why it was bland/boring]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }}
+    ]
+  }},
+  ""OpeningQuestions"": {{
+    ""Questions"": [
+      {{
+        ""Question"": ""[The question asked]"",
+        ""Speaker"": ""[Who answered]"",
+        ""Answer"": ""[Their response]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""EntertainmentValue"": [1-10],
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }}
+    ]
   }}
 }}
 

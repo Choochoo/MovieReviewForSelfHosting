@@ -32,6 +32,10 @@ public class ResponseParsingService
 
         // Remove any markdown formatting
         string cleanedResult = analysisResult.Replace("```json", "").Replace("```", "").Trim();
+        
+        // Log first 500 characters of the cleaned result for debugging
+        _logger.LogDebug("Cleaned result preview: {Preview}", 
+            cleanedResult.Length > 500 ? cleanedResult.Substring(0, 500) + "..." : cleanedResult);
 
         // Try different parsing strategies
         CategoryResults? results = TryParseNestedStructure(cleanedResult) ?? TryParseFlatStructure(cleanedResult);
@@ -39,10 +43,11 @@ public class ResponseParsingService
         if (results == null)
         {
             _logger.LogWarning("Failed to parse analysis result, using fallback structure");
+            _logger.LogDebug("Full analysis result that failed to parse: {Result}", cleanedResult);
             return CreateFallbackResults();
         }
 
-        _logger.LogInformation("Successfully parsed analysis result");
+        _logger.LogInformation("Successfully parsed analysis result with {Count} categories", GetParsedCategoriesCount(results));
         return results;
     }
 
@@ -102,32 +107,72 @@ public class ResponseParsingService
 
             CategoryResults results = new CategoryResults();
 
-            // Try to find categories directly at root level
+            // Parse each property based on the actual OpenAI response format
             foreach (JsonProperty property in root.EnumerateObject())
             {
-                string categoryName = property.Name.ToLowerInvariant().Replace("_", "").Replace("-", "");
-                
-                if (IsCategoryMatch(property.Value, "best_joke") || categoryName.Contains("bestjoke"))
-                    results.BestJoke = ParseCategoryWinner(property.Value);
-                else if (IsCategoryMatch(property.Value, "hottest_take") || categoryName.Contains("hottesttake"))
-                    results.HottestTake = ParseCategoryWinner(property.Value);
-                else if (IsCategoryMatch(property.Value, "most_offensive_take") || categoryName.Contains("offensivetake"))
-                    results.MostOffensiveTake = ParseCategoryWinner(property.Value);
-                else if (IsCategoryMatch(property.Value, "best_plot_twist") || categoryName.Contains("plottwist"))
-                    results.BestPlotTwistRevelation = ParseCategoryWinner(property.Value);
-                else if (IsCategoryMatch(property.Value, "biggest_argument_starter") || categoryName.Contains("argumentstarter"))
-                    results.BiggestArgumentStarter = ParseCategoryWinner(property.Value);
-                else if (categoryName.Contains("funniest") && categoryName.Contains("sentences"))
-                    results.FunniestSentences = ParseTopFiveList(property.Value, "Funniest Sentences");
-                else if (categoryName.Contains("bland") && categoryName.Contains("comments"))
-                    results.MostBlandComments = ParseTopFiveList(property.Value, "Most Bland Comments");
+                switch (property.Name)
+                {
+                    case "BestJoke":
+                        results.BestJoke = ParseCategoryWinner(property.Value);
+                        break;
+                    case "HottestTake":
+                        results.HottestTake = ParseCategoryWinner(property.Value);
+                        break;
+                    case "MostOffensiveTake":
+                        results.MostOffensiveTake = ParseCategoryWinner(property.Value);
+                        break;
+                    case "BiggestArgumentStarter":
+                        results.BiggestArgumentStarter = ParseCategoryWinner(property.Value);
+                        break;
+                    case "BestRoast":
+                        results.BestRoast = ParseCategoryWinner(property.Value);
+                        break;
+                    case "FunniestRandomTangent":
+                        results.FunniestRandomTangent = ParseCategoryWinner(property.Value);
+                        break;
+                    case "MostPassionateDefense":
+                        results.MostPassionateDefense = ParseCategoryWinner(property.Value);
+                        break;
+                    case "BiggestUnanimousReaction":
+                        results.BiggestUnanimousReaction = ParseCategoryWinner(property.Value);
+                        break;
+                    case "MostBoringStatement":
+                        results.MostBoringStatement = ParseCategoryWinner(property.Value);
+                        break;
+                    case "BestPlotTwistRevelation":
+                        results.BestPlotTwistRevelation = ParseCategoryWinner(property.Value);
+                        break;
+                    case "MovieSnobMoment":
+                        results.MovieSnobMoment = ParseCategoryWinner(property.Value);
+                        break;
+                    case "GuiltyPleasureAdmission":
+                        results.GuiltyPleasureAdmission = ParseCategoryWinner(property.Value);
+                        break;
+                    case "QuietestPersonBestMoment":
+                        results.QuietestPersonBestMoment = ParseCategoryWinner(property.Value);
+                        break;
+                    case "Top5FunniestSentences":
+                        results.FunniestSentences = ParseTopFiveList(property.Value, "Funniest Sentences");
+                        break;
+                    case "Top5MostBlandComments":
+                        results.MostBlandComments = ParseTopFiveList(property.Value, "Most Bland Comments");
+                        break;
+                    case "OpeningQuestions":
+                        results.InitialQuestions = ParseOpeningQuestions(property.Value);
+                        break;
+                    default:
+                        _logger.LogDebug("Unrecognized category in response: {CategoryName}", property.Name);
+                        break;
+                }
             }
 
+            _logger.LogInformation("Successfully parsed {Count} categories from OpenAI response", 
+                GetParsedCategoriesCount(results));
             return results;
         }
         catch (JsonException ex)
         {
-            _logger.LogDebug(ex, "Failed to parse flat structure");
+            _logger.LogError(ex, "Failed to parse flat structure");
             return null;
         }
     }
@@ -168,14 +213,14 @@ public class ResponseParsingService
     {
         return new CategoryWinner
         {
-            Speaker = GetStringProperty(element, "speaker") ?? "Unknown",
-            Timestamp = GetStringProperty(element, "timestamp") ?? "0:00",
-            Quote = GetStringProperty(element, "quote") ?? "No quote available",
-            Setup = GetStringProperty(element, "setup") ?? "",
-            GroupReaction = GetStringProperty(element, "group_reaction") ?? "",
-            WhyItsGreat = GetStringProperty(element, "why_its_great") ?? "",
-            AudioQuality = ParseAudioQuality(GetStringProperty(element, "audio_quality")),
-            EntertainmentScore = GetIntProperty(element, "entertainment_score") ?? 5
+            Speaker = GetStringProperty(element, "Speaker") ?? GetStringProperty(element, "speaker") ?? "Unknown",
+            Timestamp = GetStringProperty(element, "Timestamp") ?? GetStringProperty(element, "timestamp") ?? "0:00",
+            Quote = GetStringProperty(element, "Quote") ?? GetStringProperty(element, "quote") ?? "No quote available",
+            Setup = GetStringProperty(element, "Setup") ?? GetStringProperty(element, "setup") ?? "",
+            GroupReaction = GetStringProperty(element, "GroupReaction") ?? GetStringProperty(element, "group_reaction") ?? "",
+            WhyItsGreat = GetStringProperty(element, "WhyItsGreat") ?? GetStringProperty(element, "why_its_great") ?? "",
+            AudioQuality = ParseAudioQuality(GetStringProperty(element, "AudioQualityString") ?? GetStringProperty(element, "audio_quality")),
+            EntertainmentScore = GetIntProperty(element, "EntertainmentScore") ?? GetIntProperty(element, "entertainment_score") ?? 5
         };
     }
 
@@ -186,19 +231,21 @@ public class ResponseParsingService
     {
         TopFiveList topFive = new TopFiveList(); // TopFiveList doesn't have Title property
 
-        if (element.TryGetProperty("entries", out JsonElement entriesElement) && entriesElement.ValueKind == JsonValueKind.Array)
+        if ((element.TryGetProperty("Entries", out JsonElement entriesElement) || 
+             element.TryGetProperty("entries", out entriesElement)) && 
+            entriesElement.ValueKind == JsonValueKind.Array)
         {
             foreach (JsonElement entry in entriesElement.EnumerateArray())
             {
                 TopFiveEntry topFiveEntry = new TopFiveEntry
                 {
-                    Speaker = GetStringProperty(entry, "speaker") ?? "Unknown",
-                    Timestamp = GetStringProperty(entry, "timestamp") ?? "0:00",
-                    Quote = GetStringProperty(entry, "quote") ?? "No quote available",
-                    Context = GetStringProperty(entry, "context") ?? GetStringProperty(entry, "setup") ?? "",
-                    AudioQuality = ParseAudioQuality(GetStringProperty(entry, "audio_quality")),
-                    Score = GetIntProperty(entry, "entertainment_score") ?? GetIntProperty(entry, "score") ?? 5,
-                    Reasoning = GetStringProperty(entry, "why_its_great") ?? GetStringProperty(entry, "reasoning") ?? "",
+                    Speaker = GetStringProperty(entry, "Speaker") ?? GetStringProperty(entry, "speaker") ?? "Unknown",
+                    Timestamp = GetStringProperty(entry, "Timestamp") ?? GetStringProperty(entry, "timestamp") ?? "0:00",
+                    Quote = GetStringProperty(entry, "Quote") ?? GetStringProperty(entry, "quote") ?? "No quote available",
+                    Context = GetStringProperty(entry, "Context") ?? GetStringProperty(entry, "context") ?? GetStringProperty(entry, "setup") ?? "",
+                    AudioQuality = ParseAudioQuality(GetStringProperty(entry, "AudioQualityString") ?? GetStringProperty(entry, "audio_quality")),
+                    Score = GetIntProperty(entry, "Score") ?? GetIntProperty(entry, "entertainment_score") ?? GetIntProperty(entry, "score") ?? 5,
+                    Reasoning = GetStringProperty(entry, "Reasoning") ?? GetStringProperty(entry, "why_its_great") ?? GetStringProperty(entry, "reasoning") ?? "",
                     SourceAudioFile = GetStringProperty(entry, "source_audio_file") ?? ""
                 };
 
@@ -265,5 +312,60 @@ public class ResponseParsingService
             "background_noise" or "backgroundnoise" => AudioQuality.BackgroundNoise,
             _ => AudioQuality.Clear
         };
+    }
+
+    /// <summary>
+    /// Parses opening questions from a JSON element.
+    /// </summary>
+    private List<QuestionAnswer> ParseOpeningQuestions(JsonElement element)
+    {
+        List<QuestionAnswer> questions = new List<QuestionAnswer>();
+
+        if ((element.TryGetProperty("Questions", out JsonElement questionsElement) || 
+             element.TryGetProperty("questions", out questionsElement)) && 
+            questionsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement question in questionsElement.EnumerateArray())
+            {
+                QuestionAnswer questionAnswer = new QuestionAnswer
+                {
+                    Question = GetStringProperty(question, "Question") ?? GetStringProperty(question, "question") ?? "",
+                    Speaker = GetStringProperty(question, "Speaker") ?? GetStringProperty(question, "speaker") ?? "Unknown",
+                    Answer = GetStringProperty(question, "Answer") ?? GetStringProperty(question, "answer") ?? "",
+                    Timestamp = GetStringProperty(question, "Timestamp") ?? GetStringProperty(question, "timestamp") ?? "0:00",
+                    EntertainmentValue = GetIntProperty(question, "EntertainmentValue") ?? GetIntProperty(question, "entertainment_value") ?? 5,
+                    AudioClipUrl = "" // Not provided in OpenAI response
+                };
+
+                questions.Add(questionAnswer);
+            }
+        }
+
+        return questions;
+    }
+
+    /// <summary>
+    /// Gets count of successfully parsed categories for logging.
+    /// </summary>
+    private int GetParsedCategoriesCount(CategoryResults results)
+    {
+        int count = 0;
+        if (results.BestJoke != null) count++;
+        if (results.HottestTake != null) count++;
+        if (results.MostOffensiveTake != null) count++;
+        if (results.BiggestArgumentStarter != null) count++;
+        if (results.BestRoast != null) count++;
+        if (results.FunniestRandomTangent != null) count++;
+        if (results.MostPassionateDefense != null) count++;
+        if (results.BiggestUnanimousReaction != null) count++;
+        if (results.MostBoringStatement != null) count++;
+        if (results.BestPlotTwistRevelation != null) count++;
+        if (results.MovieSnobMoment != null) count++;
+        if (results.GuiltyPleasureAdmission != null) count++;
+        if (results.QuietestPersonBestMoment != null) count++;
+        if (results.FunniestSentences != null && results.FunniestSentences.Entries.Count > 0) count++;
+        if (results.MostBlandComments != null && results.MostBlandComments.Entries.Count > 0) count++;
+        if (results.InitialQuestions != null && results.InitialQuestions.Count > 0) count++;
+        return count;
     }
 }

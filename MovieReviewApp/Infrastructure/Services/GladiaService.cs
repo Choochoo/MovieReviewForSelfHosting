@@ -240,7 +240,7 @@ public class GladiaService
                 await ConvertToMp3Async(audioFile.FilePath, mp3Path, progressCallback);
 
                 // Update audio file with MP3 details
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.PendingMp3;
+                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedConvertingToMp3;
                 audioFile.ConvertedAt = DateTime.UtcNow;
 
                 // Delete the original WAV file
@@ -306,8 +306,7 @@ public class GladiaService
         }
 
         // Process all MP3 files that can be uploaded to Gladia and haven't been uploaded yet
-        List<AudioFile> mp3Files = audioFiles.Where(f => (f.ProcessingStatus == AudioProcessingStatus.PendingMp3 ||
-                                             f.ProcessingStatus == AudioProcessingStatus.ProcessedMp3 ||
+        List<AudioFile> mp3Files = audioFiles.Where(f => (f.ProcessingStatus == AudioProcessingStatus.FinishedConvertingToMp3 ||
                                              f.ProcessingStatus == AudioProcessingStatus.FailedMp3 ||
                                              f.ProcessingStatus == AudioProcessingStatus.UploadingToGladia) &&
                                            string.IsNullOrEmpty(f.AudioUrl) &&
@@ -316,7 +315,7 @@ public class GladiaService
         Console.WriteLine($"DEBUG GLADIA: After filtering, {mp3Files.Count} files qualify for upload:");
 
         // Log skipped files that are already uploaded
-        List<AudioFile> alreadyUploaded = audioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.UploadedToGladia ||
+        List<AudioFile> alreadyUploaded = audioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.FinishedUploadingToGladia ||
                                                   !string.IsNullOrEmpty(f.AudioUrl)).ToList();
         if (alreadyUploaded.Any())
         {
@@ -344,7 +343,7 @@ public class GladiaService
                 // Store the audio URL for the transcription phase
                 audioFile.AudioUrl = audioUrl;
                 audioFile.UploadedAt = DateTime.UtcNow;
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.UploadedToGladia;
+                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedUploadingToGladia;
 
                 // Save session state immediately to persist upload progress
                 if (session != null && saveSessionCallback != null)
@@ -958,7 +957,7 @@ public class GladiaService
                 // Update audio file status if provided
                 if (audioFile != null)
                 {
-                    audioFile.ProcessingStatus = Models.AudioProcessingStatus.PendingMp3;
+                    audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedConvertingToMp3;
                 }
 
                 try
@@ -971,7 +970,7 @@ public class GladiaService
                     // Update audio file with MP3 details if provided
                     if (audioFile != null)
                     {
-                        audioFile.ProcessingStatus = Models.AudioProcessingStatus.ProcessedMp3;
+                        audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedConvertingToMp3;
                         audioFile.ConvertedAt = DateTime.UtcNow;
                     }
                 }
@@ -1044,7 +1043,7 @@ public class GladiaService
             // Update audio file status if provided
             if (audioFile != null)
             {
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.UploadedToGladia;
+                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedUploadingToGladia;
                 audioFile.UploadedAt = DateTime.UtcNow;
             }
 
@@ -1383,7 +1382,7 @@ public class GladiaService
                     audioUrl, audioFile.FilePath, sessionFolderPath, numOfSpeakers);
 
                 // Update audio file with transcription completion
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.TranscriptionComplete;
+                audioFile.ProcessingStatus = Models.AudioProcessingStatus.TranscriptsDownloaded;
                 audioFile.TranscriptId = result.id;
                 audioFile.JsonFilePath = jsonPath; // Store path to JSON file
 

@@ -73,87 +73,222 @@
                         <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> Conversation Analytics</h5>
                     </div>
                     <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-6 col-xl-2-4">
-                                <div class="stat-item">
-                                    <i class="bi bi-chat-text text-primary fs-4"></i>
-                                    <div class="ms-2">
-                                        <div class="fw-bold">Most Talkative</div>
-                                        <div class="text-muted small">@Session.SessionStats.MostTalkativePerson</div>
+                        <!-- Personality Awards Section -->
+                        <h6 class="text-primary mb-3">🏆 Personality Awards</h6>
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-6 col-lg-4">
+                                <div class="stat-card h-100">
+                                    <div class="stat-icon">
+                                        <i class="bi bi-chat-text text-primary"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <div class="stat-title">Most Talkative</div>
+                                        <div class="stat-value">@Session.SessionStats.MostTalkativePerson</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-2-4">
-                                <div class="stat-item">
-                                    <i class="bi bi-question-circle text-info fs-4"></i>
-                                    <div class="ms-2">
-                                        <div class="fw-bold">Most Inquisitive</div>
-                                        <div class="text-muted small">@Session.SessionStats.MostInquisitivePerson</div>
+                            <div class="col-md-6 col-lg-4">
+                                <div class="stat-card h-100">
+                                    <div class="stat-icon">
+                                        <i class="bi bi-question-circle text-info"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <div class="stat-title">Most Inquisitive</div>
+                                        <div class="stat-value">@Session.SessionStats.MostInquisitivePerson</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-2-4">
-                                <div class="stat-item">
-                                    <i class="bi bi-emoji-laughing text-warning fs-4"></i>
-                                    <div class="ms-2">
-                                        <div class="fw-bold">Comedy Generator</div>
-                                        <div class="text-muted small">@Session.SessionStats.FunniestPerson</div>
+                            <div class="col-md-6 col-lg-4">
+                                <div class="stat-card h-100">
+                                    <div class="stat-icon">
+                                        <i class="bi bi-emoji-laughing text-warning"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <div class="stat-title">Comedy Generator</div>
+                                        <div class="stat-value">@Session.SessionStats.FunniestPerson</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-2-4">
-                                <div class="stat-item">
-                                    <i class="bi bi-exclamation-triangle text-danger fs-4"></i>
-                                    <div class="ms-2">
-                                        <div class="fw-bold">Biggest Interruptor</div>
-                                        <div class="text-muted small">@Session.SessionStats.BiggestInterruptor</div>
+                            <div class="col-md-6 col-lg-4">
+                                <div class="stat-card h-100">
+                                    <div class="stat-icon">
+                                        <i class="bi bi-exclamation-triangle text-danger"></i>
+                                    </div>
+                                    <div class="stat-content">
+                                        <div class="stat-title">Biggest Interruptor</div>
+                                        <div class="stat-value">@Session.SessionStats.BiggestInterruptor</div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-2-4">
-                                <div class="stat-item">
-                                    <i class="bi bi-fire text-danger fs-4"></i>
-                                    <div class="ms-2">
-                                        <div class="fw-bold">Foul Mouth</div>
-                                        <div class="text-muted small">@Session.SessionStats.MostProfanePerson</div>
+                            <div class="col-md-6 col-lg-4">
+                                <div class="stat-card h-100">
+                                    <div class="stat-icon">
+                                        <i class="bi bi-fire text-danger"></i>
                                     </div>
+                                    <div class="stat-content">
+                                        <div class="stat-title">Foul Mouth</div>
+                                        <div class="stat-value">@Session.SessionStats.MostProfanePerson</div>
+                                    </div>
+                                </div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(Session.SessionStats.MostPejorativePerson))
+                            {
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="stat-card h-100">
+                                        <div class="stat-icon">
+                                            <i class="bi bi-chat-square-text text-warning"></i>
+                                        </div>
+                                        <div class="stat-content">
+                                            <div class="stat-title">Most Pejorative</div>
+                                            <div class="stat-value">@Session.SessionStats.MostPejorativePerson</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <!-- Session Metrics Section -->
+                        <h6 class="text-primary mb-3">📊 Session Metrics</h6>
+                        <div class="row g-4">
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <div class="metric-card">
+                                    <div class="metric-value">@Session.SessionStats.TotalQuestions</div>
+                                    <div class="metric-label">Questions</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <div class="metric-card">
+                                    <div class="metric-value">@Session.SessionStats.TotalLaughterMoments</div>
+                                    <div class="metric-label">Laughs</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <div class="metric-card">
+                                    <div class="metric-value">@Session.SessionStats.TotalInterruptions</div>
+                                    <div class="metric-label">Interruptions</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <div class="metric-card">
+                                    <div class="metric-value">@Session.SessionStats.TotalCurseWords</div>
+                                    <div class="metric-label">Curse Words</div>
+                                </div>
+                            </div>
+                            @if (Session.SessionStats.TotalPejorativeWords > 0)
+                            {
+                                <div class="col-6 col-md-4 col-lg-2">
+                                    <div class="metric-card">
+                                        <div class="metric-value">@Session.SessionStats.TotalPejorativeWords</div>
+                                        <div class="metric-label">Pejoratives</div>
+                                    </div>
+                                </div>
+                            }
+                            <div class="col-6 col-md-4 col-lg-2">
+                                <div class="metric-card">
+                                    <div class="metric-value fs-6">@Session.SessionStats.ConversationTone</div>
+                                    <div class="metric-label">Tone</div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <hr class="my-3">
-                        
-                        <div class="row g-3">
-                            <div class="col-md-6 col-lg-3 col-xl-2-4">
-                                <div class="text-center">
-                                    <div class="fs-4 fw-bold text-primary">@Session.SessionStats.TotalQuestions</div>
-                                    <div class="small text-muted">Total Questions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Detailed Word Usage Analysis -->
+    @if (Session.SessionStats != null && (Session.SessionStats.DetailedCurseWords.Any() || Session.SessionStats.DetailedPejorativeWords.Any()))
+    {
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="bi bi-exclamation-triangle-fill"></i> Language Usage Report
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (Session.SessionStats.DetailedCurseWords.Any())
+                        {
+                            <div class="mb-4">
+                                <h6 class="text-danger mb-3">
+                                    🤬 Profanity Usage
+                                </h6>
+                                <div class="row g-3">
+                                    @foreach (var speakerGroup in Session.SessionStats.DetailedCurseWords.GroupBy(w => w.Speaker))
+                                    {
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="language-card">
+                                                <div class="language-header">
+                                                    <span class="badge bg-primary">@speakerGroup.Key</span>
+                                                    <span class="total-count">Total: @speakerGroup.Sum(w => w.Count)</span>
+                                                </div>
+                                                <div class="word-list">
+                                                    @foreach (var word in speakerGroup.OrderByDescending(w => w.Count))
+                                                    {
+                                                        <div class="word-item">
+                                                            <code class="word-text text-danger">@word.Word</code>
+                                                            <span class="word-count">×@word.Count</span>
+                                                        </div>
+                                                        @if (word.ContextExamples.Any())
+                                                        {
+                                                            <div class="context-example">
+                                                                <small>"@word.ContextExamples.First()"</small>
+                                                            </div>
+                                                        }
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3 col-xl-2-4">
-                                <div class="text-center">
-                                    <div class="fs-4 fw-bold text-warning">@Session.SessionStats.TotalLaughterMoments</div>
-                                    <div class="small text-muted">Laugh Moments</div>
+                        }
+
+                        @if (Session.SessionStats.DetailedPejorativeWords.Any())
+                        {
+                            <div class="mb-4">
+                                <h6 class="text-warning mb-3">
+                                    😤 Pejorative Language
+                                </h6>
+                                <div class="row g-3">
+                                    @foreach (var speakerGroup in Session.SessionStats.DetailedPejorativeWords.GroupBy(w => w.Speaker))
+                                    {
+                                        <div class="col-md-6 col-lg-4">
+                                            <div class="language-card">
+                                                <div class="language-header">
+                                                    <span class="badge bg-primary">@speakerGroup.Key</span>
+                                                    <span class="total-count">Total: @speakerGroup.Sum(w => w.Count)</span>
+                                                </div>
+                                                <div class="word-list">
+                                                    @foreach (var word in speakerGroup.OrderByDescending(w => w.Count))
+                                                    {
+                                                        <div class="word-item">
+                                                            <code class="word-text text-warning">@word.Word</code>
+                                                            <span class="word-count">×@word.Count</span>
+                                                        </div>
+                                                        @if (word.ContextExamples.Any())
+                                                        {
+                                                            <div class="context-example">
+                                                                <small>"@word.ContextExamples.First()"</small>
+                                                            </div>
+                                                        }
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
                                 </div>
                             </div>
-                            <div class="col-md-6 col-lg-3 col-xl-2-4">
-                                <div class="text-center">
-                                    <div class="fs-4 fw-bold text-danger">@Session.SessionStats.TotalInterruptions</div>
-                                    <div class="small text-muted">Interruptions</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-lg-3 col-xl-2-4">
-                                <div class="text-center">
-                                    <div class="fs-4 fw-bold text-danger">@Session.SessionStats.TotalCurseWords</div>
-                                    <div class="small text-muted">Curse Words</div>
-                                </div>
-                            </div>
-                            <div class="col-md-12 col-xl-2-4">
-                                <div class="text-center">
-                                    <div class="fs-4 fw-bold text-info">@Session.SessionStats.ConversationTone</div>
-                                    <div class="small text-muted">Conversation Style</div>
-                                </div>
-                            </div>
+                        }
+
+                        <div class="alert alert-info alert-sm">
+                            <small>
+                                <i class="bi bi-info-circle"></i>
+                                Language patterns are automatically detected and analyzed to provide insights into conversation dynamics.
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -226,10 +361,10 @@
             </div>
         </div>
         <div class="row g-4 mb-5">
-            <CategoryCard Title="🏆 Best Joke" Winner="Session.CategoryResults.BestJoke" />
-            <CategoryCard Title="🎭 Best Roast" Winner="Session.CategoryResults.BestRoast" />
-            <CategoryCard Title="🚀 Funniest Random Tangent" Winner="Session.CategoryResults.FunniestRandomTangent" />
-            <CategoryCard Title="🙈 Guilty Pleasure Admission" Winner="Session.CategoryResults.GuiltyPleasureAdmission" />
+            <CategoryCard Title="🏆 Best Joke" Winner="@Session.CategoryResults.BestJoke" />
+            <CategoryCard Title="🎭 Best Roast" Winner="@Session.CategoryResults.BestRoast" />
+            <CategoryCard Title="🚀 Funniest Random Tangent" Winner="@Session.CategoryResults.FunniestRandomTangent" />
+            <CategoryCard Title="🙈 Guilty Pleasure Admission" Winner="@Session.CategoryResults.GuiltyPleasureAdmission" />
         </div>
 
         <div class="row">
@@ -238,10 +373,10 @@
             </div>
         </div>
         <div class="row g-4 mb-5">
-            <CategoryCard Title="🔥 Hottest Take" Winner="Session.CategoryResults.HottestTake" />
-            <CategoryCard Title="💥 Biggest Argument Starter" Winner="Session.CategoryResults.BiggestArgumentStarter" />
-            <CategoryCard Title="💪 Most Passionate Defense" Winner="Session.CategoryResults.MostPassionateDefense" />
-            <CategoryCard Title="🤔 Most Offensive Take" Winner="Session.CategoryResults.MostOffensiveTake" />
+            <CategoryCard Title="🔥 Hottest Take" Winner="@Session.CategoryResults.HottestTake" />
+            <CategoryCard Title="💥 Biggest Argument Starter" Winner="@Session.CategoryResults.BiggestArgumentStarter" />
+            <CategoryCard Title="💪 Most Passionate Defense" Winner="@Session.CategoryResults.MostPassionateDefense" />
+            <CategoryCard Title="🤔 Most Offensive Take" Winner="@Session.CategoryResults.MostOffensiveTake" />
         </div>
 
         <div class="row">
@@ -250,10 +385,10 @@
             </div>
         </div>
         <div class="row g-4 mb-5">
-            <CategoryCard Title="😱 Best Plot Twist Revelation" Winner="Session.CategoryResults.BestPlotTwistRevelation" />
-            <CategoryCard Title="🎯 Movie Snob Moment" Winner="Session.CategoryResults.MovieSnobMoment" />
-            <CategoryCard Title="🤝 Biggest Unanimous Reaction" Winner="Session.CategoryResults.BiggestUnanimousReaction" />
-            <CategoryCard Title="🤐 Quietest Person's Best Moment" Winner="Session.CategoryResults.QuietestPersonBestMoment" />
+            <CategoryCard Title="😱 Best Plot Twist Revelation" Winner="@Session.CategoryResults.BestPlotTwistRevelation" />
+            <CategoryCard Title="🎯 Movie Snob Moment" Winner="@Session.CategoryResults.MovieSnobMoment" />
+            <CategoryCard Title="🤝 Biggest Unanimous Reaction" Winner="@Session.CategoryResults.BiggestUnanimousReaction" />
+            <CategoryCard Title="🤐 Quietest Person's Best Moment" Winner="@Session.CategoryResults.QuietestPersonBestMoment" />
         </div>
 
         <div class="row">
@@ -262,7 +397,7 @@
             </div>
         </div>
         <div class="row g-4 mb-5">
-            <CategoryCard Title="😴 Most Boring Statement" Winner="Session.CategoryResults.MostBoringStatement" />
+            <CategoryCard Title="😴 Most Boring Statement" Winner="@Session.CategoryResults.MostBoringStatement" />
         </div>
 
         <!-- Top 5 Lists -->
@@ -278,7 +413,7 @@
                 @if (Session.CategoryResults.FunniestSentences != null)
                 {
                     <div class="col-lg-6">
-                        <TopFiveDisplay TopFiveList="Session.CategoryResults.FunniestSentences" 
+                        <TopFiveDisplay TopFiveList="@Session.CategoryResults.FunniestSentences" 
                                       Title="Top 5 Funniest Sentences" 
                                       IconClass="bi bi-emoji-laughing"
                                       IsFunny="true" />
@@ -288,7 +423,7 @@
                 @if (Session.CategoryResults.MostBlandComments != null)
                 {
                     <div class="col-lg-6">
-                        <TopFiveDisplay TopFiveList="Session.CategoryResults.MostBlandComments" 
+                        <TopFiveDisplay TopFiveList="@Session.CategoryResults.MostBlandComments" 
                                       Title="Top 5 Most Bland Comments" 
                                       IconClass="bi bi-emoji-neutral"
                                       IsFunny="false" />
@@ -455,19 +590,161 @@ else
         padding-bottom: 0.5rem;
     }
     
-    /* Conversation statistics */
-    .stat-item {
+    /* Improved Conversation Analytics */
+    .stat-card {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        transition: all 0.3s ease;
         display: flex;
         align-items: center;
-        padding: 0.75rem;
+        gap: 1rem;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-color: #dee2e6;
+    }
+    
+    .stat-icon {
+        background: white;
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    
+    .stat-icon i {
+        font-size: 1.5rem;
+    }
+    
+    .stat-content {
+        flex: 1;
+    }
+    
+    .stat-title {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-value {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    
+    /* Metric Cards */
+    .metric-card {
+        text-align: center;
+        padding: 1rem;
         background: #f8f9fa;
         border-radius: 0.5rem;
         border: 1px solid #e9ecef;
-        height: 100%;
+        transition: all 0.2s ease;
     }
     
-    .stat-item i {
-        flex-shrink: 0;
+    .metric-card:hover {
+        background: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #007bff;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    /* Language Usage Cards */
+    .language-card {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        height: 100%;
+        transition: all 0.3s ease;
+    }
+    
+    .language-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .language-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+    
+    .total-count {
+        font-size: 0.875rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .word-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .word-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        background: white;
+        border-radius: 0.375rem;
+        border: 1px solid #e9ecef;
+    }
+    
+    .word-text {
+        font-weight: 500;
+        font-size: 0.95rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        background: rgba(0,0,0,0.05);
+    }
+    
+    .word-count {
+        font-weight: 600;
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+    
+    .context-example {
+        margin-top: -0.5rem;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(0,0,0,0.02);
+        border-radius: 0.25rem;
+        font-style: italic;
+        color: #6c757d;
+        font-size: 0.8rem;
+        line-height: 1.3;
+    }
+    
+    .alert-sm {
+        padding: 0.75rem 1rem;
+        margin-bottom: 0;
     }
     
     /* Question and Answer styling */
@@ -501,21 +778,27 @@ else
         font-size: 0.8rem;
     }
     
-    /* Custom 5-column layout for larger screens */
-    .col-xl-2-4 {
-        flex: 0 0 auto;
-        width: 20%;
-    }
-    
-    @@media (max-width: 1199.98px) {
-        .col-xl-2-4 {
-            width: 33.333333%;
-        }
-    }
-    
+    /* Responsive adjustments */
     @@media (max-width: 767.98px) {
-        .col-xl-2-4 {
-            width: 50%;
+        .stat-card {
+            padding: 1rem;
+        }
+        
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+        }
+        
+        .stat-icon i {
+            font-size: 1.25rem;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+        }
+        
+        .language-card {
+            padding: 1rem;
         }
     }
 </style>

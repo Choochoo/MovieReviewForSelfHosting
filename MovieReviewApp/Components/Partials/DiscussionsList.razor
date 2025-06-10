@@ -76,6 +76,25 @@
                                             <small class="text-muted">Highlights</small>
                                         </div>
                                     </div>
+                                    @if (session.SessionStats.TotalCurseWords > 0 || session.SessionStats.TotalPejorativeWords > 0)
+                                    {
+                                        <div class="row text-center mt-2 pt-2 border-top">
+                                            @if (session.SessionStats.TotalCurseWords > 0)
+                                            {
+                                                <div class="col-6">
+                                                    <div class="fw-bold text-danger">@session.SessionStats.TotalCurseWords</div>
+                                                    <small class="text-muted">Curse Words</small>
+                                                </div>
+                                            }
+                                            @if (session.SessionStats.TotalPejorativeWords > 0)
+                                            {
+                                                <div class="col-6">
+                                                    <div class="fw-bold text-warning">@session.SessionStats.TotalPejorativeWords</div>
+                                                    <small class="text-muted">Pejorative</small>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             }
 

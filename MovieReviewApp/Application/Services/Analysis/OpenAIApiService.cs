@@ -1,5 +1,6 @@
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Models;
+using MovieReviewApp.Application.Models.OpenAI;
 using System.Text;
 using System.Text.Json;
 
@@ -191,28 +192,4 @@ public class TaskTimeoutException : Exception
 {
     public TaskTimeoutException(string message) : base(message) { }
     public TaskTimeoutException(string message, Exception innerException) : base(message, innerException) { }
-}
-
-/// <summary>
-/// DTO for OpenAI API response structure.
-/// </summary>
-public class OpenAIResponse
-{
-    public OpenAIChoice[]? choices { get; set; }
-}
-
-/// <summary>
-/// DTO for OpenAI choice within API response.
-/// </summary>
-public class OpenAIChoice
-{
-    public OpenAIMessage? message { get; set; }
-}
-
-/// <summary>
-/// DTO for OpenAI message within API response.
-/// </summary>
-public class OpenAIMessage
-{
-    public string? content { get; set; }
 }
