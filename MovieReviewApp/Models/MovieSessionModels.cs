@@ -1,4 +1,3 @@
-using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MongoDB.Bson.Serialization.Options;
 using MovieReviewApp.Attributes;
@@ -11,17 +10,16 @@ namespace MovieReviewApp.Models
         public DateTime Date { get; set; }
         public string MovieTitle { get; set; } = string.Empty;
         public string FolderPath { get; set; } = string.Empty;
-        public List<string> ParticipantsPresent { get; set; } = [];
-        public List<string> ParticipantsAbsent { get; set; } = [];
         public ProcessingStatus Status { get; set; } = ProcessingStatus.Pending;
         public List<AudioFile> AudioFiles { get; set; } = new();
         public SessionStats SessionStats { get; set; } = new();
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? ProcessedAt { get; set; }
         public string? ErrorMessage { get; set; }
         [BsonDictionaryOptions(DictionaryRepresentation.ArrayOfDocuments)]
         public Dictionary<int, string> MicAssignments { get; set; } = new();
         public CategoryResults CategoryResults { get; set; } = new();
+        [BsonIgnore]
+        public IEnumerable<string> Participants => MicAssignments?.Values.AsEnumerable() ?? [];
     }
 
     public class AudioFile : BaseModel
@@ -56,7 +54,6 @@ namespace MovieReviewApp.Models
         public string TechnicalQuality { get; set; } = string.Empty;
         public int HighlightMoments { get; set; }
         public string BestMomentsSummary { get; set; } = string.Empty;
-        public string AttendancePattern { get; set; } = string.Empty;
 
         // Detailed conversation statistics
         public Dictionary<string, int> WordCounts { get; set; } = new();
@@ -128,6 +125,8 @@ namespace MovieReviewApp.Models
         ProcessingTranscriptions,      // All files ready, processing transcriptions together
         SendingToOpenAI,               // Sending combined transcripts to OpenAI for analysis
         ProcessingWithAI,              // OpenAI analysis in progress
+        ReadyToProcessAIResponse,      // OpenAI response saved, ready for local processing
+        ProcessingAIResponse,          // Processing saved AI response locally
         Complete,                      // All processing complete
         Failed                         // General processing failure
     }

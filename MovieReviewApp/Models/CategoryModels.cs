@@ -5,6 +5,7 @@ namespace MovieReviewApp.Models
 {
     public class CategoryResults
     {
+        public TopFiveList? AIsUniqueObservations { get; set; }
         public CategoryWinner? MostOffensiveTake { get; set; }
         public CategoryWinner? HottestTake { get; set; }
         public CategoryWinner? BiggestArgumentStarter { get; set; }

@@ -6,13 +6,13 @@ namespace MovieReviewApp.Application.Services
 {
     public class ThemeService
     {
-        private readonly MovieReviewService _movieReviewService;
+        private readonly SettingService _settingService;
         private readonly AppSettings _appSettings;
         private string _currentTheme = "dark";
 
-        public ThemeService(MovieReviewService movieReviewService, IOptions<AppSettings> appSettings)
+        public ThemeService(SettingService settingService, IOptions<AppSettings> appSettings)
         {
-            _movieReviewService = movieReviewService;
+            _settingService = settingService;
             _appSettings = appSettings.Value;
         }
 
@@ -22,13 +22,13 @@ namespace MovieReviewApp.Application.Services
 
         public async Task InitializeAsync()
         {
-            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _settingService.GetSettingAsync("theme");
             _currentTheme = setting?.Value ?? "dark";
         }
 
         public async Task<string> GetThemeAsync()
         {
-            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _settingService.GetSettingAsync("theme");
             _currentTheme = setting?.Value ?? "dark";
             return _currentTheme;
         }
@@ -42,7 +42,7 @@ namespace MovieReviewApp.Application.Services
 
             _currentTheme = theme;
 
-            Setting? setting = await _movieReviewService.GetSettingAsync("theme");
+            Setting? setting = await _settingService.GetSettingAsync("theme");
             if (setting == null)
             {
                 setting = new Setting
@@ -59,7 +59,7 @@ namespace MovieReviewApp.Application.Services
                 setting.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _movieReviewService.AddOrUpdateSettingAsync(setting);
+            await _settingService.AddOrUpdateSettingAsync(setting);
             ThemeChanged?.Invoke(theme);
         }
 
@@ -71,7 +71,7 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<string> GetGroupThemeAsync()
         {
-            Setting? setting = await _movieReviewService.GetSettingAsync("group_theme");
+            Setting? setting = await _settingService.GetSettingAsync("group_theme");
             return setting?.Value ?? "cyberpunk";
         }
     }

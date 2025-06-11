@@ -1,17 +1,21 @@
 // Settings.razor.cs
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using MovieReviewApp.Models;
 using MovieReviewApp.Application.Services;
-using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Application.Services.Analysis;
 using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Components.Pages
 {
     public partial class Settings : ComponentBase
     {
         [Inject]
-        private MovieReviewService movieReviewService { get; set; } = default!;
+        private PersonService PersonService { get; set; } = default!;
+
+        [Inject]
+        private SettingService SettingService { get; set; } = default!;
 
         [Inject]
         private InstanceManager instanceManager { get; set; } = default!;
@@ -20,7 +24,7 @@ namespace MovieReviewApp.Components.Pages
         private NavigationManager navigationManager { get; set; } = default!;
 
         [Inject]
-        private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
+        private DiscussionQuestionService discussionQuestionsService { get; set; } = default!;
 
         [Inject]
         private ThemeService themeService { get; set; } = default!;
@@ -29,7 +33,7 @@ namespace MovieReviewApp.Components.Pages
         private SecretsManager secretsManager { get; set; } = default!;
 
         [Inject]
-        private OpenAIService openAIService { get; set; } = default!;
+        private OpenAIApiService openAIService { get; set; } = default!;
 
         [Inject]
         private ClaudeService claudeService { get; set; } = default!;
@@ -76,7 +80,7 @@ namespace MovieReviewApp.Components.Pages
         protected override async Task OnInitializedAsync()
         {
             // Load settings
-            settings = await movieReviewService.GetAllSettingsAsync();
+            settings = await SettingService.GetAllAsync();
 
 
             // Parse settings with defaults
@@ -100,7 +104,7 @@ namespace MovieReviewApp.Components.Pages
             GroupName = instanceConfig?.DisplayName ?? "";
 
             // Load people and questions
-            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+            People = await PersonService.GetAllOrderedAsync(RespectOrder);
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
 
             // Load current theme
@@ -113,9 +117,9 @@ namespace MovieReviewApp.Components.Pages
             if (string.IsNullOrWhiteSpace(NewPerson)) return;
 
             int newPersonOrder = People.Count + 1;
-            await movieReviewService.AddPersonAsync(new Person { Name = NewPerson, Order = newPersonOrder });
+            _ = await PersonService.CreateAsync(new Person { Name = NewPerson, Order = newPersonOrder });
             NewPerson = "";
-            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+            People = await PersonService.GetAllOrderedAsync(RespectOrder);
         }
 
         private void Edit(Person person)
@@ -130,8 +134,8 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task Delete(Person person)
         {
-            await movieReviewService.DeletePersonAsync(person);
-            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+            _ = await PersonService.DeleteAsync(person.Id);
+            People = await PersonService.GetAllOrderedAsync(RespectOrder);
 
             // Reorder remaining people
             for (int i = 0; i < People.Count; i++)
@@ -139,14 +143,14 @@ namespace MovieReviewApp.Components.Pages
                 if (People[i].Order != i + 1)
                 {
                     People[i].Order = i + 1;
-                    await movieReviewService.AddOrUpdatePersonAsync(People[i]);
+                    _ = await PersonService.UpdateAsync(People[i]);
                 }
             }
         }
 
         private async Task Save(Person person)
         {
-            await movieReviewService.AddOrUpdatePersonAsync(person);
+            _ = await PersonService.UpsertAsync(person);
             person.IsEditing = false;
         }
 
@@ -167,7 +171,7 @@ namespace MovieReviewApp.Components.Pages
             await themeService.SetThemeAsync(SelectedTheme);
 
             // Refresh people list if respect order changed
-            People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+            People = await PersonService.GetAllOrderedAsync(RespectOrder);
             StateHasChanged();
         }
 
@@ -176,9 +180,9 @@ namespace MovieReviewApp.Components.Pages
             Setting? setting = settings.FirstOrDefault(x => x.Key == key);
             if (setting == null)
             {
-                setting = new Setting 
-                { 
-                    Key = key, 
+                setting = new Setting
+                {
+                    Key = key,
                     Value = value,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -190,7 +194,7 @@ namespace MovieReviewApp.Components.Pages
                 setting.Value = value;
                 setting.UpdatedAt = DateTime.UtcNow;
             }
-            await movieReviewService.AddOrUpdateSettingAsync(setting);
+            await SettingService.AddOrUpdateSettingAsync(setting);
         }
 
         private async Task MoveUp(Person person)
@@ -203,9 +207,9 @@ namespace MovieReviewApp.Components.Pages
                 personAbove.Order = person.Order;
                 person.Order = person.Order - 1;
 
-                await movieReviewService.AddOrUpdatePersonAsync(person);
-                await movieReviewService.AddOrUpdatePersonAsync(personAbove);
-                People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+                _ = await PersonService.UpsertAsync(person);
+                _ = await PersonService.UpsertAsync(personAbove);
+                People = await PersonService.GetAllOrderedAsync(RespectOrder);
             }
         }
 
@@ -219,9 +223,9 @@ namespace MovieReviewApp.Components.Pages
                 personBelow.Order = person.Order;
                 person.Order = person.Order + 1;
 
-                await movieReviewService.AddOrUpdatePersonAsync(person);
-                await movieReviewService.AddOrUpdatePersonAsync(personBelow);
-                People = await movieReviewService.GetAllPeopleAsync(RespectOrder);
+                _ = await PersonService.UpsertAsync(person);
+                _ = await PersonService.UpsertAsync(personBelow);
+                People = await PersonService.GetAllOrderedAsync(RespectOrder);
             }
         }
 
@@ -231,7 +235,7 @@ namespace MovieReviewApp.Components.Pages
             if (string.IsNullOrWhiteSpace(NewQuestionText)) return;
 
             int newQuestionOrder = DiscussionQuestions.Count + 1;
-            await discussionQuestionsService.CreateQuestionAsync(NewQuestionText, newQuestionOrder, NewQuestionIsActive);
+            _ = await discussionQuestionsService.CreateAsync(new DiscussionQuestion() { Question = NewQuestionText, Order = newQuestionOrder, IsActive = NewQuestionIsActive });
             NewQuestionText = "";
             NewQuestionIsActive = true;
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
@@ -250,13 +254,13 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task SaveQuestion(DiscussionQuestion question)
         {
-            await discussionQuestionsService.UpdateQuestionAsync(question);
+            _ = await discussionQuestionsService.UpdateAsync(question);
             question.IsEditing = false;
         }
 
         private async Task DeleteQuestion(DiscussionQuestion question)
         {
-            await discussionQuestionsService.DeleteQuestionAsync(question.Id);
+            _ = await discussionQuestionsService.DeleteAsync(question.Id);
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
 
             // Reorder remaining questions
@@ -265,7 +269,7 @@ namespace MovieReviewApp.Components.Pages
                 if (DiscussionQuestions[i].Order != i + 1)
                 {
                     DiscussionQuestions[i].Order = i + 1;
-                    await discussionQuestionsService.UpdateQuestionAsync(DiscussionQuestions[i]);
+                    _ = await discussionQuestionsService.UpdateAsync(DiscussionQuestions[i]);
                 }
             }
         }
@@ -280,8 +284,8 @@ namespace MovieReviewApp.Components.Pages
                 questionAbove.Order = question.Order;
                 question.Order = question.Order - 1;
 
-                await discussionQuestionsService.UpdateQuestionAsync(question);
-                await discussionQuestionsService.UpdateQuestionAsync(questionAbove);
+                _ = await discussionQuestionsService.UpdateAsync(question);
+                _ = await discussionQuestionsService.UpdateAsync(questionAbove);
                 DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
             }
         }
@@ -296,8 +300,8 @@ namespace MovieReviewApp.Components.Pages
                 questionBelow.Order = question.Order;
                 question.Order = question.Order + 1;
 
-                await discussionQuestionsService.UpdateQuestionAsync(question);
-                await discussionQuestionsService.UpdateQuestionAsync(questionBelow);
+                _ = await discussionQuestionsService.UpdateAsync(question);
+                _ = await discussionQuestionsService.UpdateAsync(questionBelow);
                 DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
             }
         }
@@ -335,7 +339,7 @@ namespace MovieReviewApp.Components.Pages
                 string secretKey = provider switch
                 {
                     "OpenAI" => "OpenAI:ApiKey",
-                    "Claude" => "Claude:ApiKey", 
+                    "Claude" => "Claude:ApiKey",
                     "TMDB" => "TMDB:ApiKey",
                     "Gladia" => "Gladia:ApiKey",
                     _ => throw new ArgumentException($"Unknown provider: {provider}")

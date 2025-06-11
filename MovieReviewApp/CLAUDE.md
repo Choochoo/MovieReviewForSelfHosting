@@ -63,12 +63,14 @@ This is a Blazor Server application (.NET 8.0) for tracking movie reviews across
    - Meeting date scheduling per phase
    - Timeline visualization
 
-4. **Audio Processing Pipeline** (New Architecture):
-   - Upload via `ProcessAudio.razor` and `UploadAudio.razor`
-   - Transcription via Gladia API (`GladiaService.cs`)
-   - Movie session analysis (`MovieSessionAnalysisService.cs`, `MovieSessionService.cs`)
-   - File storage in `wwwroot/uploads/{Month}-{Year}/`
-   - Processing status tracking
+4. **Clean Recursive Audio Processing Pipeline**:
+   - **Recursive State Machine**: Each audio file processes through well-defined states automatically
+   - **Core Services**: `AudioProcessingStateMachine.cs`, `RecursiveAudioProcessingService.cs`
+   - **Simple Flow**: Pending → Convert → Upload → Transcribe → Complete
+   - **Self-Managing**: Each state knows its work and next state, calls itself recursively
+   - **Natural Recovery**: Restart from any state and cascade through to completion
+   - **Async Processing**: Each file processes independently until synchronization points
+   - **File Storage**: `wwwroot/uploads/{Month}-{Year}/`
 
 5. **Award System**:
    - Questions configured in database

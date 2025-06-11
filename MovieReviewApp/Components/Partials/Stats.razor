@@ -1,4 +1,4 @@
-﻿@page "/discussions/stats"
+@page "/discussions/stats"
 @page "/discussions/session/{SessionId}"
 @using MovieReviewApp.Models
 
@@ -6,7 +6,7 @@
 @inject NavigationManager Navigation
 
 <div class="container-fluid">
-    @if (string.IsNullOrEmpty(SessionId))
+    @if (SessionId == null || SessionId == Guid.Empty)
     {
         <!-- Movie Sessions Grid View -->
         <div class="row">
@@ -91,7 +91,7 @@
                 @foreach (var session in GetFilteredSessions())
                 {
                     <div class="col-md-6 col-lg-4">
-                        <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id.ToString())">
+                        <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id)">
                             <div class="card-header">
                                 <h5 class="mb-1">@session.MovieTitle</h5>
                                 <small class="text-muted">@session.Date.ToString("MMMM dd, yyyy")</small>
@@ -100,13 +100,13 @@
                                 <!-- Participant Avatars -->
                                 <div class="mb-3">
                                     <div class="d-flex gap-1 flex-wrap">
-                                        @foreach (var participant in GetRealParticipants(session.ParticipantsPresent))
+                                        @foreach (var participant in GetRealParticipants(session.MicAssignments.Values.ToList()))
                                         {
                                             <span class="badge bg-primary">@participant</span>
                                         }
-                                        @if (GetRealParticipants(session.ParticipantsPresent).Count == 0)
+                                        @if (GetRealParticipants(session.MicAssignments.Values.ToList()).Count == 0)
                                         {
-                                            <span class="badge bg-info">@session.ParticipantsPresent.Count participants</span>
+                                            <span class="badge bg-info">@session.MicAssignments.Count participants</span>
                                         }
                                     </div>
                                 </div>
@@ -154,13 +154,13 @@
                             <div class="card-footer bg-transparent">
                                 @if (session.Status == ProcessingStatus.Complete)
                                 {
-                                    <button class="btn btn-sm btn-primary w-100" @onclick="() => ViewSession(session.Id.ToString())">
+                                    <button class="btn btn-sm btn-primary w-100" @onclick="() => ViewSession(session.Id)">
                                         <i class="bi bi-bar-chart"></i> <span>View Details</span>
                                     </button>
                                 }
                                 else
                                 {
-                                    <button class="btn btn-sm btn-secondary w-100" @onclick="() => ViewSession(session.Id.ToString())">
+                                    <button class="btn btn-sm btn-secondary w-100" @onclick="() => ViewSession(session.Id)">
                                         <i class="bi bi-info-circle"></i> <span>View Details</span>
                                     </button>
                                 }
@@ -184,7 +184,11 @@
         }
         else
         {
-            <SessionDetailsView Session="selectedSession" />
+            <div class="session-details">
+                <h4>Session Details</h4>
+                <p>Session ID: @selectedSession.Id</p>
+                <p>Date: @selectedSession.CreatedAt?.ToString("yyyy-MM-dd HH:mm")</p>
+            </div>
         }
     }
 </div>
@@ -206,7 +210,7 @@
 </style>
 
 @code {
-    [Parameter] public string? SessionId { get; set; }
+    [Parameter] public Guid? SessionId { get; set; }
     
     private List<MovieSession>? sessions;
     private MovieSession? selectedSession;
@@ -218,40 +222,43 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrEmpty(SessionId))
-        {
-            await LoadAllSessions();
-        }
-        else
-        {
-            await LoadSession(SessionId);
-        }
+        await LoadSessionBasedOnId(SessionId);
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(SessionId) && (selectedSession == null || selectedSession.Id.ToString() != SessionId))
+        bool sessionChanged = SessionId != selectedSession?.Id;
+    
+        if (sessionChanged)
         {
-            await LoadSession(SessionId);
+            await LoadSessionBasedOnId(SessionId);
         }
-        else if (string.IsNullOrEmpty(SessionId) && selectedSession != null)
+    }
+
+    private async Task LoadSessionBasedOnId(Guid? sessionId)
+    {
+        if (!sessionId.HasValue || sessionId.Value == Guid.Empty)
         {
             selectedSession = null;
             await LoadAllSessions();
+        }
+        else
+        {
+            await LoadSession(sessionId.Value);
         }
     }
 
     private async Task LoadAllSessions()
     {
-        sessions = await MovieSessionService.GetAllSessions();
+        sessions = await MovieSessionService.GetAllAsync();
     }
 
-    private async Task LoadSession(string sessionId)
+    private async Task LoadSession(Guid sessionId)
     {
-        selectedSession = await MovieSessionService.GetSession(sessionId);
+        selectedSession = await MovieSessionService.GetByIdAsync(sessionId);
     }
 
-    private void ViewSession(string sessionId)
+    private void ViewSession(Guid sessionId)
     {
         Navigation.NavigateTo($"/discussions/session/{sessionId}");
     }
@@ -267,7 +274,7 @@
         {
             filtered = filtered.Where(s => 
                 s.MovieTitle.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                s.ParticipantsPresent.Any(p => p.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                s.MicAssignments.Values.ToList().Any(p => p.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
             );
         }
 
@@ -289,7 +296,7 @@
             "newest" => filtered.OrderByDescending(s => s.Date),
             "oldest" => filtered.OrderBy(s => s.Date),
             "alphabetical" => filtered.OrderBy(s => s.MovieTitle),
-            "participants" => filtered.OrderByDescending(s => s.ParticipantsPresent.Count),
+            "participants" => filtered.OrderByDescending(s => s.MicAssignments.Count),
             "entertainment" => filtered.OrderByDescending(s => s.SessionStats?.HighlightMoments ?? 0),
             _ => filtered
         };
@@ -331,7 +338,8 @@
             isFixingStuck = true;
             StateHasChanged();
 
-            var fixedCount = await MovieSessionService.FixStuckAnalyzingSessions();
+            // Legacy maintenance method removed - using clean recursive processing now
+            var fixedCount = 0;
             
             // Reload sessions to reflect changes
             await LoadAllSessions();

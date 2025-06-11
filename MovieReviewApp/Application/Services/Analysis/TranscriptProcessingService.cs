@@ -1,8 +1,8 @@
-using MovieReviewApp.Application.Models.Transcription;
-using MovieReviewApp.Models;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MovieReviewApp.Application.Models.Transcription;
+using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services.Analysis;
 
@@ -31,10 +31,10 @@ public class TranscriptProcessingService
         try
         {
             _logger.LogInformation("Building enhanced transcript with speaker attribution for session {SessionId}", session.Id);
-            
+
             // Use speaker attribution fix to get corrected transcript
             string enhancedTranscript = await _speakerFixService.CreateCorrectedTranscriptForAI(session);
-            
+
             _logger.LogInformation("Successfully created enhanced transcript for AI analysis (length: {Length} chars)", enhancedTranscript.Length);
             return enhancedTranscript;
         }
@@ -55,11 +55,11 @@ public class TranscriptProcessingService
         StringBuilder transcriptBuilder = new StringBuilder();
 
         // Add session context
-        transcriptBuilder.AppendLine("=== TRANSCRIPT ANALYSIS CONTEXT ===");
-        transcriptBuilder.AppendLine($"Movie: {session.MovieTitle}");
-        transcriptBuilder.AppendLine($"Date: {session.Date:yyyy-MM-dd}");
-        transcriptBuilder.AppendLine($"Participants: {string.Join(", ", session.ParticipantsPresent)}");
-        transcriptBuilder.AppendLine();
+        _ = transcriptBuilder.AppendLine("=== TRANSCRIPT ANALYSIS CONTEXT ===");
+        _ = transcriptBuilder.AppendLine($"Movie: {session.MovieTitle}");
+        _ = transcriptBuilder.AppendLine($"Date: {session.Date:yyyy-MM-dd}");
+        _ = transcriptBuilder.AppendLine($"Participants: {string.Join(", ", session.Participants)}");
+        _ = transcriptBuilder.AppendLine();
 
         // Get master recording and individual files
         AudioFile? masterFile = session.AudioFiles.FirstOrDefault(f => f.IsMasterRecording && !string.IsNullOrEmpty(f.TranscriptText));
@@ -84,35 +84,35 @@ public class TranscriptProcessingService
         {
             _logger.LogInformation("Using master recording for analysis (size: {Size} chars)", masterFile.TranscriptText.Length);
 
-            transcriptBuilder.AppendLine("=== MASTER RECORDING (Full Group Conversation) ===");
-            transcriptBuilder.AppendLine("⚠️  IMPORTANT: Use ONLY timestamps from this master recording for audio clips!");
-            transcriptBuilder.AppendLine("This captures everyone talking together with natural overlaps and interruptions.");
-            transcriptBuilder.AppendLine("All audio clips will be generated from this file, so timestamps must match this timeline.");
-            transcriptBuilder.AppendLine();
+            _ = transcriptBuilder.AppendLine("=== MASTER RECORDING (Full Group Conversation) ===");
+            _ = transcriptBuilder.AppendLine("⚠️  IMPORTANT: Use ONLY timestamps from this master recording for audio clips!");
+            _ = transcriptBuilder.AppendLine("This captures everyone talking together with natural overlaps and interruptions.");
+            _ = transcriptBuilder.AppendLine("All audio clips will be generated from this file, so timestamps must match this timeline.");
+            _ = transcriptBuilder.AppendLine();
 
             string masterTranscript = masterFile.TranscriptText;
 
             // Convert JSON format to plain text
-            masterTranscript = ConvertJsonTranscriptToPlainText(masterTranscript, "Speaker", session.ParticipantsPresent);
+            masterTranscript = ConvertJsonTranscriptToPlainText(masterTranscript, "Speaker", session.MicAssignments.Values.ToList());
 
-            transcriptBuilder.Append(masterTranscript);
+            _ = transcriptBuilder.Append(masterTranscript);
         }
         else if (individualFiles.Any())
         {
             _logger.LogInformation("No master recording found, using {Count} individual recordings", individualFiles.Count);
-            transcriptBuilder.AppendLine("=== INDIVIDUAL RECORDINGS (Merged) ===");
-            transcriptBuilder.AppendLine("Note: These are separate mic recordings merged together.");
-            transcriptBuilder.AppendLine();
+            _ = transcriptBuilder.AppendLine("=== INDIVIDUAL RECORDINGS (Merged) ===");
+            _ = transcriptBuilder.AppendLine("Note: These are separate mic recordings merged together.");
+            _ = transcriptBuilder.AppendLine();
 
             foreach (AudioFile file in individualFiles)
             {
                 string speakerName = GetSpeakerName(file, session);
-                transcriptBuilder.AppendLine($"\n--- {speakerName} (from {file.FileName}) ---");
+                _ = transcriptBuilder.AppendLine($"\n--- {speakerName} (from {file.FileName}) ---");
 
                 string transcript = file.TranscriptText;
-                transcript = ConvertJsonTranscriptToPlainText(transcript, speakerName, session.ParticipantsPresent);
+                transcript = ConvertJsonTranscriptToPlainText(transcript, speakerName, session.MicAssignments.Values.ToList());
 
-                transcriptBuilder.Append(transcript);
+                _ = transcriptBuilder.Append(transcript);
             }
         }
 
@@ -122,7 +122,7 @@ public class TranscriptProcessingService
     /// <summary>
     /// Converts JSON transcript format to plain text with speaker labels.
     /// </summary>
-    public string ConvertJsonTranscriptToPlainText(string jsonTranscript, string speakerName, List<string> participantsPresent)
+    public string ConvertJsonTranscriptToPlainText(string jsonTranscript, string speakerName, List<string> MicAssignments)
     {
         try
         {
@@ -149,12 +149,12 @@ public class TranscriptProcessingService
                     // Otherwise use a generic speaker label
                     string actualSpeaker = speakerName;
 
-                    if (speakerName == "Speaker" && participantsPresent.Count == 1)
+                    if (speakerName == "Speaker" && MicAssignments.Count == 1)
                     {
-                        actualSpeaker = participantsPresent[0];
+                        actualSpeaker = MicAssignments[0];
                     }
 
-                    sb.AppendLine($"{actualSpeaker}: {utterance.text.Trim()}");
+                    _ = sb.AppendLine($"{actualSpeaker}: {utterance.text.Trim()}");
                 }
             }
 

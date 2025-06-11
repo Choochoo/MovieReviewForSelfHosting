@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using MovieReviewApp.Models;
+
 using MovieReviewApp.Infrastructure.Configuration;
-using MovieReviewApp.Core.Interfaces;
-using MovieReviewApp.Database;
+using MovieReviewApp.Models;
+using MovieReviewApp.Infrastructure.Database;
 
 namespace MovieReviewApp.Components.Pages;
 
@@ -14,7 +14,7 @@ namespace MovieReviewApp.Components.Pages;
 public partial class FirstRunSetup : ComponentBase
 {
     #region Private Fields
-    
+
     private string tmdbKey = "";
     private string mongoConnection = "";
     private string gladiaKey = "";
@@ -22,50 +22,50 @@ public partial class FirstRunSetup : ComponentBase
     private string facebookChatUrl = "";
     private string groupName = "";
     private string contentType = "General";
-    
+
     private bool isSaving = false;
     private bool isComplete = false;
     private string errorMessage = "";
     private InstanceConfig currentConfig = new();
-    
+
     #endregion
 
     #region Injected Dependencies
-    
+
     /// <summary>
     /// Service for managing application secrets and configuration.
     /// </summary>
-    [Inject] 
+    [Inject]
     public SecretsManager SecretsManager { get; set; } = default!;
 
     /// <summary>
     /// Service for managing multiple application instances.
     /// </summary>
-    [Inject] 
+    [Inject]
     public InstanceManager InstanceManager { get; set; } = default!;
 
     /// <summary>
     /// Navigation manager for routing and URL management.
     /// </summary>
-    [Inject] 
+    [Inject]
     public NavigationManager Navigation { get; set; } = default!;
 
     /// <summary>
     /// JavaScript runtime for interacting with browser APIs.
     /// </summary>
-    [Inject] 
+    [Inject]
     public IJSRuntime JS { get; set; } = default!;
 
     /// <summary>
     /// Database service for data persistence operations.
     /// </summary>
-    [Inject] 
-    public IDatabaseService DatabaseService { get; set; } = default!;
-    
+    [Inject]
+    public MongoDbService DatabaseService { get; set; } = default!;
+
     #endregion
 
     #region Lifecycle Methods
-    
+
     /// <summary>
     /// Initializes the component and checks if setup is already complete.
     /// If setup is complete, redirects to the main application.
@@ -85,11 +85,11 @@ public partial class FirstRunSetup : ComponentBase
         groupName = currentConfig.DisplayName;
         contentType = currentConfig.Environment; // Map old Environment to new ContentType
     }
-    
+
     #endregion
 
     #region Private Methods
-    
+
     /// <summary>
     /// Saves the setup configuration including API keys, database settings, and instance configuration.
     /// Validates required fields and saves secrets and instance configuration to persistent storage.
@@ -105,9 +105,9 @@ public partial class FirstRunSetup : ComponentBase
         try
         {
             Console.WriteLine($"Validating: TMDB='{tmdbKey}', Mongo='{mongoConnection}'");
-            
+
             // Validate required fields
-            if (string.IsNullOrWhiteSpace(tmdbKey) || 
+            if (string.IsNullOrWhiteSpace(tmdbKey) ||
                 string.IsNullOrWhiteSpace(mongoConnection) ||
                 string.IsNullOrWhiteSpace(groupName))
             {
@@ -158,10 +158,10 @@ public partial class FirstRunSetup : ComponentBase
             };
 
             InstanceManager.SaveInstanceConfig(instanceConfig);
-            
+
             // Save group name to MongoDB settings
             await SaveGroupNameToSettings(groupName.Trim());
-            
+
             Console.WriteLine("Setup completed successfully");
             isComplete = true;
             StateHasChanged();
@@ -189,7 +189,7 @@ public partial class FirstRunSetup : ComponentBase
     {
         Navigation.NavigateTo("/");
     }
-    
+
     /// <summary>
     /// Saves the group name setting to the database.
     /// Creates a new setting if it doesn't exist, or updates the existing one.
@@ -209,9 +209,9 @@ public partial class FirstRunSetup : ComponentBase
             }
             else
             {
-                await DatabaseService.InsertAsync(new Setting 
-                { 
-                    Key = "GroupName", 
+                await DatabaseService.InsertAsync(new Setting
+                {
+                    Key = "GroupName",
                     Value = groupName,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -224,6 +224,6 @@ public partial class FirstRunSetup : ComponentBase
             // Non-critical error, continue with setup
         }
     }
-    
+
     #endregion
 }

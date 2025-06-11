@@ -8,7 +8,7 @@ namespace MovieReviewApp.Application.Services.Analysis;
 /// </summary>
 public class PromptGenerationService
 {
-    private readonly DiscussionQuestionsService _discussionQuestionsService;
+    private readonly DiscussionQuestionService _discussionQuestionsService;
     private readonly ILogger<PromptGenerationService> _logger;
 
     // Maximum transcript size to prevent OpenAI timeouts  
@@ -17,7 +17,7 @@ public class PromptGenerationService
     private const string TRUNCATION_WARNING = "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH - ANALYSIS BASED ON FIRST {0:N0} CHARACTERS FOR OPTIMAL PROCESSING]";
 
     public PromptGenerationService(
-        DiscussionQuestionsService discussionQuestionsService,
+        DiscussionQuestionService discussionQuestionsService,
         ILogger<PromptGenerationService> logger)
     {
         _discussionQuestionsService = discussionQuestionsService;
@@ -25,9 +25,17 @@ public class PromptGenerationService
     }
 
     /// <summary>
+    /// Generates analysis prompt for a session and transcript.
+    /// </summary>
+    public string GenerateAnalysisPrompt(MovieSession session, string transcript)
+    {
+        return CreateAnalysisPromptAsync(session.MovieTitle, session.Date, session.Participants, transcript).Result;
+    }
+
+    /// <summary>
     /// Creates a comprehensive analysis prompt for OpenAI based on session data and transcript.
     /// </summary>
-    public async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime sessionDate, List<string> participants, string transcript)
+    public async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime sessionDate, IEnumerable<string> participants, string transcript)
     {
         // Limit transcript size to prevent timeouts
         string processedTranscript = transcript;
@@ -38,19 +46,22 @@ public class PromptGenerationService
             processedTranscript = transcript.Substring(0, MAX_TRANSCRIPT_SIZE);
             processedTranscript += string.Format(TRUNCATION_WARNING, MAX_TRANSCRIPT_SIZE);
             wasTruncated = true;
-            _logger.LogWarning("Transcript truncated from {OriginalLength} to {TruncatedLength} characters", 
+            _logger.LogWarning("Transcript truncated from {OriginalLength} to {TruncatedLength} characters",
                 transcript.Length, processedTranscript.Length);
         }
 
         // Get initial discussion questions for context
         List<DiscussionQuestion> questions = await _discussionQuestionsService.GetActiveQuestionsAsync();
-        string questionsContext = questions.Any() 
+        string questionsContext = questions.Any()
             ? $"The group was guided by these discussion questions: {string.Join(", ", questions.Select(q => q.Question))}"
             : "This was a free-form discussion without structured questions.";
 
-        string participantsList = participants.Any() 
+        string participantsList = participants.Any()
             ? string.Join(", ", participants)
             : "Unknown participants";
+
+        // Build dynamic opening questions for each participant using database questions
+        string openingQuestionsJson = BuildOpeningQuestionsJson(participants, questions);
 
         // Create comprehensive analysis prompt
         string prompt = $@"You are an expert entertainment analyst specializing in identifying the most entertaining and memorable moments from movie discussion recordings. 
@@ -66,6 +77,43 @@ ANALYSIS REQUIREMENTS:
 Please provide a comprehensive analysis in the following JSON format. For each category, identify the single best moment that fits the criteria:
 
 {{
+  ""AIsUniqueObservations"": {{
+    ""Entries"": [
+      {{
+        ""Rank"": 1,
+        ""Speaker"": ""[Name or 'Multiple' if it involves the group]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[The most unique/interesting moment you observed]"",
+        ""Context"": ""[Context of what made this unique]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[What made this observation particularly unique, unexpected, or entertaining from your AI perspective]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 2,
+        ""Speaker"": ""[Name or 'Multiple' if it involves the group]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Second most unique/interesting moment you observed]"",
+        ""Context"": ""[Context of what made this unique]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[What made this observation unique from your AI perspective]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }},
+      {{
+        ""Rank"": 3,
+        ""Speaker"": ""[Name or 'Multiple' if it involves the group]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""Quote"": ""[Third most unique/interesting moment you observed]"",
+        ""Context"": ""[Context of what made this unique]"",
+        ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
+        ""Score"": [1-10.0],
+        ""Reasoning"": ""[What made this observation unique from your AI perspective]"",
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }}
+    ]
+  }},
   ""MostOffensiveTake"": {{
     ""Speaker"": ""[Name]"",
     ""Timestamp"": ""[MM:SS]"",
@@ -74,7 +122,21 @@ Please provide a comprehensive analysis in the following JSON format. For each c
     ""GroupReaction"": ""[How others reacted]"",
     ""WhyItsGreat"": ""[What makes it entertaining/memorable]"",
     ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
-    ""EntertainmentScore"": [1-10]
+    ""EntertainmentScore"": [1-10],
+    ""RunnersUp"": [
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their moment]"",
+        ""Place"": 2
+      }},
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their moment]"",
+        ""Place"": 3
+      }}
+    ]
   }},
   ""HottestTake"": {{
     ""Speaker"": ""[Name]"",
@@ -84,7 +146,21 @@ Please provide a comprehensive analysis in the following JSON format. For each c
     ""GroupReaction"": ""[How others reacted]"",
     ""WhyItsGreat"": ""[What makes it a hot take]"",
     ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
-    ""EntertainmentScore"": [1-10]
+    ""EntertainmentScore"": [1-10],
+    ""RunnersUp"": [
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their hot take]"",
+        ""Place"": 2
+      }},
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their hot take]"",
+        ""Place"": 3
+      }}
+    ]
   }},
   ""BiggestArgumentStarter"": {{
     ""Speaker"": ""[Name]"",
@@ -94,7 +170,21 @@ Please provide a comprehensive analysis in the following JSON format. For each c
     ""GroupReaction"": ""[How the argument developed]"",
     ""WhyItsGreat"": ""[What made it entertaining]"",
     ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
-    ""EntertainmentScore"": [1-10]
+    ""EntertainmentScore"": [1-10],
+    ""RunnersUp"": [
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their argument starter]"",
+        ""Place"": 2
+      }},
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their argument starter]"",
+        ""Place"": 3
+      }}
+    ]
   }},
   ""BestJoke"": {{
     ""Speaker"": ""[Name]"",
@@ -104,7 +194,21 @@ Please provide a comprehensive analysis in the following JSON format. For each c
     ""GroupReaction"": ""[How others responded/laughed]"",
     ""WhyItsGreat"": ""[What makes it funny]"",
     ""AudioQualityString"": ""[Clear/Muffled/Distorted/Background_Noise]"",
-    ""EntertainmentScore"": [1-10]
+    ""EntertainmentScore"": [1-10],
+    ""RunnersUp"": [
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their joke]"",
+        ""Place"": 2
+      }},
+      {{
+        ""Speaker"": ""[Name]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""BriefDescription"": ""[Brief description of their joke]"",
+        ""Place"": 3
+      }}
+    ]
   }},
   ""BestRoast"": {{
     ""Speaker"": ""[Name]"",
@@ -314,29 +418,19 @@ Please provide a comprehensive analysis in the following JSON format. For each c
       }}
     ]
   }},
-  ""OpeningQuestions"": {{
-    ""Questions"": [
-      {{
-        ""Question"": ""[The question asked]"",
-        ""Speaker"": ""[Who answered]"",
-        ""Answer"": ""[Their response]"",
-        ""Timestamp"": ""[MM:SS]"",
-        ""EntertainmentValue"": [1-10],
-        ""EstimatedStartEnd"": [start_seconds, end_seconds]
-      }}
-    ]
-  }}
+  {openingQuestionsJson}
 }}
 
 ANALYSIS GUIDELINES:
-1. Focus on entertainment value - what would make people laugh or be engaged when reviewing this later
-2. Include exact quotes when possible, but ensure they're family-friendly for sharing
-3. Look for moments of genuine surprise, laughter, disagreement, or insight
-4. Consider both intentional humor and unintentionally funny moments
-5. Rate entertainment value from 1-10 (10 = absolutely hilarious/memorable)
-6. For Top 5 lists, provide exactly 5 entries ranked by entertainment value
-7. Timestamps should be in MM:SS format (estimate if exact time unclear)
-8. Audio quality assessment helps determine clip generation feasibility
+1. AI's Unique Observations: This is YOUR perspective as an AI - identify the 3 most unique, unexpected, or fascinating things about this conversation. These could be unusual dynamics, interesting patterns you noticed, unexpected insights, unique group behavior, conversation quirks, or anything that caught your artificial attention as distinctive about this particular discussion. Think beyond the structured categories below.
+2. Focus on entertainment value - what would make people laugh or be engaged when reviewing this later
+3. Include exact quotes when possible, the most non politically correct the better.
+4. Look for moments of genuine surprise, laughter, disagreement, or insight
+5. Consider both intentional humor and unintentionally funny moments
+6. Rate entertainment value from 1-10 (10 = absolutely hilarious/memorable)
+7. For Top 5 lists, provide exactly 5 entries ranked by entertainment value
+8. Timestamps should be in MM:SS format (estimate if exact time unclear)
+9. Audio quality assessment helps determine clip generation feasibility
 
 IMPORTANT: 
 - Respond ONLY with the JSON structure above
@@ -352,11 +446,54 @@ IMPORTANT:
     }
 
     /// <summary>
+    /// Builds dynamic opening questions JSON for each participant using database questions.
+    /// </summary>
+    private string BuildOpeningQuestionsJson(IEnumerable<string> participants, IEnumerable<DiscussionQuestion> dbQuestions)
+    {
+        if (!participants.Any() || !dbQuestions.Any())
+        {
+            return @"""OpeningQuestions"": {
+    ""Questions"": []
+  }";
+        }
+
+        List<string> questionEntries = new List<string>();
+
+        // Limit to 2-3 participants to avoid response length issues
+        List<string> selectedParticipants = participants.Take(3).ToList();
+
+        // Create entries for selected participants answering each question from the database
+        foreach (string participant in selectedParticipants)
+        {
+            foreach (DiscussionQuestion dbQuestion in dbQuestions.Take(3)) // Limit to 3 questions max
+            {
+                string entry = $@"      {{
+        ""Question"": ""{dbQuestion.Question.Replace("\"", "\\\"")}"",
+        ""Speaker"": ""{participant}"",
+        ""Answer"": ""[Their response]"",
+        ""Timestamp"": ""[MM:SS]"",
+        ""EntertainmentValue"": [1-10],
+        ""EstimatedStartEnd"": [start_seconds, end_seconds]
+      }}";
+                questionEntries.Add(entry);
+            }
+        }
+
+        string questionsArray = string.Join(",\n", questionEntries);
+
+        return $@"""OpeningQuestions"": {{
+    ""Questions"": [
+{questionsArray}
+    ]
+  }}";
+    }
+
+    /// <summary>
     /// Creates a fallback prompt for when the full analysis fails.
     /// </summary>
     public string CreateFallbackPrompt(string movieTitle, List<string> participants, string transcript)
     {
-        string participantsList = participants.Any() 
+        string participantsList = participants.Any()
             ? string.Join(", ", participants)
             : "Unknown participants";
 

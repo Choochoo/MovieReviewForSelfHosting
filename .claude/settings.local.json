@@ -52,7 +52,9 @@
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --type cs)",
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --type html)",
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ -t razor)",
-      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --glob \"*.razor\")"
+      "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --glob \"*.razor\")",
+      "Bash(pkill:*)",
+      "Bash(kill:*)"
     ],
     "deny": []
   }

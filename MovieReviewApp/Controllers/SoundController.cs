@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using MovieReviewApp.Infrastructure.Repositories;
+using MovieReviewApp.Application.Services;
 
 namespace MovieReviewApp.Controllers
 {
@@ -7,12 +7,12 @@ namespace MovieReviewApp.Controllers
     [Route("api/[controller]")]
     public class SoundController : ControllerBase
     {
-        private readonly SoundboardRepository _soundboardRepository;
+        private readonly SoundClipService _soundClipService;
         private readonly ILogger<SoundController> _logger;
 
-        public SoundController(SoundboardRepository soundboardRepository, ILogger<SoundController> logger)
+        public SoundController(SoundClipService soundClipService, ILogger<SoundController> logger)
         {
-            _soundboardRepository = soundboardRepository;
+            _soundClipService = soundClipService;
             _logger = logger;
         }
 
@@ -31,12 +31,13 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                Models.SoundClip soundClip = await _soundboardRepository.SaveSoundClipAsync(personId, file, description);
-                return Ok(new { 
+                Models.SoundClip soundClip = await _soundClipService.SaveSoundClipAsync(personId, file, description);
+                return Ok(new
+                {
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
                     originalFileName = soundClip.OriginalFileName,
-                    url = _soundboardRepository.GetSoundClipUrl(soundClip)
+                    url = _soundClipService.GetSoundClipUrl(soundClip)
                 });
             }
             catch (Exception ex)
@@ -56,12 +57,13 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                Models.SoundClip soundClip = await _soundboardRepository.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
-                return Ok(new { 
+                Models.SoundClip soundClip = await _soundClipService.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
+                return Ok(new
+                {
                     id = soundClip.Id.ToString(),
                     fileName = soundClip.FileName,
                     originalFileName = soundClip.OriginalFileName,
-                    url = _soundboardRepository.GetSoundClipUrl(soundClip)
+                    url = _soundClipService.GetSoundClipUrl(soundClip)
                 });
             }
             catch (Exception ex)
@@ -72,16 +74,11 @@ namespace MovieReviewApp.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteSound(string id)
+        public async Task<IActionResult> DeleteSound(Guid id)
         {
-            if (string.IsNullOrEmpty(id))
-            {
-                return BadRequest("Sound ID is required");
-            }
-
             try
             {
-                bool success = await _soundboardRepository.DeleteSoundClipAsync(id);
+                bool success = await _soundClipService.DeleteAsync(id);
                 if (success)
                 {
                     return Ok();
@@ -103,7 +100,7 @@ namespace MovieReviewApp.Controllers
             string[] allowedTypes = new[]
             {
                 "audio/mpeg",
-                "audio/wav", 
+                "audio/wav",
                 "audio/ogg",
                 "audio/aac",
                 "audio/mp4",
@@ -120,8 +117,8 @@ namespace MovieReviewApp.Controllers
             try
             {
                 _logger.LogInformation("Serving sound file via API: {FileName}", fileName);
-                
-                Models.SoundClip? soundClip = (await _soundboardRepository.GetAllSoundClipsAsync()).FirstOrDefault(s => s.FileName == fileName);
+
+                Models.SoundClip? soundClip = (await _soundClipService.GetAllAsync()).FirstOrDefault(s => s.FileName == fileName);
                 if (soundClip == null || !soundClip.IsActive)
                 {
                     _logger.LogWarning("Sound clip not found or inactive: {FileName}", fileName);
@@ -136,7 +133,7 @@ namespace MovieReviewApp.Controllers
 
                 byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(soundClip.FilePath);
                 _logger.LogInformation("Successfully serving sound file: {FileName}, Size: {Size} bytes", fileName, fileBytes.Length);
-                
+
                 return File(fileBytes, soundClip.ContentType, enableRangeProcessing: true);
             }
             catch (Exception ex)
@@ -157,7 +154,7 @@ namespace MovieReviewApp.Controllers
         {
             try
             {
-                List<Models.SoundClip> allSounds = await _soundboardRepository.GetAllSoundClipsAsync().ConfigureAwait(false);
+                List<Models.SoundClip> allSounds = await _soundClipService.GetAllAsync();
                 var debugInfo = allSounds.Where(s => s.IsActive).Select(s => new
                 {
                     id = s.Id,
@@ -167,12 +164,13 @@ namespace MovieReviewApp.Controllers
                     fileExists = System.IO.File.Exists(s.FilePath),
                     fileSize = s.FileSize,
                     contentType = s.ContentType,
-                    url = _soundboardRepository.GetSoundClipUrl(s),
+                    url = _soundClipService.GetSoundClipUrl(s),
                     personId = s.PersonId
                 }).ToList();
 
-                return Ok(new { 
-                    message = "Sound debug info", 
+                return Ok(new
+                {
+                    message = "Sound debug info",
                     timestamp = DateTime.UtcNow,
                     totalSounds = debugInfo.Count,
                     sounds = debugInfo

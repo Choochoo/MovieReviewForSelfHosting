@@ -31,115 +31,394 @@
     }
     else
     {
-        <div class="row g-4">
-            @foreach (var session in sessions)
-            {
-                <div class="col-lg-6 col-xl-4">
-                    <div class="card h-100 shadow-sm @GetCardClass(session)">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0 text-truncate">@session.MovieTitle</h6>
-                            <span class="badge @GetStatusBadgeClass(session.Status)">
-                                @GetStatusIcon(session.Status) @session.Status
-                            </span>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <small class="text-muted">
-                                    <i class="bi bi-calendar3"></i> @session.Date.ToString("MMM dd, yyyy")
-                                    @if (session.ProcessedAt.HasValue)
-                                    {
-                                        <br />
-                                        <i class="bi bi-check-circle"></i>
-                                        <span>Complete</span>
-                                    }
-                                </small>
-                            </div>
+        @foreach (var session in sessions)
+        {
+            <div class="card mb-4 shadow-sm @GetCardClass(session)">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">🎬 @session.MovieTitle</h5>
+                    <div class="d-flex gap-2 align-items-center">
+                        <small class="text-muted">@session.Date.ToString("MMM dd, yyyy")</small>
+                        <span class="badge @GetStatusBadgeClass(session.Status)">
+                            @GetStatusIcon(session.Status) @session.Status
+                        </span>
+                    </div>
+                </div>
 
-                            @if (session.SessionStats != null)
-                            {
-                                <div class="mb-3">
-                                    <div class="row text-center">
-                                        <div class="col-4">
-                                            <div class="border-end">
-                                                <div class="fw-bold text-primary">@session.SessionStats.TotalDuration</div>
-                                                <small class="text-muted">Duration</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-4">
-                                            <div class="border-end">
-                                                <div class="fw-bold text-success">@session.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.Complete)</div>
-                                                <small class="text-muted">Files</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-4">
-                                            <div class="fw-bold text-warning">@session.SessionStats.HighlightMoments</div>
-                                            <small class="text-muted">Highlights</small>
-                                        </div>
-                                    </div>
-                                    @if (session.SessionStats.TotalCurseWords > 0 || session.SessionStats.TotalPejorativeWords > 0)
+                @if (session.Status == ProcessingStatus.Complete && session.CategoryResults != null)
+                {
+                    <div class="card-body">
+                        @* AI's Unique Observations - Prominently at the top *@
+                        @if (session.CategoryResults.AIsUniqueObservations?.Entries?.Any() == true)
+                        {
+                            <div class="mb-4">
+                                <h6 class="text-primary mb-3">🤖 AI's Unique Observations</h6>
+                                <div class="row">
+                                    @foreach (var observation in session.CategoryResults.AIsUniqueObservations.Entries.Take(3))
                                     {
-                                        <div class="row text-center mt-2 pt-2 border-top">
-                                            @if (session.SessionStats.TotalCurseWords > 0)
-                                            {
-                                                <div class="col-6">
-                                                    <div class="fw-bold text-danger">@session.SessionStats.TotalCurseWords</div>
-                                                    <small class="text-muted">Curse Words</small>
+                                        <div class="col-md-4">
+                                            <div class="card border-primary">
+                                                <div class="card-body p-3">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <span class="badge bg-primary">#@observation.Rank</span>
+                                                        <small class="text-muted">@observation.Speaker</small>
+                                                    </div>
+                                                    <blockquote class="blockquote-footer mb-2 small">
+                                                        "@observation.Quote"
+                                                    </blockquote>
+                                                    <p class="card-text small text-muted mb-0">@observation.Reasoning</p>
                                                 </div>
-                                            }
-                                            @if (session.SessionStats.TotalPejorativeWords > 0)
-                                            {
-                                                <div class="col-6">
-                                                    <div class="fw-bold text-warning">@session.SessionStats.TotalPejorativeWords</div>
-                                                    <small class="text-muted">Pejorative</small>
-                                                </div>
-                                            }
+                                            </div>
                                         </div>
                                     }
                                 </div>
+                            </div>
+                        }
+
+                        @* Quick Stats Row *@
+                        @if (session.SessionStats != null)
+                        {
+                            <div class="row text-center mb-4">
+                                <div class="col-2">
+                                    <div class="border-end">
+                                        <div class="fw-bold text-primary">@session.SessionStats.TotalDuration</div>
+                                        <small class="text-muted">Duration</small>
+                                    </div>
+                                </div>
+                                <div class="col-2">
+                                    <div class="border-end">
+                                        <div class="fw-bold text-success">@session.SessionStats.HighlightMoments</div>
+                                        <small class="text-muted">Highlights</small>
+                                    </div>
+                                </div>
+                                <div class="col-2">
+                                    <div class="border-end">
+                                        <div class="fw-bold text-info">@session.SessionStats.TotalInterruptions</div>
+                                        <small class="text-muted">Interruptions</small>
+                                    </div>
+                                </div>
+                                <div class="col-2">
+                                    <div class="border-end">
+                                        <div class="fw-bold text-warning">@session.SessionStats.TotalQuestions</div>
+                                        <small class="text-muted">Questions</small>
+                                    </div>
+                                </div>
+                                <div class="col-2">
+                                    <div class="border-end">
+                                        <div class="fw-bold text-danger">@session.SessionStats.TotalCurseWords</div>
+                                        <small class="text-muted">Curse</small>
+                                    </div>
+                                </div>
+                                <div class="col-2">
+                                    <div class="fw-bold text-secondary">@session.SessionStats.TotalPejorativeWords</div>
+                                    <small class="text-muted">Pejorative</small>
+                                </div>
+                            </div>
+                        }
+
+                        @* Main Categories *@
+                        <div class="row mb-4">
+                            @if (session.CategoryResults.BestJoke != null)
+                            {
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0">😂 Best Joke</h6>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <strong>@session.CategoryResults.BestJoke.Speaker</strong>
+                                                <span class="badge bg-success">@session.CategoryResults.BestJoke.EntertainmentScore/10</span>
+                                            </div>
+                                            <blockquote class="blockquote small mb-2">
+                                                "@session.CategoryResults.BestJoke.Quote"
+                                            </blockquote>
+                                            <small class="text-muted">@session.CategoryResults.BestJoke.WhyItsGreat</small>
+                                        </div>
+                                    </div>
+                                </div>
                             }
 
-                            @if (session.ParticipantsPresent.Any())
+                            @if (session.CategoryResults.HottestTake != null)
                             {
-                                <div class="mb-3">
-                                    <small class="text-muted d-block mb-1">Participants:</small>
-                                    <div class="d-flex flex-wrap gap-1">
-                                        @foreach (var participant in session.ParticipantsPresent.Take(4))
-                                        {
-                                            <span class="badge bg-light text-dark">@participant</span>
-                                        }
-                                        @if (session.ParticipantsPresent.Count > 4)
-                                        {
-                                            <span class="badge bg-secondary">+@(session.ParticipantsPresent.Count - 4) more</span>
-                                        }
+                                <div class="col-md-6 mb-3">
+                                    <div class="card border-danger">
+                                        <div class="card-header bg-danger text-white">
+                                            <h6 class="mb-0">🔥 Hottest Take</h6>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <strong>@session.CategoryResults.HottestTake.Speaker</strong>
+                                                <span class="badge bg-danger">@session.CategoryResults.HottestTake.EntertainmentScore/10</span>
+                                            </div>
+                                            <blockquote class="blockquote small mb-2">
+                                                "@session.CategoryResults.HottestTake.Quote"
+                                            </blockquote>
+                                            <small class="text-muted">@session.CategoryResults.HottestTake.WhyItsGreat</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @* Top 5 Lists *@
+                        @if (session.CategoryResults.FunniestSentences?.Entries?.Any() == true || session.CategoryResults.MostBlandComments?.Entries?.Any() == true)
+                        {
+                            <div class="row mb-4">
+                                @if (session.CategoryResults.FunniestSentences?.Entries?.Any() == true)
+                                {
+                                    <div class="col-md-6">
+                                        <div class="card border-warning">
+                                            <div class="card-header bg-warning text-dark">
+                                                <h6 class="mb-0">🎭 Top Funniest Sentences</h6>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                @foreach (var sentence in session.CategoryResults.FunniestSentences.Entries.Take(3))
+                                                {
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between align-items-start">
+                                                            <span class="badge bg-warning text-dark">#@sentence.Rank</span>
+                                                            <small class="text-muted">@sentence.Speaker</small>
+                                                        </div>
+                                                        <small class="text-muted">"@sentence.Quote"</small>
+                                                    </div>
+                                                }
+                                                @if (session.CategoryResults.FunniestSentences.Entries.Count > 3)
+                                                {
+                                                    <small class="text-muted">...and @(session.CategoryResults.FunniestSentences.Entries.Count - 3) more</small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (session.CategoryResults.MostBlandComments?.Entries?.Any() == true)
+                                {
+                                    <div class="col-md-6">
+                                        <div class="card border-secondary">
+                                            <div class="card-header bg-secondary text-white">
+                                                <h6 class="mb-0">😴 Most Bland Comments</h6>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                @foreach (var comment in session.CategoryResults.MostBlandComments.Entries.Take(3))
+                                                {
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between align-items-start">
+                                                            <span class="badge bg-secondary">#@comment.Rank</span>
+                                                            <small class="text-muted">@comment.Speaker</small>
+                                                        </div>
+                                                        <small class="text-muted">"@comment.Quote"</small>
+                                                    </div>
+                                                }
+                                                @if (session.CategoryResults.MostBlandComments.Entries.Count > 3)
+                                                {
+                                                    <small class="text-muted">...and @(session.CategoryResults.MostBlandComments.Entries.Count - 3) more</small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Detailed Word Usage Statistics (using SpeakerAttributionFix style) *@
+                        @if (session.SessionStats?.DetailedCurseWords?.Any() == true || session.SessionStats?.DetailedPejorativeWords?.Any() == true)
+                        {
+                            <div class="row mb-4">
+                                @if (session.SessionStats.DetailedCurseWords?.Any() == true)
+                                {
+                                    <div class="col-md-6">
+                                        <div class="card border-danger">
+                                            <div class="card-header bg-danger text-white">
+                                                <h6 class="mb-0">🤬 Detailed Curse Word Usage</h6>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                @foreach (var speakerGroup in session.SessionStats.DetailedCurseWords.GroupBy(d => d.Speaker).OrderByDescending(g => g.Sum(d => d.Count)))
+                                                {
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <strong>@speakerGroup.Key</strong>
+                                                            <span class="badge bg-danger rounded-pill">@speakerGroup.Sum(d => d.Count) 🤬</span>
+                                                        </div>
+                                                        <details class="mt-2">
+                                                            <summary class="cursor-pointer text-muted small">
+                                                                <i class="bi bi-list-ul"></i> Show details (@speakerGroup.Count() words)
+                                                            </summary>
+                                                            <div class="mt-2 small">
+                                                                @foreach (var wordUsage in speakerGroup.Take(10))
+                                                                {
+                                                                    <div class="mb-2">
+                                                                        <span class="badge bg-danger me-2">@wordUsage.Word (@wordUsage.Count)</span>
+                                                                        @if (wordUsage.ContextExamples?.Any() == true)
+                                                                        {
+                                                                            foreach (var example in wordUsage.ContextExamples.Take(2))
+                                                                            {
+                                                                                <div class="text-muted small">• @example</div>
+                                                                            }
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                                @if (speakerGroup.Count() > 10)
+                                                                {
+                                                                    <div class="text-muted">... and @(speakerGroup.Count() - 10) more</div>
+                                                                }
+                                                            </div>
+                                                        </details>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (session.SessionStats.DetailedPejorativeWords?.Any() == true)
+                                {
+                                    <div class="col-md-6">
+                                        <div class="card border-warning">
+                                            <div class="card-header bg-warning text-dark">
+                                                <h6 class="mb-0">😤 Detailed Pejorative Usage</h6>
+                                            </div>
+                                            <div class="card-body p-3">
+                                                @foreach (var speakerGroup in session.SessionStats.DetailedPejorativeWords.GroupBy(d => d.Speaker).OrderByDescending(g => g.Sum(d => d.Count)))
+                                                {
+                                                    <div class="mb-2">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <strong>@speakerGroup.Key</strong>
+                                                            <span class="badge bg-warning text-dark rounded-pill">@speakerGroup.Sum(d => d.Count) 😤</span>
+                                                        </div>
+                                                        <details class="mt-2">
+                                                            <summary class="cursor-pointer text-muted small">
+                                                                <i class="bi bi-exclamation-triangle"></i> Show details (@speakerGroup.Count() words)
+                                                            </summary>
+                                                            <div class="mt-2 small">
+                                                                @foreach (var wordUsage in speakerGroup.Take(10))
+                                                                {
+                                                                    <div class="mb-2">
+                                                                        <span class="badge bg-warning text-dark me-2">@wordUsage.Word (@wordUsage.Count)</span>
+                                                                        @if (wordUsage.ContextExamples?.Any() == true)
+                                                                        {
+                                                                            foreach (var example in wordUsage.ContextExamples.Take(2))
+                                                                            {
+                                                                                <div class="text-muted small">• @example</div>
+                                                                            }
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                                @if (speakerGroup.Count() > 10)
+                                                                {
+                                                                    <div class="text-muted">... and @(speakerGroup.Count() - 10) more</div>
+                                                                }
+                                                            </div>
+                                                        </details>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Participants and Additional Info *@
+                        <div class="row">
+                            @if (session.MicAssignments.Any())
+                            {
+                                <div class="col-md-6">
+                                    <div class="card border-info">
+                                        <div class="card-header bg-info text-white">
+                                            <h6 class="mb-0">👥 Participants</h6>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @foreach (var participant in session.MicAssignments)
+                                                {
+                                                    <span class="badge bg-info">@participant</span>
+                                                }
+                                            </div>
+                                            @if (session.SessionStats != null && !string.IsNullOrEmpty(session.SessionStats.ConversationTone))
+                                            {
+                                                <hr class="my-2">
+                                                <small class="text-muted">
+                                                    <i class="bi bi-chat-quote"></i> <strong>Tone:</strong> @session.SessionStats.ConversationTone
+                                                </small>
+                                            }
+                                        </div>
                                     </div>
                                 </div>
                             }
 
                             @if (!string.IsNullOrEmpty(session.SessionStats?.BestMomentsSummary))
                             {
-                                <div class="mb-3">
-                                    <small class="text-muted d-block mb-1">Best Moments:</small>
-                                    <p class="small mb-0">@GetTruncatedSummary(session.SessionStats.BestMomentsSummary)</p>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0">✨ Best Moments Summary</h6>
+                                        </div>
+                                        <div class="card-body p-3">
+                                            <p class="small mb-0">@session.SessionStats.BestMomentsSummary</p>
+                                        </div>
+                                    </div>
                                 </div>
                             }
                         </div>
-                        <div class="card-footer bg-transparent">
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-primary btn-sm flex-fill" @onclick="() => ViewSession(session.Id.ToString())">
-                                    <i class="bi bi-eye"></i> View Details
-                                </button>
-                                @if (session.CategoryResults != null)
-                                {
-                                    <button class="btn btn-outline-success btn-sm" @onclick="() => ViewHighlights(session.Id.ToString())">
-                                        <i class="bi bi-star"></i> Highlights
-                                    </button>
-                                }
+                    </div>
+                }
+                else
+                {
+                    @* Compact view for incomplete sessions *@
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <div class="border-end">
+                                    <div class="fw-bold text-primary">@(session.SessionStats?.TotalDuration ?? "N/A")</div>
+                                    <small class="text-muted">Duration</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border-end">
+                                    <div class="fw-bold text-success">@session.AudioFiles.Count(f => f.ProcessingStatus == AudioProcessingStatus.Complete)</div>
+                                    <small class="text-muted">Files</small>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="fw-bold text-warning">@(session.SessionStats?.HighlightMoments ?? 0)</div>
+                                <small class="text-muted">Highlights</small>
                             </div>
                         </div>
+
+                        @if (session.MicAssignments.Any())
+                        {
+                            <div class="mt-3">
+                                <small class="text-muted d-block mb-1">Participants:</small>
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var participant in session.MicAssignments.Take(4))
+                                    {
+                                        <span class="badge bg-light text-dark">@participant</span>
+                                    }
+                                    @if (session.MicAssignments.Count > 4)
+                                    {
+                                        <span class="badge bg-secondary">+@(session.MicAssignments.Count - 4) more</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary btn-sm flex-fill" @onclick="() => ViewSession(session.Id.ToString())">
+                            <i class="bi bi-eye"></i> View Details
+                        </button>
+                        @if (session.CategoryResults != null)
+                        {
+                            <button class="btn btn-outline-success btn-sm" @onclick="() => ViewHighlights(session.Id.ToString())">
+                                <i class="bi bi-star"></i> Highlights
+                            </button>
+                        }
                     </div>
                 </div>
-            }
-        </div>
+            </div>
+        }
 
         @if (sessions.Count >= 20)
         {
@@ -172,7 +451,7 @@
         isLoading = true;
         try
         {
-            sessions = await MovieSessionService.GetRecentSessions(currentLimit);
+            sessions = await MovieSessionService.GetAllAsync();
             Console.WriteLine($"DiscussionsList: Loaded {sessions.Count} sessions");
             
             // Log session details to help debug
@@ -249,3 +528,9 @@
     }
 
 }
+
+<style>
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>

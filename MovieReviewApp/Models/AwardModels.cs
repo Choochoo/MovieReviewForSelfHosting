@@ -1,4 +1,4 @@
-﻿using MongoDB.Bson;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MovieReviewApp.Attributes;
 
@@ -10,7 +10,7 @@ namespace MovieReviewApp.Models
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
-        public List<Guid> Questions { get; set; } = new();
+        public List<Guid> Questions { get; set; } = [];
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public DateTime VotingStartDate { get; set; }
         public DateTime VotingEndDate { get; set; }
@@ -34,10 +34,9 @@ namespace MovieReviewApp.Models
         public Guid QuestionId { get; set; }
         [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid MovieEventId { get; set; }
-        public string VoterIp { get; set; }
+        public string VoterIp { get; set; } = string.Empty;
         public string VoterName { get; set; }
         public int Points { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public class QuestionResult

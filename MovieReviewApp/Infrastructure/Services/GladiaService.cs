@@ -18,14 +18,19 @@ public class GladiaService
     private readonly string _apiKey;
     private readonly string _baseUrl = "https://api.gladia.io";
 
-    public GladiaService(HttpClient httpClient, IConfiguration configuration, SecretsManager secretsManager, AudioFileOrganizer audioOrganizer, ILogger<GladiaService> logger)
+    public GladiaService(
+        HttpClient httpClient,
+        IConfiguration configuration,
+        SecretsManager secretsManager,
+        AudioFileOrganizer audioOrganizer,
+        ILogger<GladiaService> logger)
     {
         _httpClient = httpClient;
         _configuration = configuration;
         _secretsManager = secretsManager;
         _audioOrganizer = audioOrganizer;
         _logger = logger;
-
+        
         // Set the base URL for the HttpClient
         _httpClient.BaseAddress = new Uri(_baseUrl);
 
@@ -97,7 +102,7 @@ public class GladiaService
         }
     }
 
-    private async Task<string> ConvertToMp3Async(string inputPath, string outputPath, Action<string, int, int>? progressCallback = null)
+    public async Task<string> ConvertToMp3Async(string inputPath, string outputPath, Action<string, int, int>? progressCallback = null)
     {
         try
         {
@@ -126,7 +131,7 @@ public class GladiaService
             while ((DateTime.UtcNow - startTime) < maxWaitTime)
             {
                 // Check if process finished with a short timeout
-                if (process.WaitForExit(1000))
+                if (process.WaitForExit(2200))
                 {
                     // Process finished
                     break;
@@ -189,196 +194,6 @@ public class GladiaService
         {
             return true;
         }
-    }
-
-    /// <summary>
-    /// Phase 1: Convert all WAV files to MP3 format
-    /// </summary>
-    /// <summary>
-    /// Converts all WAV audio files to MP3 format for optimized uploading to Gladia API.
-    /// </summary>
-    /// <param name="session">The movie session containing audio files to convert.</param>
-    /// <param name="progressCallback">Optional callback to report conversion progress.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains conversion results for each file.</returns>
-    public async Task<List<(AudioFile audioFile, bool success, string? error)>> ConvertAllWavsToMp3Async(
-        List<AudioFile> audioFiles,
-        string sessionFolderPath,
-        Action<string, int, int>? progressCallback = null)
-    {
-        List<(AudioFile audioFile, bool success, string? error)> results = new List<(AudioFile audioFile, bool success, string? error)>();
-        int totalFiles = audioFiles.Count;
-
-        _logger.LogInformation("Starting MP3 conversion for {TotalFiles} files", totalFiles);
-
-        for (int i = 0; i < audioFiles.Count; i++)
-        {
-            AudioFile audioFile = audioFiles[i];
-            progressCallback?.Invoke($"Converting {Path.GetFileName(audioFile.FilePath)}", i + 1, totalFiles);
-
-            try
-            {
-                if (Path.GetExtension(audioFile.FilePath).ToLowerInvariant() != ".wav")
-                {
-                    // Already MP3 or other format, skip conversion
-                    results.Add((audioFile, true, null));
-                    continue;
-                }
-
-                if (!IsFFmpegAvailable())
-                {
-                    string error = "FFmpeg not available - required for WAV to MP3 conversion";
-                    audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
-                    audioFile.ConversionError = error;
-                    results.Add((audioFile, false, error));
-                    continue;
-                }
-
-                // Convert to MP3 in the same session folder
-                string? mp3FileName = Path.ChangeExtension(Path.GetFileName(audioFile.FilePath), ".mp3");
-                string mp3Path = Path.Combine(sessionFolderPath, mp3FileName);
-
-                await ConvertToMp3Async(audioFile.FilePath, mp3Path, progressCallback);
-
-                // Update audio file with MP3 details
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedConvertingToMp3;
-                audioFile.ConvertedAt = DateTime.UtcNow;
-
-                // Delete the original WAV file
-                string originalWavPath = audioFile.FilePath;
-                try
-                {
-                    if (File.Exists(originalWavPath) && originalWavPath != mp3Path)
-                    {
-                        File.Delete(originalWavPath);
-                        _logger.LogInformation("Deleted original WAV file: {FilePath}", originalWavPath);
-                    }
-                }
-                catch (Exception deleteEx)
-                {
-                    _logger.LogWarning(deleteEx, "Failed to delete original WAV file: {FilePath}", originalWavPath);
-                }
-
-                // Update FilePath to point to the new MP3 file
-                audioFile.FilePath = mp3Path;
-                // Update FileName to reflect the new MP3 extension
-                audioFile.FileName = Path.GetFileName(mp3Path);
-
-                results.Add((audioFile, true, null));
-                _logger.LogInformation("Converted {FileName} to MP3: {Mp3Path}",
-                    Path.GetFileName(audioFile.FilePath), mp3Path);
-            }
-            catch (Exception ex)
-            {
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.Failed;
-                audioFile.ConversionError = ex.Message;
-
-                results.Add((audioFile, false, ex.Message));
-                _logger.LogError(ex, "Failed to convert {FileName} to MP3", Path.GetFileName(audioFile.FilePath));
-            }
-        }
-
-        return results;
-    }
-
-    /// <summary>
-    /// Phase 2: Upload all MP3 files to Gladia for transcription
-    /// </summary>
-    /// <summary>
-    /// Uploads all MP3 audio files from a session to the Gladia API for transcription processing.
-    /// </summary>
-    /// <param name="session">The movie session containing audio files to upload.</param>
-    /// <param name="progressCallback">Optional callback to report upload progress.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains upload results for each file.</returns>
-    public async Task<List<(AudioFile audioFile, bool success, string? error)>> UploadAllMp3sToGladiaAsync(
-        List<AudioFile> audioFiles,
-        string sessionFolderPath,
-        Action<string, int, int>? progressCallback = null,
-        MovieSession? session = null,
-        Func<MovieSession, Task>? saveSessionCallback = null)
-    {
-        List<(AudioFile audioFile, bool success, string? error)> results = new List<(AudioFile audioFile, bool success, string? error)>();
-
-        // Debug: Log all files and their status
-        Console.WriteLine($"DEBUG GLADIA: UploadAllMp3sToGladiaAsync called with {audioFiles.Count} files:");
-        foreach (AudioFile file in audioFiles)
-        {
-            Console.WriteLine($"  File: {file.FileName}, Status: {file.ProcessingStatus}, AudioUrl: {(string.IsNullOrEmpty(file.AudioUrl) ? "EMPTY" : "SET")}, Path: {file.FilePath}");
-        }
-
-        // Process all MP3 files that can be uploaded to Gladia and haven't been uploaded yet
-        List<AudioFile> mp3Files = audioFiles.Where(f => (f.ProcessingStatus == AudioProcessingStatus.FinishedConvertingToMp3 ||
-                                             f.ProcessingStatus == AudioProcessingStatus.FailedMp3 ||
-                                             f.ProcessingStatus == AudioProcessingStatus.UploadingToGladia) &&
-                                           string.IsNullOrEmpty(f.AudioUrl) &&
-                                           f.FilePath.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)).ToList();
-
-        Console.WriteLine($"DEBUG GLADIA: After filtering, {mp3Files.Count} files qualify for upload:");
-
-        // Log skipped files that are already uploaded
-        List<AudioFile> alreadyUploaded = audioFiles.Where(f => f.ProcessingStatus == AudioProcessingStatus.FinishedUploadingToGladia ||
-                                                  !string.IsNullOrEmpty(f.AudioUrl)).ToList();
-        if (alreadyUploaded.Any())
-        {
-            _logger.LogInformation("Skipping {SkippedCount} files already uploaded to Gladia: {FileNames}",
-                alreadyUploaded.Count, string.Join(", ", alreadyUploaded.Select(f => Path.GetFileName(f.FilePath))));
-        }
-        int totalFiles = mp3Files.Count;
-
-        _logger.LogInformation("Starting Gladia upload for {TotalFiles} MP3 files", totalFiles);
-
-        for (int i = 0; i < mp3Files.Count; i++)
-        {
-            AudioFile audioFile = mp3Files[i];
-            progressCallback?.Invoke($"Uploading {Path.GetFileName(audioFile.FilePath)}", i + 1, totalFiles);
-
-            try
-            {
-                Console.WriteLine($"DEBUG GLADIA: Starting upload for {audioFile.FileName} (File {i + 1}/{totalFiles})");
-                Console.WriteLine($"DEBUG GLADIA: File path: {audioFile.FilePath}");
-                Console.WriteLine($"DEBUG GLADIA: File exists: {File.Exists(audioFile.FilePath)}");
-
-                string audioUrl = await UploadSingleFileToGladiaAsync(audioFile.FilePath);
-                Console.WriteLine($"DEBUG GLADIA: Upload successful for {audioFile.FileName}, got URL: {audioUrl}");
-
-                // Store the audio URL for the transcription phase
-                audioFile.AudioUrl = audioUrl;
-                audioFile.UploadedAt = DateTime.UtcNow;
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FinishedUploadingToGladia;
-
-                // Save session state immediately to persist upload progress
-                if (session != null && saveSessionCallback != null)
-                {
-                    try
-                    {
-                        await saveSessionCallback(session);
-                        Console.WriteLine($"DEBUG GLADIA: Session state saved after uploading {audioFile.FileName}");
-                        _logger.LogInformation("Session state saved after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
-                    }
-                    catch (Exception saveEx)
-                    {
-                        Console.WriteLine($"DEBUG GLADIA: Failed to save session state after uploading {audioFile.FileName}: {saveEx.Message}");
-                        _logger.LogWarning(saveEx, "Failed to save session state after uploading {FileName}", Path.GetFileName(audioFile.FilePath));
-                    }
-                }
-
-                results.Add((audioFile, true, null));
-                _logger.LogInformation("Uploaded {FileName} to Gladia: {AudioUrl}",
-                    Path.GetFileName(audioFile.FilePath), audioUrl);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"DEBUG GLADIA: Upload failed for {audioFile.FileName}: {ex.GetType().Name}: {ex.Message}");
-                Console.WriteLine($"DEBUG GLADIA: Full exception: {ex}");
-
-                audioFile.ProcessingStatus = Models.AudioProcessingStatus.FailedMp3;
-                audioFile.ConversionError = ex.Message;
-
-                results.Add((audioFile, false, ex.Message));
-                _logger.LogError(ex, "Failed to upload {FileName} to Gladia", Path.GetFileName(audioFile.FilePath));
-            }
-        }
-
-        return results;
     }
 
     /// <summary>
@@ -726,7 +541,7 @@ public class GladiaService
     /// <summary>
     /// Upload a single file to Gladia with retry logic and return the transcript ID
     /// </summary>
-    private async Task<string> UploadSingleFileToGladiaAsync(string filePath)
+    public async Task<string> UploadSingleFileToGladiaAsync(string filePath)
     {
         Console.WriteLine($"DEBUG GLADIA: UploadSingleFileToGladiaAsync called for: {filePath}");
         Console.WriteLine($"DEBUG GLADIA: IsConfigured: {IsConfigured}");

@@ -1,6 +1,6 @@
 @using MovieReviewApp.Models
 
-@inject MovieReviewService MovieReviewService
+@inject PersonService PersonService
 @inject MovieSessionService MovieSessionService
 @inject IJSRuntime JSRuntime
 
@@ -171,7 +171,7 @@
             statusMessage = "Loading people...";
             
             // Load people from database using the same approach as Settings page
-            people = await MovieReviewService.GetAllPeopleAsync(false); // false = don't respect order for mic assignment
+            people = await PersonService.GetAllOrderedAsync(false); // false = don't respect order for mic assignment
             
             Console.WriteLine($"Loaded {people.Count} people from database");
             statusMessage = $"Loaded {people.Count} people";

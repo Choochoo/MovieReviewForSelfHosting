@@ -7,7 +7,7 @@ using System.Text.Json;
 namespace MovieReviewApp.Application.Services.Analysis;
 
 /// <summary>
-/// Service responsible for communicating with the OpenAI API to perform analysis operations.
+/// Service responsible for communicating with the OpenAI API.
 /// Handles API authentication, request/response management, and retry logic.
 /// </summary>
 public class OpenAIApiService
@@ -16,6 +16,7 @@ public class OpenAIApiService
     private readonly SecretsManager _secretsManager;
     private readonly ILogger<OpenAIApiService> _logger;
     private readonly string _openAiApiKey;
+    private readonly string _baseUrl = "https://api.openai.com";
 
     public OpenAIApiService(
         HttpClient httpClient,
@@ -25,7 +26,6 @@ public class OpenAIApiService
         _httpClient = httpClient;
         _secretsManager = secretsManager;
         _logger = logger;
-
         _openAiApiKey = _secretsManager.GetSecret("OpenAI:ApiKey") ?? string.Empty;
 
         if (!string.IsNullOrEmpty(_openAiApiKey))
@@ -45,13 +45,28 @@ public class OpenAIApiService
     public bool IsConfigured => !string.IsNullOrEmpty(_openAiApiKey);
 
     /// <summary>
-    /// Calls the OpenAI API with the provided prompt and returns the analysis result with automatic retry logic.
+    /// Analyzes transcript using OpenAI API.
     /// </summary>
-    public async Task<string> CallOpenAIForAnalysisWithRetry(string prompt)
+    public async Task<string> AnalyzeTranscriptAsync(string prompt)
+    {
+        string? result = await ExecutePromptAsync(prompt, 4000, 0.3);
+        return result ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Executes a prompt with the OpenAI API with automatic retry logic.
+    /// </summary>
+    public async Task<string?> ExecutePromptAsync(string prompt, int maxTokens = 1000, double temperature = 0.7)
     {
         if (!IsConfigured)
         {
-            throw new InvalidOperationException("OpenAI API key not configured");
+            _logger.LogWarning("OpenAI API key not configured - cannot execute prompt");
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return null;
         }
 
         int maxRetries = 3;
@@ -64,7 +79,7 @@ public class OpenAIApiService
             {
                 _logger.LogInformation("Attempting OpenAI API call (attempt {Attempt}/{MaxAttempts})", currentRetry + 1, maxRetries);
                 
-                return await CallOpenAIForAnalysis(prompt);
+                return await CallOpenAIForAnalysis(prompt, maxTokens, temperature);
             }
             catch (HttpRequestException ex) when (ex.Message.Contains("rate limit") || ex.Message.Contains("429"))
             {
@@ -111,34 +126,34 @@ public class OpenAIApiService
             }
         }
 
-        throw new InvalidOperationException("Failed to complete OpenAI request after all retry attempts");
+        return null;
     }
 
     /// <summary>
     /// Makes a single call to the OpenAI API with the provided prompt.
     /// </summary>
-    private async Task<string> CallOpenAIForAnalysis(string prompt)
+    private async Task<string?> CallOpenAIForAnalysis(string prompt, int maxTokens, double temperature)
     {
         string requestBody = JsonSerializer.Serialize(new
         {
-            model = "gpt-4o",
+            model = "gpt-4",
             messages = new[]
             {
                 new { role = "user", content = prompt }
             },
-            max_tokens = 4000,
-            temperature = 0.3
+            max_tokens = maxTokens,
+            temperature = temperature
         });
 
         using StringContent content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
         _logger.LogDebug("Sending request to OpenAI API with {TokenCount} estimated tokens", EstimateTokenCount(prompt));
 
-        using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+        using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         
         try
         {
-            HttpResponseMessage response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content, cts.Token);
+            HttpResponseMessage response = await _httpClient.PostAsync($"{_baseUrl}/v1/chat/completions", content, cts.Token);
 
             if (response.IsSuccessStatusCode)
             {
@@ -147,9 +162,9 @@ public class OpenAIApiService
 
                 if (openAIResponse?.choices?.Length > 0 && openAIResponse.choices[0].message?.content != null)
                 {
-                    string analysisResult = openAIResponse.choices[0].message.content;
-                    _logger.LogInformation("OpenAI analysis completed successfully: {ResultLength} characters", analysisResult.Length);
-                    return analysisResult;
+                    string result = openAIResponse.choices[0].message.content;
+                    _logger.LogInformation("OpenAI analysis completed successfully: {ResultLength} characters", result.Length);
+                    return result;
                 }
                 else
                 {
@@ -172,7 +187,7 @@ public class OpenAIApiService
         }
         catch (TaskCanceledException ex) when (ex.CancellationToken == cts.Token)
         {
-            throw new TaskTimeoutException("OpenAI request timed out after 20 minutes");
+            throw new TaskTimeoutException("OpenAI request timed out after 5 minutes");
         }
     }
 

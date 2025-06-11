@@ -1,5 +1,5 @@
-﻿using MovieReviewApp.Attributes;
 using System.ComponentModel.DataAnnotations.Schema;
+using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
 {
@@ -8,7 +8,6 @@ namespace MovieReviewApp.Models
     {
         public int Order { get; set; }
         public string? Name { get; set; }
-        public DateTime? UpdatedAt { get; set; }
         [NotMapped]
         public bool IsEditing { get; set; }
     }

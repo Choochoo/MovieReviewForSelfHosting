@@ -1,8 +1,9 @@
 @page "/soundboard/{PersonName?}"
 @using MovieReviewApp.Models
 
-@inject SoundboardRepository SoundboardRepository
-@inject DiscussionQuestionsService DiscussionQuestionsService
+@inject DiscussionQuestionService DiscussionQuestionService
+@inject SoundClipService SoundClipService
+@inject PersonService PersonService
 @inject IJSRuntime JSRuntime
 @inject ILogger<Soundboard> Logger
 @inject NavigationManager Navigation
@@ -166,7 +167,7 @@ else
                             <div class="col-6 col-md-4 col-lg-3">
                                 <button class="btn btn-primary w-100 play-sound-btn" 
                                         @onclick="@(() => HandlePlayClick(sound.Id.ToString()))"
-                                        data-sound-url="@SoundboardRepository.GetSoundClipUrl(sound)"
+                                        data-sound-url="@SoundClipService.GetSoundClipUrl(sound)"
                                         data-sound-id="@sound.Id.ToString()"
                                         title="@sound.OriginalFileName"
                                         style="min-height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
@@ -290,9 +291,9 @@ else
 
     private async Task LoadInitialData()
     {
-        people = await SoundboardRepository.GetPeopleAsync();
-        discussionQuestions = await DiscussionQuestionsService.GetActiveQuestionsAsync();
-        soundCounts = await SoundboardRepository.GetSoundClipCountsByPersonAsync();
+        people = await PersonService.GetAllAsync();
+        discussionQuestions = await DiscussionQuestionService.GetActiveQuestionsAsync();
+        soundCounts = await SoundClipService.GetSoundClipCountsByPersonAsync();
     }
 
     private async Task SelectPersonByName(string personName)
@@ -324,7 +325,7 @@ else
 
         try
         {
-            currentSounds = await SoundboardRepository.GetSoundClipsForPersonAsync(selectedPersonId);
+            currentSounds = await SoundClipService.GetSoundClipsForPersonAsync(selectedPersonId);
             
             // Update JavaScript with current person ID for paste functionality
             try
@@ -474,7 +475,7 @@ else
             catch (InvalidOperationException)
             {
                 // JavaScript not available during prerendering, fallback to server-side upload
-                await SoundboardRepository.SaveSoundClipFromUrlAsync(selectedPersonId, urlInput);
+                await SoundClipService.SaveSoundClipFromUrlAsync(selectedPersonId, urlInput);
             }
             
             // Success
@@ -501,7 +502,7 @@ else
     {
         try
         {
-            var url = SoundboardRepository.GetSoundClipUrl(sound);
+            var url = SoundClipService.GetSoundClipUrl(sound);
             await JSRuntime.InvokeVoidAsync("playSound", url);
         }
         catch (InvalidOperationException)
@@ -533,7 +534,7 @@ else
             isLoading = true;
             StateHasChanged();
 
-            await SoundboardRepository.DeleteSoundClipAsync(sound.Id.ToString());
+            await SoundClipService.DeleteAsync(sound.Id);
             await RefreshCurrentSounds();
             await RefreshSoundCounts();
         }
@@ -552,13 +553,13 @@ else
     {
         if (selectedPersonId != null)
         {
-            currentSounds = await SoundboardRepository.GetSoundClipsForPersonAsync(selectedPersonId);
+            currentSounds = await SoundClipService.GetSoundClipsForPersonAsync(selectedPersonId);
         }
     }
 
     private async Task RefreshSoundCounts()
     {
-        soundCounts = await SoundboardRepository.GetSoundClipCountsByPersonAsync();
+        soundCounts = await SoundClipService.GetSoundClipCountsByPersonAsync();
     }
 
 

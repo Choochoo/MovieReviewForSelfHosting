@@ -1,18 +1,17 @@
-using MongoDB.Bson;
-using MongoDB.Driver;
-using MovieReviewApp.Attributes;
-using MovieReviewApp.Core.Interfaces;
-using MovieReviewApp.Infrastructure.Configuration;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using MovieReviewApp.Attributes;
+using MovieReviewApp.Infrastructure.Configuration;
 
-namespace MovieReviewApp.Database
+namespace MovieReviewApp.Infrastructure.Database
 {
     /// <summary>
     /// Refactored MongoDB service that uses type-based collection resolution
     /// </summary>
-    public class MongoDbService : IDatabaseService
+    public class MongoDbService
     {
         private readonly IMongoDatabase? _database;
         private readonly ILogger<MongoDbService> _logger;
@@ -100,7 +99,7 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Gets a MongoDB collection for the specified type
         /// </summary>
-        private IMongoCollection<T>? GetCollection<T>()
+        public IMongoCollection<T>? GetCollection<T>()
         {
             if (_database == null) return null;
 
@@ -124,45 +123,10 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Gets a document by ID (supports both string and Guid)
         /// </summary>
-        public async Task<T?> GetByIdAsync<T>(string id) where T : class
-        {
-            return await GetByIdAsync<T>(id as object);
-        }
-
-        /// <summary>
-        /// Gets a document by ID (supports both string and Guid)
-        /// </summary>
-        public async Task<T?> GetByIdAsync<T>(object id) where T : class
+        public async Task<T?> GetByIdAsync<T>(Guid id) where T : class
         {
             IMongoCollection<T>? collection = GetCollection<T>();
-            if (collection == null) return default;
-
-            FilterDefinition<T> filter;
-
-            // Handle different ID types
-            if (id is Guid guidId)
-            {
-                filter = Builders<T>.Filter.Eq("_id", guidId);
-            }
-            else if (id is string stringId)
-            {
-                // For string IDs that contain GUIDs, try both the string and parsed GUID
-                if (Guid.TryParse(stringId, out Guid parsedGuid))
-                {
-                    // Try both formats - string and GUID - since MongoDB might store either
-                    FilterDefinition<T> stringFilter = Builders<T>.Filter.Eq("_id", stringId);
-                    FilterDefinition<T> guidFilter = Builders<T>.Filter.Eq("_id", parsedGuid);
-                    filter = Builders<T>.Filter.Or(stringFilter, guidFilter);
-                }
-                else
-                {
-                    filter = Builders<T>.Filter.Eq("_id", stringId);
-                }
-            }
-            else
-            {
-                filter = Builders<T>.Filter.Eq("_id", id);
-            }
+            FilterDefinition<T> filter = Builders<T>.Filter.Eq("_id", id);
 
             return await collection.Find(filter).FirstOrDefaultAsync();
         }
@@ -179,6 +143,28 @@ namespace MovieReviewApp.Database
         }
 
         /// <summary>
+        /// Finds documents matching a filter definition with optional sorting and limit
+        /// </summary>
+        public async Task<List<T>> FindAsync<T>(
+            FilterDefinition<T> filter,
+            SortDefinition<T>? sort = null,
+            int? limit = null) where T : class
+        {
+            IMongoCollection<T>? collection = GetCollection<T>();
+            if (collection == null) return new List<T>();
+
+            IFindFluent<T, T> query = collection.Find(filter);
+
+            if (sort != null)
+                query = query.Sort(sort);
+
+            if (limit.HasValue)
+                query = query.Limit(limit.Value);
+
+            return await query.ToListAsync();
+        }
+
+        /// <summary>
         /// Finds a single document matching a filter expression
         /// </summary>
         public async Task<T?> FindOneAsync<T>(Expression<Func<T, bool>> filter) where T : class
@@ -192,22 +178,13 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Inserts a new document
         /// </summary>
-        async Task IDatabaseService.InsertAsync<T>(T entity)
-        {
-            await InsertAsync(entity);
-        }
-
-        /// <summary>
-        /// Inserts a new document
-        /// </summary>
-        public async Task<T> InsertAsync<T>(T document) where T : class
+        public async Task InsertAsync<T>(T entity)
         {
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
-            await collection.InsertOneAsync(document);
-            return document;
+            await collection.InsertOneAsync(entity);
         }
 
         /// <summary>
@@ -225,15 +202,7 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Updates or inserts a document based on its ID
         /// </summary>
-        async Task IDatabaseService.UpsertAsync<T>(T entity)
-        {
-            await UpsertAsync(entity);
-        }
-
-        /// <summary>
-        /// Updates or inserts a document based on its ID
-        /// </summary>
-        public async Task<T> UpsertAsync<T>(T document) where T : class
+        public async Task UpsertAsync<T>(T entity)
         {
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
@@ -244,12 +213,12 @@ namespace MovieReviewApp.Database
             if (idProperty == null)
                 throw new InvalidOperationException($"Type {typeof(T).Name} must have an Id or _id property");
 
-            object? idValue = idProperty.GetValue(document);
+            object? idValue = idProperty.GetValue(entity);
             if (idValue == null)
             {
                 // If no ID, just insert
-                await collection.InsertOneAsync(document);
-                return document;
+                await collection.InsertOneAsync(entity);
+                return;
             }
 
             // Create filter with proper type handling for GUIDs
@@ -263,11 +232,9 @@ namespace MovieReviewApp.Database
             {
                 filter = Builders<T>.Filter.Eq("_id", idValue);
             }
-            
-            ReplaceOptions options = new ReplaceOptions { IsUpsert = true };
-            await collection.ReplaceOneAsync(filter, document, options);
 
-            return document;
+            ReplaceOptions options = new ReplaceOptions { IsUpsert = true };
+            _ = await collection.ReplaceOneAsync(filter, entity, options);
         }
 
         /// <summary>
@@ -322,21 +289,13 @@ namespace MovieReviewApp.Database
         /// <summary>
         /// Deletes a document by ID (string version for compatibility)
         /// </summary>
-        async Task IDatabaseService.DeleteAsync<T>(string id)
-        {
-            await DeleteAsync<T>(id);
-        }
-
-        /// <summary>
-        /// Deletes a document by ID (string version for compatibility)
-        /// </summary>
-        public async Task<bool> DeleteAsync<T>(string id) where T : class
+        public async Task DeleteAsync<T>(string id) where T : class
         {
             if (!Guid.TryParse(id, out Guid guidId))
             {
-                return false;
+                return;
             }
-            return await DeleteByIdAsync<T>(guidId);
+            _ = await DeleteByIdAsync<T>(guidId);
         }
 
         /// <summary>
@@ -386,7 +345,7 @@ namespace MovieReviewApp.Database
 
             List<FilterDefinition<T>> filters = new List<FilterDefinition<T>>();
 
-            foreach (var field in searchFields)
+            foreach (Expression<Func<T, object>> field in searchFields)
             {
                 string fieldName = GetFieldName(field);
                 FilterDefinition<T> filter = Builders<T>.Filter.Regex(fieldName, new BsonRegularExpression(searchTerm, "i"));

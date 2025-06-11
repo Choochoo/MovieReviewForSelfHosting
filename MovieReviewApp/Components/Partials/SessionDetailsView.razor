@@ -1,9 +1,9 @@
-﻿@using MovieReviewApp.Models
+@using MovieReviewApp.Models
 
 @using MovieReviewApp.Components.Partials
 @inject NavigationManager Navigation
 @inject MovieSessionService MovieSessionService
-@inject DiscussionQuestionsService DiscussionQuestionsService
+@inject DiscussionQuestionService DiscussionQuestionService
 
 @if (Session != null && _questionsLoaded)
 {
@@ -28,7 +28,7 @@
                             <h2 class="mb-2">@Session.MovieTitle</h2>
                             <p class="text-muted mb-2">@Session.Date.ToString("MMMM yyyy")</p>
                             <div class="d-flex gap-1 flex-wrap">
-                                @foreach (var participant in Session.ParticipantsPresent)
+                                @foreach (var participant in Session.MicAssignments)
                                 {
                                     <span class="badge bg-primary">🎤 @participant</span>
                                 }
@@ -454,21 +454,6 @@
                 </div>
             </div>
         }
-    }
-    else if (Session.Status == ProcessingStatus.Complete && Session.CategoryResults == null)
-    {
-        <div class="alert alert-warning">
-            <h5><i class="bi bi-exclamation-triangle"></i> Analysis Incomplete</h5>
-            <p>This session completed processing but analysis results are missing. This might happen if:</p>
-            <ul>
-                <li>The OpenAI analysis failed but the session was marked complete</li>
-                <li>The session used fallback analysis that didn't save properly</li>
-                <li>There was a database sync issue</li>
-            </ul>
-            <button class="btn btn-warning" @onclick="RerunAnalysis">
-                <i class="bi bi-arrow-clockwise"></i> Rerun Analysis
-            </button>
-        </div>
     }
     else if (Session.Status == ProcessingStatus.Failed)
     {
@@ -916,7 +901,7 @@ else
     {
         try
         {
-            _configuredQuestions = await DiscussionQuestionsService.GetActiveQuestionsAsync();
+            _configuredQuestions = await DiscussionQuestionService.GetActiveQuestionsAsync();
             _questionsLoaded = true;
         }
         catch (Exception)
@@ -928,24 +913,6 @@ else
 
     private void GoToStats() => Navigation.NavigateTo("/discussions/stats");
 
-    private async Task RerunAnalysis()
-    {
-        if (Session?.Id != null)
-        {
-            try
-            {
-                await MovieSessionService.RerunAnalysis(Session.Id.ToString());
-                // Reload the session to get updated data
-                Session = await MovieSessionService.GetSession(Session.Id.ToString());
-                StateHasChanged();
-            }
-            catch (Exception ex)
-            {
-                // Handle error - could show a toast notification
-                Console.WriteLine($"Failed to rerun analysis: {ex.Message}");
-            }
-        }
-    }
 
 
 }

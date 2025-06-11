@@ -1,7 +1,7 @@
-﻿using MongoDB.Bson;
+using System.ComponentModel.DataAnnotations.Schema;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using MovieReviewApp.Attributes;
-using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MovieReviewApp.Models
 {
@@ -9,6 +9,8 @@ namespace MovieReviewApp.Models
     {
         [BsonGuidRepresentation(GuidRepresentation.CSharpLegacy)]
         public Guid Id { get; set; } = Guid.NewGuid();
+        public DateTime? UpdatedAt { get; set; }
+        public DateTime? CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     [MongoCollection("MovieEvents")]

@@ -1,17 +1,18 @@
-using MovieReviewApp.Core.Interfaces;
-using MovieReviewApp.Database;
-using MovieReviewApp.Enums;
+using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Infrastructure.FileSystem
 {
     public class ImageMigrationService
     {
-        private readonly IDatabaseService _database;
+        private readonly MongoDbService _database;
         private readonly ImageService _imageService;
         private readonly ILogger<ImageMigrationService> _logger;
 
-        public ImageMigrationService(IDatabaseService database, ImageService imageService, ILogger<ImageMigrationService> logger)
+        public ImageMigrationService(
+            MongoDbService database,
+            ImageService imageService,
+            ILogger<ImageMigrationService> logger)
         {
             _database = database;
             _imageService = imageService;
@@ -21,7 +22,7 @@ namespace MovieReviewApp.Infrastructure.FileSystem
         public async Task<int> MigrateExistingUrlsToBlobs()
         {
             _logger.LogInformation("Starting migration of existing image URLs to blob storage...");
-            
+
             IEnumerable<MovieEvent> movieEvents = await _database.GetAllAsync<MovieEvent>();
             int migratedCount = 0;
             int failedCount = 0;
@@ -33,15 +34,15 @@ namespace MovieReviewApp.Infrastructure.FileSystem
                     try
                     {
                         _logger.LogInformation($"Migrating poster URL for movie: {movieEvent.Movie} - {movieEvent.PosterUrl}");
-                        
+
                         Guid? imageId = await _imageService.SaveImageFromUrlAsync(movieEvent.PosterUrl);
-                        
+
                         if (imageId.HasValue)
                         {
                             movieEvent.ImageId = imageId;
                             movieEvent.PosterUrl = null; // Clear the URL after successful migration
                             await _database.UpsertAsync(movieEvent);
-                            
+
                             migratedCount++;
                             _logger.LogInformation($"Successfully migrated poster for: {movieEvent.Movie}");
                         }
@@ -67,7 +68,7 @@ namespace MovieReviewApp.Infrastructure.FileSystem
         public async Task<(int totalMovies, int withImageIds, int withUrls, int withBoth, int withNeither)> GetMigrationStatus()
         {
             IEnumerable<MovieEvent> movieEvents = await _database.GetAllAsync<MovieEvent>();
-            
+
             int totalMovies = movieEvents.Count();
             int withImageIds = movieEvents.Count(me => me.ImageId.HasValue);
             int withUrls = movieEvents.Count(me => !string.IsNullOrEmpty(me.PosterUrl));

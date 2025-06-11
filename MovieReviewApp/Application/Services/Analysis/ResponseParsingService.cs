@@ -22,33 +22,53 @@ public class ResponseParsingService
     /// </summary>
     public CategoryResults ParseAnalysisResult(string analysisResult)
     {
+        _logger.LogInformation("[ANALYSIS DEBUG] ResponseParsingService.ParseAnalysisResult starting");
+        
         if (string.IsNullOrWhiteSpace(analysisResult))
         {
-            _logger.LogWarning("Received empty analysis result");
+            _logger.LogWarning("[ANALYSIS DEBUG] Received empty analysis result");
             return new CategoryResults();
         }
 
-        _logger.LogDebug("Parsing analysis result: {Length} characters", analysisResult.Length);
+        _logger.LogDebug("[ANALYSIS DEBUG] Parsing analysis result: {Length} characters", analysisResult.Length);
 
         // Remove any markdown formatting
         string cleanedResult = analysisResult.Replace("```json", "").Replace("```", "").Trim();
         
         // Log first 500 characters of the cleaned result for debugging
-        _logger.LogDebug("Cleaned result preview: {Preview}", 
+        _logger.LogDebug("[ANALYSIS DEBUG] Cleaned result preview: {Preview}", 
             cleanedResult.Length > 500 ? cleanedResult.Substring(0, 500) + "..." : cleanedResult);
 
         // Try different parsing strategies
-        CategoryResults? results = TryParseNestedStructure(cleanedResult) ?? TryParseFlatStructure(cleanedResult);
+        _logger.LogInformation("[ANALYSIS DEBUG] Attempting to parse with nested structure");
+        CategoryResults? results = TryParseNestedStructure(cleanedResult);
+        
+        if (results == null)
+        {
+            _logger.LogInformation("[ANALYSIS DEBUG] Nested structure parsing failed, trying flat structure");
+            results = TryParseFlatStructure(cleanedResult);
+        }
 
         if (results == null)
         {
-            _logger.LogWarning("Failed to parse analysis result, using fallback structure");
-            _logger.LogDebug("Full analysis result that failed to parse: {Result}", cleanedResult);
-            return CreateFallbackResults();
+            _logger.LogWarning("[ANALYSIS DEBUG] Failed to parse analysis result, using fallback structure");
+            _logger.LogDebug("[ANALYSIS DEBUG] Full analysis result that failed to parse: {Result}", cleanedResult);
+            CategoryResults fallbackResults = CreateFallbackResults();
+            _logger.LogInformation("[ANALYSIS DEBUG] Created fallback results");
+            return fallbackResults;
         }
 
-        _logger.LogInformation("Successfully parsed analysis result with {Count} categories", GetParsedCategoriesCount(results));
-        return results;
+        int categoryCount = GetParsedCategoriesCount(results);
+        _logger.LogInformation("[ANALYSIS DEBUG] Successfully parsed analysis result with {Count} categories", categoryCount);
+        
+        if (results != null)
+        {
+            _logger.LogInformation("[ANALYSIS DEBUG] Parsed results summary - BestJoke: {BestJoke}, HottestTake: {HottestTake}", 
+                results.BestJoke?.Quote ?? "null", 
+                results.HottestTake?.Quote ?? "null");
+        }
+        
+        return results ?? new CategoryResults();
     }
 
     /// <summary>
@@ -62,35 +82,65 @@ public class ResponseParsingService
             JsonElement root = doc.RootElement;
 
             CategoryResults results = new CategoryResults();
+            bool foundAnyCategory = false;
 
             // Parse each category section
             if (TryGetNestedCategory(root, "comedy_categories", "best_joke", out JsonElement bestJoke))
+            {
                 results.BestJoke = ParseCategoryWinner(bestJoke);
+                foundAnyCategory = true;
+            }
             
             if (TryGetNestedCategory(root, "comedy_categories", "most_offensive_take", out JsonElement offensiveTake))
+            {
                 results.MostOffensiveTake = ParseCategoryWinner(offensiveTake);
+                foundAnyCategory = true;
+            }
 
             if (TryGetNestedCategory(root, "opinion_categories", "hottest_take", out JsonElement hottestTake))
+            {
                 results.HottestTake = ParseCategoryWinner(hottestTake);
+                foundAnyCategory = true;
+            }
 
             if (TryGetNestedCategory(root, "insight_categories", "best_plot_twist", out JsonElement plotTwist))
+            {
                 results.BestPlotTwistRevelation = ParseCategoryWinner(plotTwist);
+                foundAnyCategory = true;
+            }
 
             if (TryGetNestedCategory(root, "discussion_categories", "biggest_argument_starter", out JsonElement argumentStarter))
+            {
                 results.BiggestArgumentStarter = ParseCategoryWinner(argumentStarter);
+                foundAnyCategory = true;
+            }
 
             // Parse Top 5 lists
             if (TryGetNestedCategory(root, "top_5_lists", "funniest_sentences", out JsonElement funniestSentences))
+            {
                 results.FunniestSentences = ParseTopFiveList(funniestSentences, "Funniest Sentences");
+                foundAnyCategory = true;
+            }
 
             if (TryGetNestedCategory(root, "top_5_lists", "most_bland_comments", out JsonElement blandComments))
+            {
                 results.MostBlandComments = ParseTopFiveList(blandComments, "Most Bland Comments");
+                foundAnyCategory = true;
+            }
 
+            // If no categories were found using nested structure, return null to try flat structure
+            if (!foundAnyCategory)
+            {
+                _logger.LogDebug("[ANALYSIS DEBUG] Nested structure parsing found 0 categories, returning null to try flat parsing");
+                return null;
+            }
+
+            _logger.LogDebug("[ANALYSIS DEBUG] Nested structure parsing found categories, returning results");
             return results;
         }
         catch (JsonException ex)
         {
-            _logger.LogDebug(ex, "Failed to parse nested structure");
+            _logger.LogDebug(ex, "[ANALYSIS DEBUG] Failed to parse nested structure due to JSON exception");
             return null;
         }
     }
@@ -112,6 +162,9 @@ public class ResponseParsingService
             {
                 switch (property.Name)
                 {
+                    case "AIsUniqueObservations":
+                        results.AIsUniqueObservations = ParseTopFiveList(property.Value, "AI's Unique Observations");
+                        break;
                     case "BestJoke":
                         results.BestJoke = ParseCategoryWinner(property.Value);
                         break;
@@ -211,7 +264,7 @@ public class ResponseParsingService
     /// </summary>
     private CategoryWinner ParseCategoryWinner(JsonElement element)
     {
-        return new CategoryWinner
+        CategoryWinner winner = new CategoryWinner
         {
             Speaker = GetStringProperty(element, "Speaker") ?? GetStringProperty(element, "speaker") ?? "Unknown",
             Timestamp = GetStringProperty(element, "Timestamp") ?? GetStringProperty(element, "timestamp") ?? "0:00",
@@ -222,6 +275,26 @@ public class ResponseParsingService
             AudioQuality = ParseAudioQuality(GetStringProperty(element, "AudioQualityString") ?? GetStringProperty(element, "audio_quality")),
             EntertainmentScore = GetIntProperty(element, "EntertainmentScore") ?? GetIntProperty(element, "entertainment_score") ?? 5
         };
+
+        // Parse RunnersUp if they exist
+        if ((element.TryGetProperty("RunnersUp", out JsonElement runnersUpElement) || 
+             element.TryGetProperty("runners_up", out runnersUpElement)) && 
+            runnersUpElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement runnerUpElement in runnersUpElement.EnumerateArray())
+            {
+                RunnerUp runnerUp = new RunnerUp
+                {
+                    Speaker = GetStringProperty(runnerUpElement, "Speaker") ?? GetStringProperty(runnerUpElement, "speaker") ?? "Unknown",
+                    Timestamp = GetStringProperty(runnerUpElement, "Timestamp") ?? GetStringProperty(runnerUpElement, "timestamp") ?? "0:00",
+                    BriefDescription = GetStringProperty(runnerUpElement, "BriefDescription") ?? GetStringProperty(runnerUpElement, "brief_description") ?? GetStringProperty(runnerUpElement, "Quote") ?? GetStringProperty(runnerUpElement, "quote") ?? "",
+                    Place = GetIntProperty(runnerUpElement, "Place") ?? GetIntProperty(runnerUpElement, "place") ?? GetIntProperty(runnerUpElement, "Rank") ?? GetIntProperty(runnerUpElement, "rank") ?? 2
+                };
+                winner.RunnersUp.Add(runnerUp);
+            }
+        }
+
+        return winner;
     }
 
     /// <summary>
@@ -239,6 +312,7 @@ public class ResponseParsingService
             {
                 TopFiveEntry topFiveEntry = new TopFiveEntry
                 {
+                    Rank = GetIntProperty(entry, "Rank") ?? GetIntProperty(entry, "rank") ?? 0,
                     Speaker = GetStringProperty(entry, "Speaker") ?? GetStringProperty(entry, "speaker") ?? "Unknown",
                     Timestamp = GetStringProperty(entry, "Timestamp") ?? GetStringProperty(entry, "timestamp") ?? "0:00",
                     Quote = GetStringProperty(entry, "Quote") ?? GetStringProperty(entry, "quote") ?? "No quote available",
@@ -350,6 +424,7 @@ public class ResponseParsingService
     private int GetParsedCategoriesCount(CategoryResults results)
     {
         int count = 0;
+        if (results.AIsUniqueObservations != null && results.AIsUniqueObservations.Entries.Count > 0) count++;
         if (results.BestJoke != null) count++;
         if (results.HottestTake != null) count++;
         if (results.MostOffensiveTake != null) count++;

@@ -1,4 +1,4 @@
-﻿namespace MovieReviewApp.Extentions
+namespace MovieReviewApp.Extensions
 {
     public static class WebHostEnvironmentExtensions
     {

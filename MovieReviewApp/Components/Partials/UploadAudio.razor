@@ -1,13 +1,16 @@
-﻿@page "/upload-audio"
+@page "/upload-audio"
 @inject IWebHostEnvironment WebHostEnvironment
-@inject MovieReviewService MovieReviewService
+@inject MovieEventService MovieEventService
 @inject MovieSessionService MovieSessionService
+@inject FileProcessingService FileProcessingService
 @using System.IO
 @using System.Globalization
 @using System.Text.RegularExpressions
+@using MovieReviewApp.Application.Services.Processing
 @using MovieReviewApp.Models
+@using MovieReviewApp.Infrastructure.Database
 
-@inject IDatabaseService DatabaseService
+@inject MongoDbService DatabaseService
 
 <div class="container-fluid">
     <div class="row">
@@ -45,15 +48,14 @@
                             </div>
                         }
                     </div>
-                    
+
                     <div class="mb-3">
-                        <ParticipantAssignment 
-                            @bind-MicAssignments="micAssignments"
-                            @bind-PresentSpeakers="presentSpeakers" />
+                        <ParticipantAssignment @bind-MicAssignments="micAssignments"
+                                               @bind-PresentSpeakers="presentSpeakers" />
                     </div>
 
                     <div class="alert alert-info">
-                        <strong>Folder will be created as:</strong><br/>
+                        <strong>Folder will be created as:</strong><br />
                         @GetFolderName()
                     </div>
                 </div>
@@ -90,11 +92,11 @@
                                     </span>
                                 </div>
                                 <div class="progress" style="height: 20px;">
-                                    <div class="progress-bar @(file.IsComplete ? "bg-success" : "progress-bar-striped progress-bar-animated")" 
-                                         role="progressbar" 
-                                         style="width: @file.UploadedPercentage%;" 
-                                         aria-valuenow="@file.UploadedPercentage" 
-                                         aria-valuemin="0" 
+                                    <div class="progress-bar @(file.IsComplete ? "bg-success" : "progress-bar-striped progress-bar-animated")"
+                                         role="progressbar"
+                                         style="width: @file.UploadedPercentage%;"
+                                         aria-valuenow="@file.UploadedPercentage"
+                                         aria-valuemin="0"
                                          aria-valuemax="100">
                                         @file.UploadedPercentage.ToString("F0")%
                                     </div>
@@ -139,10 +141,10 @@
                             <ul>
                                 @foreach (var mic in presentSpeakers.OrderBy(x => x))
                                 {
-                                    var participantName = micAssignments.TryGetValue(mic, out var name) 
-                                        ? name 
-                                        : MovieSessionService.GetParticipantName(mic + 1); // Display as 1-based but store as 0-based
-                                    <li><code>MIC@(mic + 1).WAV</code> - @participantName</li>
+                                    string participantName = micAssignments.TryGetValue(mic, out var name)
+                                    ? name
+                                    : MovieSessionService.GetParticipantName(micAssignments, mic + 1); // Display as 1-based but store as 0-based
+                                                                                                       <li><code>MIC@(mic + 1).WAV</code> - @participantName</li>
                                 }
                                 <li><code>PHONE.WAV</code> - Phone audio input</li>
                                 <li><code>SOUND_PAD.WAV</code> - Sound effects/clips</li>
@@ -183,7 +185,7 @@
     private List<MovieEvent>? availableMovies;
     private MovieEvent? selectedMovie;
 
-    private static readonly string[] AllowedExtensions = { 
+    private static readonly string[] AllowedExtensions = {
         ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma",
         ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".3gp"
     };
@@ -191,7 +193,7 @@
     protected override async Task OnInitializedAsync()
     {
         // Load available movies
-        availableMovies = await MovieReviewService.GetAllMovieEventsAsync();
+        availableMovies = await MovieEventService.GetAllAsync();
     }
 
     private async Task OnMovieSelected(ChangeEventArgs e)
@@ -219,7 +221,7 @@
     {
         if (string.IsNullOrWhiteSpace(movieTitle))
             return "YYYY-MonthName-MovieTitle";
-        
+
         var sanitizedTitle = Regex.Replace(movieTitle.Trim(), @"[^a-zA-Z0-9\s-]", "")
                                   .Replace(" ", "-");
         return $"{sessionDate:yyyy}-{sessionDate:MMMM}-{sanitizedTitle}";
@@ -279,8 +281,8 @@
         }
 
         // Prepare movie session with mic assignments (NO database save yet)
-        var session = await MovieSessionService.PrepareSessionFromFolder(targetFolder, micAssignments);
-        
+        MovieSession? session = await FileProcessingService.PrepareSessionFromFolderAsync(targetFolder, micAssignments);
+
         uploadComplete = true;
         await InvokeAsync(StateHasChanged);
     }
@@ -288,58 +290,58 @@
     private string DetermineFileType(string fileName)
     {
         var upperName = fileName.ToUpper();
-        
+
         // Check for MIC1-6 pattern (file names are 1-based, but we store assignments as 0-based)
         var micMatch = Regex.Match(upperName, @"^MIC(\d)\.WAV$");
         if (micMatch.Success)
         {
             var micFileNum = int.Parse(micMatch.Groups[1].Value); // 1-based from file
             var micAssignmentNum = micFileNum - 1; // Convert to 0-based for assignment lookup
-            var participantName = micAssignments.TryGetValue(micAssignmentNum, out var name) 
-                ? name 
-                : MovieSessionService.GetParticipantName(micFileNum); // Display uses 1-based
+            var participantName = micAssignments.TryGetValue(micAssignmentNum, out var name)
+                ? name
+                : MovieSessionService.GetParticipantName(micAssignments, micFileNum); // Display uses 1-based
             return $"🎤 {participantName}";
         }
-        
+
         // Check for PHONE
         if (upperName == "PHONE.WAV")
         {
             return "📞 Phone Input";
         }
-        
+
         // Check for SOUND_PAD
         if (upperName == "SOUND_PAD.WAV" || upperName == "SOUNDPAD.WAV")
         {
             return "🔊 Sound Pad";
         }
-        
+
         // Check for legacy speaker files (1-based file naming)
         var speakerMatch = Regex.Match(fileName, @"^(\d)_Speaker\d", RegexOptions.IgnoreCase);
         if (speakerMatch.Success)
         {
             var speakerFileNum = int.Parse(speakerMatch.Groups[1].Value); // 1-based from file
             var speakerAssignmentNum = speakerFileNum - 1; // Convert to 0-based for assignment lookup
-            var participantName = micAssignments.TryGetValue(speakerAssignmentNum, out var name) 
-                ? name 
-                : MovieSessionService.GetParticipantName(speakerFileNum); // Display uses 1-based
+            var participantName = micAssignments.TryGetValue(speakerAssignmentNum, out var name)
+                ? name
+                : MovieSessionService.GetParticipantName(micAssignments, speakerFileNum); // Display uses 1-based
             return $"🎤 {participantName}";
         }
-        
+
         // Check for master recording with date pattern (e.g., 2024_1122_1839.wav)
         var datePattern = Regex.Match(fileName, @"^\d{4}_\d{4}_\d{4}\.(wav|mp3|m4a|aac|ogg|flac)$", RegexOptions.IgnoreCase);
         if (datePattern.Success)
         {
             return "🎬 Master Mix (timestamped)";
         }
-        
+
         // Check for master recording with keywords
         var lowerName = fileName.ToLower();
-        if (lowerName.Contains("master") || lowerName.Contains("combined") || 
+        if (lowerName.Contains("master") || lowerName.Contains("combined") ||
             lowerName.Contains("full") || lowerName.Contains("group"))
         {
             return "🎬 Master Recording";
         }
-        
+
         // If unidentified, just show the filename
         return fileName;
     }
@@ -362,7 +364,7 @@
                 await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
                 progress.UploadedBytes += bytesRead;
             }
-            
+
             progress.IsComplete = true;
         }
         catch (Exception ex)

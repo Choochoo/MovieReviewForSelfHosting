@@ -17,7 +17,28 @@ namespace MovieReviewApp.Components.Pages
         private MovieReviewService movieReviewService { get; set; } = default!;
 
         [Inject]
-        private DiscussionQuestionsService discussionQuestionsService { get; set; } = default!;
+        private DiscussionQuestionService discussionQuestionsService { get; set; } = default!;
+
+        [Inject]
+        private AwardEventService AwardEventService { get; set; } = default!;
+
+        [Inject]
+        private AwardQuestionService AwardQuestionService { get; set; } = default!;
+
+        [Inject]
+        private PersonService PersonService { get; set; } = default!;
+
+        [Inject]
+        private SettingService SettingService { get; set; } = default!;
+
+        [Inject]
+        private MovieEventService MovieEventService { get; set; } = default!;
+
+        [Inject]
+        private PhaseService PhaseService { get; set; } = default!;
+
+        [Inject]
+        private SiteUpdateService SiteUpdateService { get; set; } = default!;
 
         private List<SiteUpdate> RecentUpdates { get; set; } = new();
         private bool showUpdates = true;
@@ -54,16 +75,16 @@ namespace MovieReviewApp.Components.Pages
             DiscussionQuestions = await discussionQuestionsService.GetActiveQuestionsAsync();
 
             // Check if current phase is award phase
-            AwardEvent? currentAwardEvent = await movieReviewService.GetAwardEventForDateAsync(DateProvider.Now);
+            AwardEvent? currentAwardEvent = await AwardEventService.GetAwardEventForDateAsync(DateProvider.Now);
             IsCurrentPhaseAwardPhase = currentAwardEvent != null;
 
             // Load award settings
-            AwardSettings = await movieReviewService.GetAwardSettingsAsync();
+            AwardSettings = await SettingService.GetAwardSettingsAsync();
 
             // Load all award events, questions, and people for chronological display
-            Task<List<AwardEvent>> awardEventsTask = movieReviewService.GetAwardEventsAsync();
-            Task<List<AwardQuestion>> awardQuestionsTask = movieReviewService.GetActiveAwardQuestionsAsync();
-            Task<List<Person>> peopleTask = movieReviewService.GetAllPeopleAsync(true);
+            Task<List<AwardEvent>> awardEventsTask = AwardEventService.GetAllAsync();
+            Task<List<AwardQuestion>> awardQuestionsTask = AwardQuestionService.GetActiveAwardQuestionsAsync();
+            Task<List<Person>> peopleTask = PersonService.GetAllAsync();
 
             await Task.WhenAll(awardEventsTask, awardQuestionsTask, peopleTask);
             
@@ -91,7 +112,7 @@ namespace MovieReviewApp.Components.Pages
         private async Task LoadAllDataAsync()
         {
             // Load settings
-            _settings = await movieReviewService.GetAllSettingsAsync();
+            _settings = await SettingService.GetAllAsync();
 
             // Parse start date
             string? startDateSetting = _settings?.FirstOrDefault(x => x.Key == "StartDate")?.Value;
@@ -112,16 +133,16 @@ namespace MovieReviewApp.Components.Pages
                            respect;
 
             // Load people names
-            List<Person> people = await movieReviewService.GetAllPeopleAsync(_respectOrder.Value);
+            List<Person> people = await PersonService.GetAllAsync();
             _allNames = people.Select(x => x.Name)
                 .Where(x => !string.IsNullOrEmpty(x))
                 .ToArray();
 
             // Load existing events
-            _existingEvents = (await movieReviewService.GetAllMovieEventsAsync()).ToList();
+            _existingEvents = (await MovieEventService.GetAllAsync()).ToList();
 
             // Load phases
-            _dbPhases = (await movieReviewService.GetAllPhasesAsync()).OrderBy(p => p.StartDate).ToList();
+            _dbPhases = (await PhaseService.GetAllAsync()).OrderBy(p => p.StartDate).ToList();
 
             // Advance random number generator based on existing events
             if (_existingEvents != null)
@@ -277,7 +298,7 @@ namespace MovieReviewApp.Components.Pages
                         ? DateTime.UtcNow.AddDays(-1)
                         : DateTime.Parse(lastVisitStr);
 
-                    List<SiteUpdate> updates = await movieReviewService.GetRecentUpdatesAsync(lastVisit);
+                    List<SiteUpdate> updates = await SiteUpdateService.GetRecentUpdatesAsync(lastVisit);
                     await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
 
                     // Only call StateHasChanged if we actually have updates to show
@@ -329,7 +350,7 @@ namespace MovieReviewApp.Components.Pages
         {
             try
             {
-                List<QuestionResult> results = await movieReviewService.GetQuestionResultsAsync(awardEventId, questionId);
+                List<QuestionResult> results = await AwardQuestionService.GetQuestionResultsAsync(awardEventId, questionId);
                 CachedResults[(awardEventId, questionId)] = results;
             }
             catch (Exception ex)

@@ -1,7 +1,8 @@
 @using MovieReviewApp.Models
 
-@inject MovieReviewService movieReviewService
+@inject SettingService settingService
 @inject ILogger<AwardSettings> Logger
+@inject AwardQuestionService awardQuestionService
 
 <h3 class="section-title">Award Settings</h3>
 
@@ -314,8 +315,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        settings = await movieReviewService.GetAwardSettingsAsync();
-        var allQuestions = await movieReviewService.GetActiveAwardQuestionsAsync();
+        settings = await settingService.GetAwardSettingsAsync();
+        var allQuestions = await awardQuestionService.GetActiveAwardQuestionsAsync();
         questions = allQuestions
             .Where(q => q.Question != DEFAULT_QUESTION)
             .ToList();
@@ -354,7 +355,7 @@
 
             // First save the AwardSettings
             var settingsJson = System.Text.Json.JsonSerializer.Serialize(settings);
-            await movieReviewService.AddOrUpdateSettingAsync(new Setting
+            await settingService.AddOrUpdateSettingAsync(new Setting
                 {
                     Key = "AwardSettings",
                     Value = settingsJson,
@@ -363,12 +364,12 @@
                 });
 
             // Delete any existing default questions in the database
-            await movieReviewService.DeleteDefaultQuestionsAsync();
+            await awardQuestionService.DeleteDefaultQuestionsAsync();
 
             // Delete questions that were removed
             foreach (var questionId in questionsToDelete)
             {
-                await movieReviewService.DeleteAwardQuestionAsync(questionId);
+                await awardQuestionService.DeleteAsync(questionId);
             }
 
             // Then save each valid question
@@ -381,7 +382,7 @@
                     {
                         question.Id = Guid.NewGuid();
                     }
-                    await movieReviewService.AddOrUpdateAwardQuestionAsync(question);
+                    await awardQuestionService.UpdateAsync(question);
                 }
             }
 

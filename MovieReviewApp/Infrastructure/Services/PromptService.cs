@@ -1,12 +1,14 @@
+using MovieReviewApp.Application.Services.Analysis;
+
 namespace MovieReviewApp.Infrastructure.Services;
 
 public class PromptService
 {
-    private readonly OpenAIService _openAIService;
+    private readonly OpenAIApiService _openAIService;
     private readonly ClaudeService _claudeService;
     private readonly ILogger<PromptService> _logger;
 
-    public PromptService(OpenAIService openAIService, ClaudeService claudeService, ILogger<PromptService> logger)
+    public PromptService(OpenAIApiService openAIService, ClaudeService claudeService, ILogger<PromptService> logger)
     {
         _openAIService = openAIService;
         _claudeService = claudeService;

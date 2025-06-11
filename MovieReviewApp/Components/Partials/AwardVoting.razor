@@ -1,8 +1,5 @@
 @using MovieReviewApp.Models
 @using MovieReviewApp.Extensions
-@inject MovieReviewService movieReviewService
-@inject IHttpContextAccessor HttpContextAccessor
-@inject IJSRuntime JS
 
 <div class="row">
     @if (!meetupPassed)
@@ -32,635 +29,157 @@
 
                     @if (string.IsNullOrEmpty(selectedUser))
                     {
-                        <div class="card" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);">
-                            <div class="card-header" style="background-color: var(--surface-hover); border-bottom: 1px solid var(--border-color); color: var(--text-primary);">
-                                <h5 class="mb-0" style="color: var(--text-primary);">Welcome to Awards Voting</h5>
-                            </div>
-                            <div class="card-body">
-                                <p>Your IP Address: @GetUserIp()</p>
-                                @if (!existingUsers.Any())
-                                {
-                                    <div class="alert alert-info">
-                                        There are currently no eligible voters. This could mean all votes have been cast
-                                        or no questions are available.
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="mb-3">
-                                        <label class="form-label">Select Your Name:</label>
-                                        <select class="form-select" @bind="tempUserName">
-                                            <option value="">Choose your name...</option>
-                                            @foreach (var user in existingUsers)
-                                            {
-                                                <option value="@user">@user</option>
-                                            }
-                                        </select>
-                                        <small class="text-muted">Only showing people with remaining votes</small>
-                                    </div>
-                                    <button class="btn btn-primary" @onclick="SetUser">Continue</button>
-                                }
+                        <div class="mb-3">
+                            <label for="userName" class="form-label">Enter your name to vote:</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="userName" @bind="tempUserName" @bind:event="oninput" />
+                                <button class="btn btn-primary" @onclick="SetUser">Set Name</button>
                             </div>
                         </div>
                     }
                     else
                     {
-                        <div>
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Awards Month</h5>
-                                <div class="d-flex align-items-center">
-                                    <small class="text-muted me-2">Voting as: @selectedUser</small>
-                                    <button class="btn btn-sm btn-outline-secondary" @onclick="LogOut">Change User</button>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                @if (awardEvent == null)
-                                {
-                                    <p>No active award event.</p>
-                                }
-                                else if (!questions.Any())
-                                {
-                                    <div class="alert alert-info">
-                                        You have completed all your votes! Thank you for participating.
-                                        <button class="btn btn-link" @onclick="LogOut">Click here to change user</button>
-                                    </div>
-                                }
-                                else
-                                {
-                                    @foreach (var question in questions)
-                                    {
-                                        var remainingVotesCount = GetRemainingVotesForQuestion(question.Id);
-
-                                        <div class="mb-4 p-3 border rounded">
-                                            <h6 class="mb-3">@question.Question</h6>
-                                            @{
-                                                var userVotes = GetUserVotesForQuestion(question.Id);
-                                                var pointsForNextVote = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
-                                            }
-
-                                            <div class="mb-3">
-                                                <h6 class="text-muted">Your Current Votes:</h6>
-                                                @if (userVotes.Any())
-                                                {
-                                                    <ul class="list-group">
-                                                        @foreach (var vote in userVotes.OrderByDescending(v => v.Points))
-                                                        {
-                                                            var movie = allMovies.FirstOrDefault(m => m.Id == vote.MovieEventId);
-                                                            var voteAge = DateTime.UtcNow - vote.CreatedAt;
-                                                            var canChange = awardSettings.AllowVoteChanges &&
-                                                            (awardSettings.VoteChangeTimeLimit == 0 ||
-                                                            voteAge.TotalHours <= awardSettings.VoteChangeTimeLimit);
-
-                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                                <div class="d-flex align-items-center">
-                                                                    @if (canChange)
-                                                                    {
-                                                                        <button class="btn btn-sm btn-outline-danger me-2"
-                                                                        @onclick="() => RemoveVote(question.Id, vote.Id)"
-                                                                        title="Remove this vote">
-                                                                            Recast
-                                                                            <i class="fas fa-times"></i>
-                                                                        </button>
-                                                                    }
-                                                                    <div>
-                                                                        @movie?.Movie
-                                                                        @if (!canChange)
-                                                                        {
-                                                                            <small class="text-muted d-block">
-                                                                                Vote locked (over @awardSettings.VoteChangeTimeLimit hours old)
-                                                                            </small>
-                                                                        }
-                                                                    </div>
-                                                                </div>
-                                                                <span class="badge bg-primary">@vote.Points points</span>
-                                                            </li>
-                                                        }
-                                                    </ul>
-                                                }
-                                                else
-                                                {
-                                                    <p class="text-muted">No votes cast yet</p>
-                                                }
-                                            </div>
-
-                                            @if (remainingVotesCount > 0)
-                                            {
-                                                var availableMovies = GetAvailableMoviesForQuestion(question.Id);
-                                                <div class="alert alert-info">
-                                                    You have @remainingVotesCount @(remainingVotesCount == 1 ? "vote" : "votes") remaining
-                                                    <strong>(Vote worth @pointsForNextVote @(pointsForNextVote == 1 ? "point" : "points"))</strong>
-                                                </div>
-                                                @if (availableMovies.Any())
-                                                {
-                                                    <div class="mb-3">
-                                                        <select class="form-select" @bind="selectedMovies[question.Id]">
-                                                            <option value="@Guid.Empty">Select a movie...</option>
-                                                            @foreach (var movie in availableMovies)
-                                                            {
-                                                                <option value="@movie.Id">@movie.Movie (@movie.Person)</option>
-                                                            }
-                                                        </select>
-                                                    </div>
-                                                    <button class="btn btn-primary"
-                                                    @onclick="() => CastVote(question.Id)"
-                                                    disabled="@(selectedMovies[question.Id] == Guid.Empty)">
-                                                        Cast Vote
-                                                    </button>
-                                                }
-                                                else
-                                                {
-                                                    <div class="alert alert-warning">
-                                                        No more movies available to vote for in this category
-                                                    </div>
-                                                }
-                                            }
-                                        </div>
-                                    }
-                                }
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>Logged in as: <strong>@selectedUser</strong></span>
+                                <button class="btn btn-outline-danger btn-sm" @onclick="LogOut">Log Out</button>
                             </div>
                         </div>
+
+                        @foreach (var question in questions)
+                        {
+                            <div class="mb-4 p-3 border rounded">
+                                <h6 class="mb-3">@question.Question</h6>
+                                @{
+                                    var userVotes = GetUserVotesForQuestion(question.Id);
+                                    var pointsForNextVote = remainingVotes.GetValueOrDefault(question.Id, 0);
+                                }
+
+                                <div class="mb-3">
+                                    <h6 class="text-muted">Your Current Votes:</h6>
+                                    @if (userVotes.Any())
+                                    {
+                                        <ul class="list-group">
+                                            @foreach (var vote in userVotes.OrderByDescending(v => v.Points))
+                                            {
+                                                var movie = allMovies.FirstOrDefault(m => m.Id == vote.MovieEventId);
+                                                var voteAge = DateTime.UtcNow - vote.CreatedAt;
+                                                var canChange = awardSettings?.AllowVoteChanges == true &&
+                                                (awardSettings.VoteChangeTimeLimit == 0 ||
+                                                voteAge?.TotalHours <= awardSettings.VoteChangeTimeLimit);
+
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong>@movie?.Movie</strong>
+                                                        <span class="badge bg-primary ms-2">@vote.Points points</span>
+                                                    </div>
+                                                    @if (canChange)
+                                                    {
+                                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveVote(question.Id, vote.Id)">
+                                                            Remove
+                                                        </button>
+                                                    }
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted">No votes cast yet</p>
+                                    }
+                                </div>
+
+                                @if (pointsForNextVote > 0)
+                                {
+                                    <div class="mb-3">
+                                        <h6 class="text-muted">Cast Your Vote (@pointsForNextVote points):</h6>
+                                        <select class="form-select" @bind="selectedMovies[question.Id]">
+                                            <option value="@Guid.Empty">Select a movie...</option>
+                                            @foreach (var movie in GetAvailableMoviesForQuestion(question.Id))
+                                            {
+                                                <option value="@movie.Id">@movie.Movie</option>
+                                            }
+                                        </select>
+                                        <button class="btn btn-primary mt-2" 
+                                                @onclick="() => CastVote(question.Id)"
+                                                disabled="@(selectedMovies[question.Id] == Guid.Empty)">
+                                            Cast Vote
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-md-6">
+            <div class="card" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--surface-hover); border-bottom: 1px solid var(--border-color); color: var(--text-primary);">
+                    <h5 class="mb-0" style="color: var(--text-primary);">Award Results</h5>
+                    <button class="btn btn-outline-primary btn-sm" @onclick="ToggleResults">
+                        @(showResults ? "Hide Results" : "Show Results")
+                    </button>
+                </div>
+                <div class="card-body">
+                    @if (showResults)
+                    {
+                        @foreach (var currentEvent in GetAllAwardEvents())
+                        {
+                            <div class="mb-4">
+                                <h5 class="mb-3">@currentEvent.StartDate.ToString("MMMM yyyy")</h5>
+                                @foreach (var question in questions)
+                                {
+                                    <div class="card mb-3" style="background-color: var(--surface-hover); border: 1px solid var(--border-color);">
+                                        <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--surface-color); border-bottom: 1px solid var(--border-color);">
+                                            <h6 class="mb-0">@question.Question</h6>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    @onclick="() => ToggleEventResults(currentEvent.Id, question.Id, currentEvent.Id != awardEvent.Id)">
+                                                @(IsEventResultShowing(currentEvent.Id, question.Id, currentEvent.Id != awardEvent.Id) ? "Hide" : "Show")
+                                            </button>
+                                        </div>
+                                        @if (IsEventResultShowing(currentEvent.Id, question.Id, currentEvent.Id != awardEvent.Id))
+                                        {
+                                            <div class="card-body">
+                                                @foreach (var result in GetQuestionResults(currentEvent.Id, question.Id).Result)
+                                                {
+                                                    var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
+                                                    <div class="mb-3">
+                                                        <div class="d-flex justify-content-between">
+                                                            <strong>@result.MovieTitle</strong>
+                                                            <span>@result.TotalPoints points</span>
+                                                        </div>
+                                                        <div class="progress" style="height: 25px; background-color: var(--background-secondary); border-radius: 0.5rem;">
+                                                            <div class="progress-bar" 
+                                                                 role="progressbar" 
+                                                                 style="width: @percentage%; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: var(--text-primary); border-radius: 0.5rem;">
+                                                                @percentage.ToString("F1")%
+                                                            </div>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                                                        </small>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
                     }
                 </div>
             </div>
         </div>
     }
-
-    <!-- Results Section -->
-    <div class="@(!meetupPassed ? "col-md-6" : "col-md-12")">
-        <div class="card mb-3" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);">
-            <div class="card-header" style="background-color: var(--surface-hover); border-bottom: 1px solid var(--border-color); color: var(--text-primary);">
-                <h5 class="mb-0" style="color: var(--text-primary);">Awards Results</h5>
-            </div>
-            <div class="card-body">
-                @if (awardEvent != null)
-                {
-                    <!-- Show all award events, including the current one -->
-                    @foreach (var currentEvent in GetAllAwardEvents())
-                    {
-                        <h6 class="mt-3 mb-4">
-                            Awards for @currentEvent.StartDate.ToString("MMMM yyyy")
-                            @if (currentEvent.Id == awardEvent.Id)
-                            {
-                                <span class="badge bg-primary ms-2">Current</span>
-                            }
-                        </h6>
-                        
-                        @foreach (var question in movieReviewService.GetActiveAwardQuestions())
-                        {
-                            var isPastEvent = currentEvent.Id != awardEvent.Id;
-                            var questionKey = isPastEvent 
-                                ? $"past_{currentEvent.Id}_{question.Id}" 
-                                : $"show_{question.Id}";
-                            
-                            <div class="card mb-4" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary);">
-                                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--surface-hover); border-bottom: 1px solid var(--border-color); color: var(--text-primary);">
-                                    <h6 class="mb-0" style="color: var(--text-primary);">@question.Question</h6>
-                                    <button class="btn btn-sm" style="background-color: var(--accent-primary); color: var(--text-primary); border: 1px solid var(--border-color);" 
-                                            @onclick="() => ToggleEventResults(currentEvent.Id, question.Id, isPastEvent)">
-                                        @(IsEventResultShowing(currentEvent.Id, question.Id, isPastEvent) ? "Hide" : "Show") Results
-                                    </button>
-                                </div>
-                                
-                                @if (IsEventResultShowing(currentEvent.Id, question.Id, isPastEvent))
-                                {
-                                    @if (!IsAuthorizedToSeeResults(currentEvent.Id, question.Id))
-                                    {
-                                        <div class="card-body">
-                                            <div class="mb-3">
-                                                <label class="form-label">Enter Password to View Results</label>
-                                                <div class="input-group">
-                                                    <input type="password" class="form-control" 
-                                                           @bind-value="passwordInputs[question.Id]"
-                                                           @bind-value:event="oninput"
-                                                           @onkeypress="@(e => HandleKeyPress(e, question.Id))" />
-                                                    <button class="btn btn-primary" @onclick="() => VerifyPassword(question.Id)">
-                                                        View Results
-                                                    </button>
-                                                </div>
-                                                @if (passwordErrors.ContainsKey(question.Id) && passwordErrors[question.Id])
-                                                {
-                                                    <div class="alert alert-danger mt-2">
-                                                        Incorrect password. Please try again.
-                                                    </div>
-                                                }
-                                            </div>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="card-body">
-                                            @{
-                                                var results = movieReviewService.GetQuestionResults(currentEvent.Id, question.Id);
-                                                var totalVoters = movieReviewService.GetAllPeople(true).Count;
-                                                var totalPossiblePoints = totalVoters * 3;
-                                            }
-                                            @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
-                                            {
-                                                var percentage = (result.TotalPoints / (float)totalPossiblePoints) * 100;
-                                                <div class="mb-3">
-                                                    <div class="d-flex justify-content-between">
-                                                        <strong>@result.MovieTitle</strong>
-                                                        <span>@result.TotalPoints points</span>
-                                                    </div>
-                                                    <div class="progress" style="height: 25px; background-color: var(--background-secondary); border-radius: 0.5rem;">
-                                                        <div class="progress-bar" 
-                                                             role="progressbar" 
-                                                             style="width: @percentage%; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: var(--text-primary); border-radius: 0.5rem;">
-                                                            @percentage.ToString("F1")%
-                                                        </div>
-                                                    </div>
-                                                    <small class="text-muted">
-                                                        (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
-                                                    </small>
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                }
-                            </div>
-                        }
-                        
-                        @if (currentEvent.Id != awardEvent.Id)
-                        {
-                            <hr class="my-4" />
-                        }
-                    }
-                }
+    else
+    {
+        <div class="col-12">
+            <div class="alert alert-info">
+                The voting period for this meetup has ended.
             </div>
         </div>
-    </div>
+    }
 </div>
-
-@code {
-    [Parameter]
-    public DateTime CurrentDate { get; set; }
-
-    private AwardEvent awardEvent;
-    private List<AwardQuestion> questions = new List<AwardQuestion>();
-    private List<MovieEvent> allMovies = new List<MovieEvent>();
-    private List<AwardVote> votes = new();
-    private Dictionary<Guid, Guid> selectedMovies = new();
-    private bool showResults = false;
-    private string selectedUser = "";
-    private string tempUserName = "";
-    private List<string> existingUsers = new();
-    private AwardSetting awardSettings;
-    private Dictionary<Guid, int> remainingVotes = new();
-
-    // Password protection properties
-    private bool isPasswordVerified = false;
-    private string enteredPassword = "";
-    private bool showPasswordError = false;
-    private const string RESULTS_PASSWORD = "006514";
-
-    // New properties to store voter information
-    private List<Person> allVoters = new();
-    private Dictionary<string, int> voterVoteCounts = new();
-    private List<Person> incompleteVoters = new();
-
-    private bool meetupPassed =>
-        awardEvent?.Questions.Any() == true &&
-        allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
-
-    private Dictionary<string, bool> showResultsDict = new Dictionary<string, bool>();
-    private Dictionary<Guid, string> passwordInputs = new Dictionary<Guid, string>();
-    private HashSet<Guid> verifiedQuestions = new HashSet<Guid>();
-    private Dictionary<Guid, bool> passwordErrors = new Dictionary<Guid, bool>();
-
-    private List<AwardEvent> pastAwardEvents = new List<AwardEvent>();
-    private Dictionary<string, bool> showPastResultsDict = new Dictionary<string, bool>();
-
-    protected override async Task OnInitializedAsync()
-    {
-        awardEvent = movieReviewService.GetAwardEventForDate(CurrentDate);
-        if (awardEvent == null) return;
-
-        // Get all voters and votes
-        allVoters = movieReviewService.GetAllPeople(true);
-        var allVotesForEvent = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
-        
-        // Group votes by voter and count them
-        voterVoteCounts = allVotesForEvent
-            .GroupBy(v => v.VoterName)
-            .ToDictionary(g => g.Key, g => g.Count());
-        
-        // Calculate incomplete voters
-        incompleteVoters = allVoters
-            .Where(voter => !voterVoteCounts.ContainsKey(voter.Name) || voterVoteCounts[voter.Name] < 18)
-            .OrderBy(voter => voter.Name)
-            .ToList();
-
-        // Always load questions
-        questions = movieReviewService.GetActiveAwardQuestions();
-        
-        // Get all eligible movies for the award event
-        var currentPhaseNumber = GetCurrentPhaseNumber();
-        allMovies = movieReviewService.GetAllMovieEvents()
-            .Where(m => 
-                m.PhaseNumber == currentPhaseNumber &&
-                !string.IsNullOrEmpty(m.Movie))
-            .ToList();
-        
-        // Load past award events
-        try
-        {
-            pastAwardEvents = movieReviewService.GetPastAwardEvents(awardEvent.Id).ToList();
-            Console.WriteLine($"Found {pastAwardEvents.Count} past award events");
-            foreach (var past in pastAwardEvents)
-            {
-                Console.WriteLine($"Past event: {past.Id} - {past.StartDate:MMM yyyy}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error loading past award events: {ex.Message}");
-            pastAwardEvents = new List<AwardEvent>();
-        }
-
-        selectedUser = await GetStoredUser();
-        await LoadUserData();
-
-        // Initialize password inputs
-        foreach (var question in questions)
-        {
-            passwordInputs[question.Id] = "";
-        }
-    }
-
-    private async Task LoadUserData()
-    {
-        existingUsers = await movieReviewService.GetAvailableVotersAsync(awardEvent.Id);
-
-        if (!string.IsNullOrEmpty(selectedUser))
-        {
-            remainingVotes = await movieReviewService.GetRemainingVotesForUserAsync(selectedUser, awardEvent.Id);
-            var availableQuestions = await movieReviewService.GetAvailableQuestionsForUserAsync(selectedUser, awardEvent.Id);
-            questions = availableQuestions.Select(x => x.Question).ToList();
-            allMovies = await movieReviewService.GetAllMovieEventsAsync();
-            allMovies = allMovies.Where(m => m.EndDate < awardEvent.EndDate && !string.IsNullOrEmpty(m.Movie))
-                .ToList();
-            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
-            awardSettings = await movieReviewService.GetAwardSettingsAsync();
-            selectedMovies = questions.ToDictionary(q => q.Id, _ => Guid.Empty);
-        }
-    }
-
-    private string GetUserIp() =>
-        HttpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
-
-    private async Task HandleKeyPress(KeyboardEventArgs e, Guid questionId)
-    {
-        if (e.Key == "Enter")
-        {
-            await VerifyPassword(questionId);
-        }
-    }
-
-    private async Task VerifyPassword(Guid categoryId)
-    {
-        if (!passwordInputs.ContainsKey(categoryId))
-        {
-            passwordInputs[categoryId] = "";
-        }
-
-        if (passwordInputs[categoryId] == RESULTS_PASSWORD)
-        {
-            verifiedQuestions.Add(categoryId);
-            passwordErrors[categoryId] = false;
-        }
-        else
-        {
-            passwordErrors[categoryId] = true;
-        }
-        passwordInputs[categoryId] = "";
-    }
-
-    private void ToggleResults()
-    {
-        showResults = !showResults;
-        if (!showResults)
-        {
-            // Reset password verification when hiding results
-            isPasswordVerified = false;
-            showPasswordError = false;
-            enteredPassword = "";
-        }
-    }
-
-    private async Task SetUser()
-    {
-        if (string.IsNullOrWhiteSpace(tempUserName)) return;
-        selectedUser = tempUserName;
-        await StoreUser(selectedUser);
-        await LoadUserData();
-        tempUserName = "";
-    }
-
-    private async Task LogOut()
-    {
-        selectedUser = "";
-        await JS.InvokeVoidAsync("localStorage.removeItem", "awardVoterName");
-        await LoadUserData();
-    }
-
-    private List<AwardVote> GetUserVotesForQuestion(Guid questionId)
-    {
-        return votes.Where(v =>
-            v.QuestionId == questionId &&
-            v.VoterName == selectedUser)
-            .OrderByDescending(v => v.Points)
-            .ToList();
-    }
-
-    private int GetRemainingVotesForQuestion(Guid questionId)
-    {
-        return remainingVotes.GetValueOrDefault(questionId, 0);
-    }
-
-    private List<MovieEvent> GetAvailableMoviesForQuestion(Guid questionId)
-    {
-        var votedMovieIds = GetUserVotesForQuestion(questionId)
-            .Select(v => v.MovieEventId)
-            .ToList();
-
-        return allMovies
-            .Where(m => !votedMovieIds.Contains(m.Id))
-            .OrderBy(m => m.Movie)
-            .ToList();
-    }
-
-    private async Task CastVote(Guid questionId)
-    {
-        if (!selectedMovies.ContainsKey(questionId) ||
-            selectedMovies[questionId] == Guid.Empty)
-            return;
-
-        var userVotes = GetUserVotesForQuestion(questionId);
-        var remainingVotesCount = GetRemainingVotesForQuestion(questionId);
-        
-        var points = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
-
-        var vote = new AwardVote
-            {
-                AwardEventId = awardEvent.Id,
-                QuestionId = questionId,
-                MovieEventId = selectedMovies[questionId],
-                VoterName = selectedUser,
-                VoterIp = GetUserIp(),
-                Points = points
-            };
-
-        if (await movieReviewService.AddVoteAsync(vote))
-        {
-            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
-            selectedMovies[questionId] = Guid.Empty;
-            await LoadUserData();
-            StateHasChanged();
-        }
-    }
-
-    private async Task RemoveVote(Guid questionId, Guid voteId)
-    {
-        var confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
-        if (!confirmDelete) return;
-
-        if (await movieReviewService.RemoveVoteAsync(voteId))
-        {
-            // Refresh votes and remaining votes
-            votes = await movieReviewService.GetVotesForAwardEventAsync(awardEvent.Id);
-            await LoadUserData();
-            StateHasChanged();
-        }
-    }
-
-    private async Task<string> GetStoredUser()
-    {
-        try
-        {
-            return await JS.InvokeAsync<string>("localStorage.getItem", "awardVoterName") ?? "";
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    private async Task StoreUser(string username)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("localStorage.setItem", "awardVoterName", username);
-        }
-        catch
-        {
-            // Handle storage errors
-        }
-    }
-
-    private bool IsShowingResults(Guid questionId) => 
-        showResultsDict.ContainsKey($"show_{questionId}") && showResultsDict[$"show_{questionId}"];
-
-    private bool IsVerified(Guid questionId) => 
-        verifiedQuestions.Contains(questionId) || !IsCurrentAwardEvent();
-
-    private void ToggleCategoryResults(Guid questionId)
-    {
-        var key = $"show_{questionId}";
-        if (!showResultsDict.ContainsKey(key))
-            showResultsDict[key] = false;
-        showResultsDict[key] = !showResultsDict[key];
-    }
-
-    // Add a helper method to determine the current phase number
-    private int GetCurrentPhaseNumber()
-    {
-        // Get the current phase based on the award event date
-        var phases = movieReviewService.GetAllPhases().OrderBy(p => p.Number).ToList();
-        
-        // The award event happens after a phase, so find the phase that ends right before
-        // the award event starts
-        var relevantPhase = phases
-            .LastOrDefault(p => p.EndDate < awardEvent.StartDate);
-        
-        if (relevantPhase != null)
-        {
-            // The next phase after this one would be the current phase for the award event
-            return relevantPhase.Number + 1;
-        }
-        
-        // If no relevant phase found, default to phase 1
-        return 1;
-    }
-
-    private bool IsCurrentAwardEvent()
-    {
-        // If the award event's end date is in the future, it's the current event
-        return awardEvent != null && awardEvent.EndDate >= DateTime.UtcNow;
-    }
-
-    // Add methods to handle past award events
-    private bool IsPastResultShowing(Guid eventId, Guid questionId)
-    {
-        var key = $"past_{eventId}_{questionId}";
-        return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
-    }
-
-    private void TogglePastResults(Guid eventId, Guid questionId)
-    {
-        var key = $"past_{eventId}_{questionId}";
-        if (!showPastResultsDict.ContainsKey(key))
-            showPastResultsDict[key] = false;
-        
-        showPastResultsDict[key] = !showPastResultsDict[key];
-    }
-
-    private bool IsEventResultShowing(Guid eventId, Guid questionId, bool isPastEvent)
-    {
-        if (isPastEvent)
-        {
-            var key = $"past_{eventId}_{questionId}";
-            return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
-        }
-        else
-        {
-            return IsShowingResults(questionId);
-        }
-    }
-
-    private void ToggleEventResults(Guid eventId, Guid questionId, bool isPastEvent)
-    {
-        if (isPastEvent)
-        {
-            var key = $"past_{eventId}_{questionId}";
-            if (!showPastResultsDict.ContainsKey(key))
-                showPastResultsDict[key] = false;
-            
-            showPastResultsDict[key] = !showPastResultsDict[key];
-        }
-        else
-        {
-            ToggleCategoryResults(questionId);
-        }
-    }
-
-    private bool IsAuthorizedToSeeResults(Guid eventId, Guid questionId)
-    {
-        // Past events don't need password
-        if (eventId != awardEvent.Id)
-            return true;
-        
-        // Current event needs password unless already verified
-        return verifiedQuestions.Contains(questionId) || !IsCurrentAwardEvent();
-    }
-
-    private List<AwardEvent> GetAllAwardEvents()
-    {
-        // Get all award events, with current one first, then past ones
-        var allEvents = new List<AwardEvent> { awardEvent };
-        
-        // Add all past events
-        allEvents.AddRange(pastAwardEvents);
-        
-        return allEvents;
-    }
-}

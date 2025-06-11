@@ -1,25 +1,31 @@
-using MovieReviewApp.Core.Interfaces;
-using MovieReviewApp.Database;
+using System.Security.Cryptography;
+
 using MovieReviewApp.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Processing;
-using System.Security.Cryptography;
+using MovieReviewApp.Infrastructure.Database;
+using Microsoft.Extensions.Logging;
 
 namespace MovieReviewApp.Infrastructure.FileSystem
 {
     public class ImageService
     {
-        private readonly IDatabaseService _database;
+        private readonly MongoDbService _database;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<ImageService> _logger;
         private const int MaxWidth = 800;
         private const int MaxHeight = 1200;
         private const int Quality = 85;
 
-        public ImageService(IDatabaseService database, IHttpClientFactory httpClientFactory)
+        public ImageService(
+            MongoDbService database,
+            IHttpClientFactory httpClientFactory,
+            ILogger<ImageService> logger)
         {
             _database = database;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         public async Task<Guid?> SaveImageAsync(byte[] imageData, string fileName, string? originalUrl = null)

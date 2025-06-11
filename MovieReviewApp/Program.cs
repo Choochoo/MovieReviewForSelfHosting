@@ -4,18 +4,16 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
-using MovieReviewApp.Components;
-using MovieReviewApp.Core.Interfaces;
-using MovieReviewApp.Database;
-using MovieReviewApp.Middleware;
-using MovieReviewApp.Models;
 using MovieReviewApp.Application.Services;
 using MovieReviewApp.Application.Services.Analysis;
-using MovieReviewApp.Application.Services.Session;
+using MovieReviewApp.Application.Services.Processing;
+using MovieReviewApp.Components;
 using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.FileSystem;
-using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Middleware;
+using MovieReviewApp.Models;
 using MovieReviewApp.Utilities;
 
 // Configure MongoDB serialization
@@ -87,11 +85,11 @@ string templateFile = "appsettings.json.template";
 // Use template file if main config doesn't exist (for public distribution)  
 if (!File.Exists(configFile) && File.Exists(templateFile))
 {
-    builder.Configuration.AddJsonFile(templateFile, optional: true, reloadOnChange: true);
+    _ = builder.Configuration.AddJsonFile(templateFile, optional: true, reloadOnChange: true);
 }
 else
 {
-    builder.Configuration.AddJsonFile(configFile, optional: true, reloadOnChange: true);
+    _ = builder.Configuration.AddJsonFile(configFile, optional: true, reloadOnChange: true);
 }
 
 // Define and configure AppSettings
@@ -130,11 +128,19 @@ builder.Services.Configure<FormOptions>(options =>
 });
 
 // Register database service
-builder.Services.AddSingleton<IDatabaseService, MongoDbService>();
+builder.Services.AddSingleton<MongoDbService>();
 
-// Register award services
-builder.Services.AddScoped<IAwardEventService, AwardEventRepository>();
-builder.Services.AddScoped<IAwardVoteService, AwardVoteRepository>();
+// Register model services
+builder.Services.AddScoped<AwardEventService>();
+builder.Services.AddScoped<AwardQuestionService>();
+builder.Services.AddScoped<AwardVoteService>();
+builder.Services.AddScoped<ImageStorageService>();
+builder.Services.AddScoped<MovieEventService>();
+builder.Services.AddScoped<PersonService>();
+builder.Services.AddScoped<PhaseService>();
+builder.Services.AddScoped<SettingService>();
+builder.Services.AddScoped<SiteUpdateService>();
+builder.Services.AddScoped<SoundClipService>();
 
 builder.Services.AddScoped<MovieReviewService>();
 
@@ -146,11 +152,11 @@ builder.Services.AddScoped<MarkdownService>();
 
 // Register new audio processing services
 builder.Services.AddScoped<GladiaService>();
-builder.Services.AddScoped<OpenAIService>();
 builder.Services.AddScoped<ClaudeService>();
 builder.Services.AddScoped<PromptService>();
 
 // Register refactored analysis services
+builder.Services.AddScoped<WordAnalysisService>();
 builder.Services.AddScoped<TranscriptProcessingService>();
 builder.Services.AddScoped<PromptGenerationService>();
 builder.Services.AddScoped<ResponseParsingService>();
@@ -158,28 +164,28 @@ builder.Services.AddScoped<SimpleSessionStatsService>();
 builder.Services.AddScoped<SpeakerAttributionFixService>();
 builder.Services.AddHttpClient<OpenAIApiService>(client =>
 {
-    client.Timeout = TimeSpan.FromMinutes(20); // 20 minute timeout for OpenAI analysis
+    client.Timeout = TimeSpan.FromMinutes(5); // 5 minute timeout for OpenAI requests
 });
-builder.Services.AddScoped<MovieSessionAnalysisOrchestrator>();
+builder.Services.AddScoped<OpenAIApiService>();
 
-// Register refactored session services
-builder.Services.AddScoped<SessionRepositoryService>();
-builder.Services.AddScoped<SessionMetadataService>();
-builder.Services.AddScoped<AudioProcessingWorkflowService>();
-builder.Services.AddScoped<SessionAnalysisService>();
-builder.Services.AddScoped<SessionMaintenanceService>();
-builder.Services.AddScoped<SessionOrchestrationService>();
-
-// Keep the original MovieSessionAnalysisService for backward compatibility
-builder.Services.AddScoped<MovieSessionAnalysisService>();
+// Register audio processing services
+builder.Services.AddScoped<AudioProcessingService>();
+builder.Services.AddScoped<AudioProcessingStateMachine>();
 builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
-builder.Services.AddScoped<DiscussionQuestionsService>();
+builder.Services.AddScoped<DiscussionQuestionService>();
 builder.Services.AddScoped<ThemeService>();
-builder.Services.AddScoped<SoundboardRepository>();
 
-// MongoDB connection is now handled directly in the MongoDb constructor using instance secrets
+// Analysis Services
+builder.Services.AddScoped<AnalysisService>();
+builder.Services.AddScoped<OpenAIAnalysisService>();
+builder.Services.AddScoped<TranscriptProcessingService>();
+
+// Processing Services
+builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
+builder.Services.AddScoped<AudioProcessingStateMachine>();
+builder.Services.AddScoped<FileUploadService>();
 
 // Configure Facebook settings from secure config  
 builder.Services.Configure<FacebookSettings>(options =>
@@ -209,7 +215,7 @@ WebApplication app = builder.Build();
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    _ = app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
 
@@ -230,8 +236,8 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = ctx =>
     {
         // Add headers for audio files
-        if (ctx.File.Name.EndsWith(".mp3") || ctx.File.Name.EndsWith(".wav") || 
-            ctx.File.Name.EndsWith(".ogg") || ctx.File.Name.EndsWith(".m4a") || 
+        if (ctx.File.Name.EndsWith(".mp3") || ctx.File.Name.EndsWith(".wav") ||
+            ctx.File.Name.EndsWith(".ogg") || ctx.File.Name.EndsWith(".m4a") ||
             ctx.File.Name.EndsWith(".aac"))
         {
             ctx.Context.Response.Headers.Append("Accept-Ranges", "bytes");
