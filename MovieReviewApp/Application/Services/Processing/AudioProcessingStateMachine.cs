@@ -233,7 +233,20 @@ public class AudioProcessingStateMachine
 
         // Convert single file
         string? mp3FileName = Path.ChangeExtension(Path.GetFileName(audioFile.FilePath), ".mp3");
-        string mp3Path = Path.Combine(session.FolderPath, mp3FileName);
+
+        // For WSL, we need to use the same directory as the input file
+        string mp3Path;
+        if (audioFile.FilePath.StartsWith("/mnt/"))
+        {
+            // Already a WSL path, use the directory from the file path
+            string directory = Path.GetDirectoryName(audioFile.FilePath) ?? session.FolderPath;
+            mp3Path = Path.Combine(directory, mp3FileName);
+        }
+        else
+        {
+            // Windows path
+            mp3Path = Path.Combine(session.FolderPath, mp3FileName);
+        }
 
         await _gladiaService.ConvertToMp3Async(audioFile.FilePath, mp3Path, (step, current, total) =>
         {
@@ -333,16 +346,16 @@ public class AudioProcessingStateMachine
     private async Task ProcessDownloadingTranscriptsState(AudioFile audioFile, MovieSession session)
     {
         string fileName = Path.GetFileName(audioFile.FilePath);
-        
+
         if (string.IsNullOrEmpty(audioFile.AudioUrl))
         {
             throw new InvalidOperationException($"File {fileName} has no AudioUrl - cannot start transcription");
         }
-        
+
         audioFile.CurrentStep = "Processing transcription...";
         audioFile.ProgressPercentage = 25;
         audioFile.LastUpdated = DateTime.UtcNow;
-        
+
         _logger.LogInformation("Starting transcription for {FileName}", fileName);
 
         // Use ProcessMultipleFilesAsync to handle the transcription
@@ -360,15 +373,15 @@ public class AudioProcessingStateMachine
         if (results.Any())
         {
             TranscriptionResult result = results.First();
-            
+
             // Check for errors
             if (result.error != null)
             {
                 throw new InvalidOperationException($"Transcription failed for {fileName}: {result.error.message}");
             }
 
-            // Check status
-            if (result.status != "success")
+            // Check status - Gladia API returns "done" when successful
+            if (result.status != "done")
             {
                 throw new InvalidOperationException($"Transcription failed for {fileName}: Status {result.status}");
             }
@@ -416,7 +429,7 @@ public class AudioProcessingStateMachine
 
         _logger.LogInformation("Running speaker attribution fix for session {SessionId}", session.Id);
 
-        var result = await _speakerAttributionService.FixSpeakerAttributionForSession(session);
+        SpeakerAttributionResult result = await _speakerAttributionService.FixSpeakerAttributionForSession(session);
 
         if (result.Success)
         {

@@ -100,17 +100,17 @@ namespace MovieReviewApp.Utilities
                 {
                     InstanceManager tempInstanceManager = new InstanceManager(instanceName);
                     dynamic config = tempInstanceManager.GetInstanceConfig();
-                    
+
                     Console.WriteLine($"  📁 {instanceName}");
                     Console.WriteLine($"     Display Name: {config.DisplayName}");
                     Console.WriteLine($"     Environment: {config.Environment}");
                     Console.WriteLine($"     Port: {config.Port}");
                     Console.WriteLine($"     Created: {config.CreatedDate:yyyy-MM-dd HH:mm}");
                     Console.WriteLine($"     Last Used: {config.LastUsed:yyyy-MM-dd HH:mm}");
-                    
+
                     if (!string.IsNullOrEmpty(config.Description))
                         Console.WriteLine($"     Description: {config.Description}");
-                    
+
                     Console.WriteLine();
                 }
                 catch

@@ -8,6 +8,7 @@ using MovieReviewApp.Application.Services;
 using MovieReviewApp.Application.Services.Analysis;
 using MovieReviewApp.Application.Services.Processing;
 using MovieReviewApp.Components;
+using MovieReviewApp.Controllers;
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.FileSystem;
@@ -39,6 +40,8 @@ if (cmdArgs.ListInstances)
     CommandLineParser.ListInstances();
     return;
 }
+
+
 
 
 // Initialize instance manager with command line instance name or default to "Default"
@@ -112,13 +115,9 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.AddControllers();
 
+
 builder.Services.AddHttpClient(); // Register HttpClient
 
-// Configure HttpClient for GladiaService with extended timeout for large file uploads
-builder.Services.AddHttpClient<GladiaService>(client =>
-{
-    client.Timeout = TimeSpan.FromHours(1); // 1 hour timeout for large uploads and processing
-});
 builder.Services.AddHttpContextAccessor();
 
 // Configure file upload size limit (10GB)
@@ -151,7 +150,11 @@ builder.Services.AddScoped<MarkdownService>();
 
 
 // Register new audio processing services
-builder.Services.AddScoped<GladiaService>();
+builder.Services.AddHttpClient<GladiaService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.gladia.io");
+    client.Timeout = TimeSpan.FromHours(1); // Long timeout for audio uploads
+});
 builder.Services.AddScoped<ClaudeService>();
 builder.Services.AddScoped<PromptService>();
 
@@ -181,6 +184,7 @@ builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AnalysisService>();
 builder.Services.AddScoped<OpenAIAnalysisService>();
 builder.Services.AddScoped<TranscriptProcessingService>();
+
 
 // Processing Services
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();

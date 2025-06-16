@@ -107,7 +107,7 @@ public class OpenAIAnalysisService
                     model = "gpt-4-turbo-preview",
                     messages = new[]
                     {
-                        new { role = "system", content = "You are an expert at analyzing movie discussion transcripts to find the most entertaining and memorable moments. You have a great sense of humor and can identify what makes conversations funny, awkward, or interesting." },
+                        new { role = "system", content = "You are an expert at analyzing movie discussion transcripts to find the most entertaining and memorable moments. You have a great sense of humor and can identify what makes conversations funny, awkward, or interesting. You must respond in valid JSON format." },
                         new { role = "user", content = prompt }
                     },
                     temperature = 0.7,
@@ -179,6 +179,7 @@ IMPORTANT RULES:
 3. Include relevant context/setup before each moment
 4. Focus on genuine entertainment value, not forced humor
 5. Ensure variety - avoid featuring the same person too many times
+6. Respond with a valid JSON object using the provided schema
 
 For each category, find the absolute best example that matches the criteria. If a category doesn't have a good match, you can leave it with minimal/placeholder values.";
     }

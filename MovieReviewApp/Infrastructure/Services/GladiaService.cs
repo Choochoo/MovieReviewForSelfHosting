@@ -30,9 +30,6 @@ public class GladiaService
         _secretsManager = secretsManager;
         _audioOrganizer = audioOrganizer;
         _logger = logger;
-        
-        // Set the base URL for the HttpClient
-        _httpClient.BaseAddress = new Uri(_baseUrl);
 
         // Get API key from secrets manager directly
         _apiKey = _secretsManager.GetSecret("Gladia:ApiKey") ?? string.Empty;
@@ -111,7 +108,7 @@ public class GladiaService
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-y -i \"{inputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{outputPath}\"",
+                Arguments = $"-y -i \"{ffmpegInputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{ffmpegOutputPath}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = false,
                 RedirectStandardError = false,
@@ -352,7 +349,6 @@ public class GladiaService
     private List<string> BuildTimestampBasedTranscript(TranscriptionResult masterMixResult, List<(TranscriptionResult micResult, string participantName)> individualMicData)
     {
         List<string> transcriptLines = new List<string>();
-        const double TIMESTAMP_TOLERANCE = 1.0; // Allow 1 second tolerance for timestamp matching
 
         _logger.LogInformation("Building timestamp-based transcript from master mix with {UtteranceCount} utterances",
             masterMixResult.result.transcription.utterances.Count);
@@ -1283,8 +1279,9 @@ public class GladiaService
     }
 
     /// <summary>
-    /// Deletes a single transcription from Gladia using V2 API.
+    /// Deletes a single transcription from Gladia using V2 pre-recorded API.
     /// WARNING: This action is PERMANENT and cannot be undone.
+    /// Uses the current recommended /v2/pre-recorded/{id} endpoint.
     /// </summary>
     public async Task<bool> DeleteTranscriptionAsync(string transcriptionId)
     {
@@ -1302,7 +1299,8 @@ public class GladiaService
 
             _logger.LogWarning("DELETING TRANSCRIPTION {TranscriptionId} FROM GLADIA - This action is PERMANENT", transcriptionId);
 
-            // Use the correct V2 API endpoint for deleting transcriptions
+            // Use the current V2 pre-recorded API endpoint for deleting transcriptions
+            // This replaces the deprecated /v2/transcription/{id} endpoint
             HttpResponseMessage response = await _httpClient.DeleteAsync($"/v2/pre-recorded/{transcriptionId}");
 
             if (!response.IsSuccessStatusCode)
@@ -1311,7 +1309,14 @@ public class GladiaService
                 _logger.LogError("Failed to delete transcription {TranscriptionId}: {StatusCode} - {Error}",
                     transcriptionId, response.StatusCode, errorContent);
 
-                // Return false for client errors (404, 400) but throw for server errors (500+)
+                // Handle specific status codes
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    _logger.LogWarning("Transcription {TranscriptionId} not found - may have been already deleted", transcriptionId);
+                    return false;
+                }
+
+                // Return false for client errors (400, 401, 403, 404) but throw for server errors (500+)
                 if ((int)response.StatusCode >= 500)
                 {
                     throw new HttpRequestException($"Server error deleting transcription: {response.StatusCode} - {errorContent}");
@@ -1320,7 +1325,16 @@ public class GladiaService
                 return false;
             }
 
-            _logger.LogInformation("Successfully deleted transcription {TranscriptionId}", transcriptionId);
+            // Response 202 means deletion was accepted (async operation)
+            if (response.StatusCode == System.Net.HttpStatusCode.Accepted)
+            {
+                _logger.LogInformation("Successfully initiated deletion of transcription {TranscriptionId} (async operation)", transcriptionId);
+            }
+            else
+            {
+                _logger.LogInformation("Successfully deleted transcription {TranscriptionId}", transcriptionId);
+            }
+
             return true;
         }
         catch (Exception ex) when (!(ex is HttpRequestException))

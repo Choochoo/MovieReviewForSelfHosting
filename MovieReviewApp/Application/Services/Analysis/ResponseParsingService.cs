@@ -22,6 +22,14 @@ public class ResponseParsingService
     /// </summary>
     public CategoryResults ParseAnalysisResult(string analysisResult)
     {
+        return ParseAnalysisResponse(analysisResult);
+    }
+
+    /// <summary>
+    /// Parses an OpenAI analysis response string into CategoryResults object.
+    /// </summary>
+    public CategoryResults ParseAnalysisResponse(string analysisResult)
+    {
         _logger.LogInformation("[ANALYSIS DEBUG] ResponseParsingService.ParseAnalysisResult starting");
         
         if (string.IsNullOrWhiteSpace(analysisResult))

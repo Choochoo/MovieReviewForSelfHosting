@@ -54,7 +54,15 @@
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ -t razor)",
       "Bash(/home/jared/.nvm/versions/node/v22.16.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"CategoryResults\" MovieReviewApp/Components/ --glob \"*.razor\")",
       "Bash(pkill:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "mcp__memory__create_entities",
+      "Bash(ffmpeg:*)",
+      "mcp__puppeteer__puppeteer_navigate",
+      "Bash(sudo apt:*)",
+      "Bash(apt list:*)",
+      "mcp__memory__create_relations",
+      "Bash(pgrep:*)",
+      "Bash(export:*)"
     ],
     "deny": []
   }

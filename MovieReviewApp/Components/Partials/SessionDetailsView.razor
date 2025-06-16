@@ -28,9 +28,12 @@
                             <h2 class="mb-2">@Session.MovieTitle</h2>
                             <p class="text-muted mb-2">@Session.Date.ToString("MMMM yyyy")</p>
                             <div class="d-flex gap-1 flex-wrap">
-                                @foreach (var participant in Session.MicAssignments)
+                                @if (Session.MicAssignments != null)
                                 {
-                                    <span class="badge bg-primary">🎤 @participant</span>
+                                    @foreach (var participant in Session.MicAssignments.Values)
+                                    {
+                                        <span class="badge bg-primary">🎤 @participant</span>
+                                    }
                                 }
                             </div>
                         </div>
