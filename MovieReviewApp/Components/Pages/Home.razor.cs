@@ -361,16 +361,16 @@ namespace MovieReviewApp.Components.Pages
         }
 
         // Method to create chronological timeline with phases and award events
-        public List<object> GetChronologicalTimeline()
+        public List<ITimelineItem> GetChronologicalTimeline()
         {
-            List<object> timeline = new List<object>();
+            List<ITimelineItem> timeline = new List<ITimelineItem>();
             
             if (Phases == null || AwardSettings == null) return timeline;
 
             // Add all phases to timeline (including past ones)
-            foreach (var phase in Phases)
+            foreach (Phase phase in Phases)
             {
-                timeline.Add(new { Type = "Phase", Date = phase.StartDate, Item = phase });
+                timeline.Add(new PhaseTimelineItem(phase));
                 
                 // Check if this phase should have an award event after it
                 if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
@@ -378,32 +378,37 @@ namespace MovieReviewApp.Components.Pages
                     DateTime awardDate = phase.EndDate.AddDays(1);
                     
                     // Look for an existing award event for this time period
-                    var awardEvent = AllAwardEvents.FirstOrDefault(ae => 
+                    AwardEvent? awardEvent = AllAwardEvents.FirstOrDefault(ae => 
                         ae.StartDate >= awardDate && ae.StartDate <= awardDate.AddMonths(1));
                     
                     if (awardEvent != null)
                     {
-                        timeline.Add(new { Type = "Award", Date = awardEvent.StartDate, Item = awardEvent });
+                        timeline.Add(new AwardTimelineItem(awardEvent));
                     }
                     else if (awardDate > DateProvider.Now)
                     {
                         // Only create placeholder for future award events
-                        timeline.Add(new { Type = "FutureAward", Date = awardDate, Item = new { PhaseNumber = phase.Number, AwardDate = awardDate } });
+                        FutureAwardItem futureAward = new FutureAwardItem 
+                        { 
+                            PhaseNumber = phase.Number, 
+                            AwardDate = awardDate 
+                        };
+                        timeline.Add(new FutureAwardTimelineItem(futureAward));
                     }
                 }
             }
             
             // Also add any standalone award events that might not have been matched to phases
-            foreach (var awardEvent in AllAwardEvents)
+            foreach (AwardEvent awardEvent in AllAwardEvents)
             {
-                if (!timeline.Any(t => ((dynamic)t).Type == "Award" && ((AwardEvent)((dynamic)t).Item).Id == awardEvent.Id))
+                if (!timeline.OfType<AwardTimelineItem>().Any(t => t.AwardEvent.Id == awardEvent.Id))
                 {
-                    timeline.Add(new { Type = "Award", Date = awardEvent.StartDate, Item = awardEvent });
+                    timeline.Add(new AwardTimelineItem(awardEvent));
                 }
             }
             
             // Sort by date (oldest first for chronological display)
-            return timeline.OrderBy(t => ((dynamic)t).Date).ToList();
+            return timeline.OrderBy(t => t.Date).ToList();
         }
 
         // Dictionary to track which award results are being shown

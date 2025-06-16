@@ -1,0 +1,24 @@
+@using MovieReviewApp.Models
+@using MovieReviewApp.Extensions
+
+<div class="timeline-item phase-item" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
+    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+        <i class="bi bi-calendar-event me-2"></i>
+        Phase @PhaseData.Number (@PhaseData.StartDate.ToString("MMMM yyyy") - @PhaseData.EndDate.ToString("MMMM yyyy"))
+    </h5>
+    @foreach (MovieEvent movieEvent in TimelineEvents)
+    {
+        <div class="timeline-content" style="padding: 0.75rem; background-color: var(--background-secondary); border-radius: 0.5rem; margin-bottom: 0.5rem;">
+            <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@movieEvent.StartDate.ToString("MMMM yyyy")</span> -
+            <span class="person" style="color: var(--text-primary);">@(movieEvent.Person ?? "TBD")</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Models.Phase PhaseData { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public List<MovieEvent> TimelineEvents { get; set; } = new();
+}

@@ -1,0 +1,69 @@
+@using MovieReviewApp.Models
+@using MovieReviewApp.Extensions
+
+<div class="timeline-item award-item" style="background-color: var(--surface-color); border: 2px solid var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(255, 107, 0, 0.2);">
+    <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
+        <i class="bi bi-trophy-fill me-2"></i>
+        Awards - @AwardEvent.StartDate.ToString("MMMM yyyy")
+    </h5>
+    
+    @foreach (AwardQuestion question in AllAwardQuestions.Where(q => AwardEvent.Questions.Contains(q.Id)))
+    {
+        <div class="award-category mb-3" style="border: 1px solid var(--border-light); border-radius: 0.5rem; padding: 1rem; background-color: var(--background-secondary);">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0" style="color: var(--text-primary);">@question.Question</h6>
+                <button class="btn btn-sm" style="background-color: var(--accent-primary); color: var(--text-primary); border: 1px solid var(--border-color);" 
+                        @onclick="() => OnToggleResults?.Invoke(AwardEvent.Id, question.Id)">
+                    @(IsShowingResults?.Invoke(AwardEvent.Id, question.Id) == true ? "Hide" : "Show") Results
+                </button>
+            </div>
+            
+            @if (IsShowingResults?.Invoke(AwardEvent.Id, question.Id) == true)
+            {
+                List<QuestionResult> results = CachedResults.GetValueOrDefault((AwardEvent.Id, question.Id), new List<QuestionResult>());
+                int totalVoters = AllPeople.Count;
+                int totalPossiblePoints = totalVoters * 3;
+                @foreach (QuestionResult result in results.OrderByDescending(r => r.TotalPoints))
+                {
+                    float percentage = totalPossiblePoints > 0 ? (result.TotalPoints / (float)totalPossiblePoints) * 100 : 0;
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <strong style="color: var(--text-primary);">@result.MovieTitle</strong>
+                            <span style="color: var(--text-secondary);">@result.TotalPoints/@totalPossiblePoints points</span>
+                        </div>
+                        <div class="progress" style="height: 25px; background-color: var(--surface-color); border-radius: 0.5rem; border: 1px solid var(--border-color);">
+                            <div class="progress-bar" 
+                                 role="progressbar" 
+                                 style="width: @percentage%; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: var(--text-primary); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                                @percentage.ToString("F1")%
+                            </div>
+                        </div>
+                        <small style="color: var(--text-muted);">
+                            (@result.FirstPlaceVotes first, @result.SecondPlaceVotes second, @result.ThirdPlaceVotes third)
+                        </small>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public AwardEvent AwardEvent { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public List<AwardQuestion> AllAwardQuestions { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public List<Person> AllPeople { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults { get; set; } = new();
+
+    [Parameter]
+    public Func<Guid, Guid, bool>? IsShowingResults { get; set; }
+
+    [Parameter]
+    public Action<Guid, Guid>? OnToggleResults { get; set; }
+}

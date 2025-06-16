@@ -1,0 +1,71 @@
+@using MovieReviewApp.Models
+@using MovieReviewApp.Extensions
+
+@if (Item is PhaseTimelineItem phaseItem)
+{
+    MovieReviewApp.Models.Phase phase = phaseItem.Phase;
+    List<MovieEvent> timelineEvents = phase.Events?.Where(x =>
+        x != CurrentEvent &&
+        x != NextEvent).ToList() ?? new List<MovieEvent>();
+
+    @if (timelineEvents.Any())
+    {
+        <PhaseSection PhaseData="phase" TimelineEvents="timelineEvents" />
+    }
+}
+else if (Item is AwardTimelineItem awardItem)
+{
+    AwardEvent awardEvent = awardItem.AwardEvent;
+    
+    <PhaseAwardSection AwardEvent="awardEvent" 
+                     AllAwardQuestions="AllAwardQuestions" 
+                     AllPeople="AllPeople" 
+                     CachedResults="CachedResults" 
+                     IsShowingResults="IsShowingResults" 
+                     OnToggleResults="OnToggleResults" />
+}
+else if (Item is FutureAwardTimelineItem futureAwardItem)
+{
+    FutureAwardItem futureAward = futureAwardItem.FutureAward;
+    List<string> eligibleMovies = GetEligibleMoviesForPhase(futureAward.PhaseNumber);
+
+    // Only show it in the timeline if it's not the current award phase
+    DateTime awardDate = futureAward.AwardDate;
+    DateTime awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
+    
+    if (!DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
+    {
+        <FutureAwardSection PhaseNumber="futureAward.PhaseNumber" 
+                          AwardDate="awardDate" 
+                          EligibleMovies="eligibleMovies" />
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public ITimelineItem Item { get; set; } = default!;
+
+    [Parameter]
+    public MovieEvent? CurrentEvent { get; set; }
+
+    [Parameter]
+    public MovieEvent? NextEvent { get; set; }
+
+    [Parameter, EditorRequired]
+    public List<AwardQuestion> AllAwardQuestions { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public List<Person> AllPeople { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults { get; set; } = new();
+
+    [Parameter]
+    public Func<Guid, Guid, bool>? IsShowingResults { get; set; }
+
+    [Parameter]
+    public Action<Guid, Guid>? OnToggleResults { get; set; }
+
+    [Parameter, EditorRequired]
+    public Func<int, List<string>> GetEligibleMoviesForPhase { get; set; } = default!;
+}
