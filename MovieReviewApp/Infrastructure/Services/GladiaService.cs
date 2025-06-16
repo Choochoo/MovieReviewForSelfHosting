@@ -108,7 +108,7 @@ public class GladiaService
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-y -i \"{ffmpegInputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{ffmpegOutputPath}\"",
+                Arguments = $"-y -i \"{inputPath}\" -codec:a libmp3lame -b:a 192k -ar 44100 -ac 2 -af \"volume=1.5\" \"{outputPath}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = false,
                 RedirectStandardError = false,

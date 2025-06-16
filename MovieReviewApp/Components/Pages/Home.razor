@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using MovieReviewApp.Components.Partials
 @using MovieReviewApp.Extensions
 @using MovieReviewApp.Models
@@ -111,7 +111,7 @@
                             <div class="timeline-item award-item" style="background-color: var(--surface-color); border: 2px solid var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(255, 107, 0, 0.2);">
                                 <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
                                     <i class="bi bi-trophy-fill me-2"></i>
-                                    🏆 Awards - @awardEvent.StartDate.ToString("MMMM yyyy")
+                                    Awards - @awardEvent.StartDate.ToString("MMMM yyyy")
                                 </h5>
                                 
                                 @foreach (var question in AllAwardQuestions.Where(q => awardEvent.Questions.Contains(q.Id)))
@@ -169,7 +169,7 @@
                                 <div class="timeline-item future-award-item" style="background-color: var(--surface-color); border: 1px dashed var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
                                     <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
                                         <i class="bi bi-trophy me-2"></i>
-                                        🏆 Future Awards Month
+                                        Future Awards Month
                                     </h5>
                                     <div class="timeline-content">
                                         <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@awardDate.ToString("MMMM yyyy")</span>

@@ -245,7 +245,7 @@ a:hover {
 }
 
 .sidebar {
-    width: 260px;
+    width: 290px;
     background-color: #000000 !important;
     background-image: none !important;
     background: #000000 !important;
@@ -479,6 +479,24 @@ main {
     animation: glow 2s ease-in-out infinite;
 }
 
+/* Remove the dot for phase items since they already have a calendar icon */
+.timeline-item.phase-item::before {
+    content: none;
+    display: none;
+}
+
+/* Remove the dot for award items since they already have trophy icons */
+.timeline-item.award-item::before {
+    content: none;
+    display: none;
+}
+
+/* Remove the dot for future award items since they already have trophy icons */
+.timeline-item.future-award-item::before {
+    content: none;
+    display: none;
+}
+
 .timeline-content {
     background-color: var(--surface-color);
     padding: 1.5rem;
@@ -659,6 +677,22 @@ i, .icon, [class*="bi-"], [class*="fa-"], [class*="fas-"], [class*="far-"], [cla
     h1 { font-size: 2rem; }
     h2 { font-size: 1.5rem; }
     h3 { font-size: 1.25rem; }
+    
+    /* Stack award category header on mobile */
+    .award-category .d-flex {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+    }
+    
+    .award-category .d-flex h6 {
+        width: 100%;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .award-category .d-flex button {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
 }
 
 /* Focus states */
