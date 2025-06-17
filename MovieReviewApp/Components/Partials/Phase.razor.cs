@@ -28,6 +28,9 @@ namespace MovieReviewApp.Components.Partials
         private MessengerService MessengerService { get; set; } = default!;
 
         [Inject]
+        private DemoProtectionService demoProtection { get; set; } = default!;
+
+        [Inject]
         private SecretsManager SecretsManager { get; set; } = default!;
 
         [Inject]
@@ -47,6 +50,10 @@ namespace MovieReviewApp.Components.Partials
         private int selectedYear = DateTime.Now.Year;
         private string? Synopsis { get; set; }
         private string _apiKey = string.Empty;
+        
+        // Demo notification state
+        private bool showDemoNotification = false;
+        private string demoNotificationMessage = "";
 
         protected override async Task OnInitializedAsync()
         {
@@ -183,6 +190,12 @@ namespace MovieReviewApp.Components.Partials
                     {
                         try
                         {
+                            if (!demoProtection.TryValidateNotDemo("Update movie synopsis", out string errorMessage))
+                            {
+                                await ShowDemoNotification(errorMessage);
+                                return;
+                            }
+                            
                             MovieEvent.Synopsis = Synopsis;
                             await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
                         }
@@ -290,6 +303,12 @@ namespace MovieReviewApp.Components.Partials
                         MovieEvent.Reasoning = MarkdownService.AddLineBreaks(MovieEvent.Reasoning);
                     }
 
+                    if (!demoProtection.TryValidateNotDemo("Save movie changes", out string saveErrorMessage))
+                    {
+                        await ShowDemoNotification(saveErrorMessage);
+                        return;
+                    }
+                    
                     await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
 
                     var updatedMovieEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
@@ -321,6 +340,20 @@ namespace MovieReviewApp.Components.Partials
             {
                 isLoading = false;
             }
+        }
+        
+        private async Task ShowDemoNotification(string message)
+        {
+            demoNotificationMessage = message;
+            showDemoNotification = true;
+            StateHasChanged();
+            await Task.Delay(100); // Small delay to ensure UI updates
+        }
+        
+        private async Task HideDemoNotification()
+        {
+            showDemoNotification = false;
+            StateHasChanged();
         }
     }
 } 

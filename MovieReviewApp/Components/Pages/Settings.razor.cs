@@ -28,6 +28,9 @@ namespace MovieReviewApp.Components.Pages
 
         [Inject]
         private ThemeService themeService { get; set; } = default!;
+        
+        [Inject]
+        private DemoProtectionService demoProtection { get; set; } = default!;
 
         [Inject]
         private SecretsManager secretsManager { get; set; } = default!;
@@ -46,7 +49,8 @@ namespace MovieReviewApp.Components.Pages
         public bool RespectOrder { get; set; } = false;
         public string GroupName { get; set; } = "";
         public List<Setting> settings { get; set; } = new List<Setting>();
-        public string SelectedTheme { get; set; } = "dark";
+        public string SelectedGroupTheme { get; set; } = "cyberpunk";
+        public bool IsDarkMode { get; set; } = false;
 
         private List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public string NewQuestionText { get; set; } = "";
@@ -99,16 +103,18 @@ namespace MovieReviewApp.Components.Pages
             if (timePeriodSetting != null)
                 TimePeriod = timePeriodSetting.Value;
 
-            // Load group name
-            dynamic? instanceConfig = instanceManager.GetInstanceConfig();
-            GroupName = instanceConfig?.DisplayName ?? "";
+            // Load group name from settings (separate from instance name)
+            Setting? groupNameSetting = settings.FirstOrDefault(x => x.Key == "GroupName");
+            GroupName = groupNameSetting?.Value ?? "Movie Club";
 
             // Load people and questions
             People = await PersonService.GetAllOrderedAsync(RespectOrder);
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
 
-            // Load current theme
-            SelectedTheme = await themeService.GetThemeAsync();
+            // Load current themes
+            SelectedGroupTheme = await themeService.GetGroupThemeAsync();
+            await themeService.InitializeAsync();
+            IsDarkMode = themeService.IsDarkMode;
         }
 
 
@@ -150,25 +156,42 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task Save(Person person)
         {
+            if (!demoProtection.TryValidateNotDemo("Save person", out string errorMessage))
+            {
+                // Show error message similar to API key errors
+                StateHasChanged();
+                return;
+            }
             _ = await PersonService.UpsertAsync(person);
             person.IsEditing = false;
         }
 
         private async Task SaveGeneralSettings()
         {
-            // Save Group Name
-            dynamic instanceConfig = instanceManager.GetInstanceConfig();
-            instanceConfig.DisplayName = GroupName;
-            instanceManager.SaveInstanceConfig(instanceConfig);
+            // Always save dark mode to localStorage (local device preference)
+            await themeService.SetDarkMode(IsDarkMode);
+
+            // Save group theme to database only if not demo mode
+            if (!demoProtection.IsDemoInstance)
+            {
+                await themeService.SetGroupThemeAsync(SelectedGroupTheme);
+            }
+
+            if (!demoProtection.TryValidateNotDemo("Save general settings", out string errorMessage))
+            {
+                // In demo mode, still allow theme toggle but show message for other settings
+                StateHasChanged();
+                return;
+            }
+
+            // Save Group Name as a setting (not instance name) - only in non-demo mode
+            await SaveOrCreateSetting("GroupName", GroupName);
 
             // Save settings
             await SaveOrCreateSetting("RespectOrder", RespectOrder.ToString());
             await SaveOrCreateSetting("StartDate", StartDate.ToString());
             await SaveOrCreateSetting("TimeCount", TimeCount.ToString());
             await SaveOrCreateSetting("TimePeriod", TimePeriod);
-
-            // Save theme
-            await themeService.SetThemeAsync(SelectedTheme);
 
             // Refresh people list if respect order changed
             People = await PersonService.GetAllOrderedAsync(RespectOrder);
@@ -232,6 +255,14 @@ namespace MovieReviewApp.Components.Pages
         // Discussion Questions Management
         private async Task AddQuestion()
         {
+            if (!demoProtection.TryValidateNotDemo("Add discussion question", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+            
             if (string.IsNullOrWhiteSpace(NewQuestionText)) return;
 
             int newQuestionOrder = DiscussionQuestions.Count + 1;
@@ -254,12 +285,28 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task SaveQuestion(DiscussionQuestion question)
         {
+            if (!demoProtection.TryValidateNotDemo("Save discussion question", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+            
             _ = await discussionQuestionsService.UpdateAsync(question);
             question.IsEditing = false;
         }
 
         private async Task DeleteQuestion(DiscussionQuestion question)
         {
+            if (!demoProtection.TryValidateNotDemo("Delete discussion question", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+            
             _ = await discussionQuestionsService.DeleteAsync(question.Id);
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
 
@@ -276,6 +323,14 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task MoveQuestionUp(DiscussionQuestion question)
         {
+            if (!demoProtection.TryValidateNotDemo("Reorder discussion questions", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+            
             if (question.Order <= 1) return;
 
             DiscussionQuestion? questionAbove = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order - 1);
@@ -292,6 +347,14 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task MoveQuestionDown(DiscussionQuestion question)
         {
+            if (!demoProtection.TryValidateNotDemo("Reorder discussion questions", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+            
             if (question.Order >= DiscussionQuestions.Count) return;
 
             DiscussionQuestion? questionBelow = DiscussionQuestions.FirstOrDefault(q => q.Order == question.Order + 1);
@@ -329,6 +392,13 @@ namespace MovieReviewApp.Components.Pages
         {
             try
             {
+                if (!demoProtection.TryValidateNotDemo($"Save {provider} API key", out string errorMessage))
+                {
+                    apiMessage = errorMessage;
+                    apiMessageIsError = true;
+                    StateHasChanged();
+                    return;
+                }
                 if (string.IsNullOrWhiteSpace(apiKey))
                 {
                     apiMessage = $"{provider} API key cannot be empty";

@@ -4,6 +4,14 @@
 <PageTitle>Settings</PageTitle>
 <h1>Settings</h1>
 
+@if (demoProtection.IsDemoInstance)
+{
+    <div class="alert alert-warning mb-3">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Demo Mode:</strong> Settings are read-only in demo mode. Changes cannot be saved to preserve the demo experience.
+    </div>
+}
+
 <div class="settings-container">
     <div class="settings-section">
         <h3 class="section-title">General Settings</h3>
@@ -31,11 +39,25 @@
                 </div>
 
                 <div class="setting-field">
-                    <label class="setting-label">Theme:</label>
-                    <InputSelect @bind-Value="SelectedTheme" class="form-control form-control-sm">
-                        <option value="dark">Dark Mode</option>
-                        <option value="light">Light Mode</option>
-                    </InputSelect>
+                    <label class="setting-label">Theme Style:</label>
+                    @if (demoProtection.IsDemoInstance)
+                    {
+                        <InputSelect @bind-Value="SelectedGroupTheme" class="form-control form-control-sm" disabled>
+                            <option value="cyberpunk">Cyberpunk</option>
+                            <option value="ocean">Ocean</option>
+                            <option value="nature">Nature</option>
+                            <option value="classic">Classic</option>
+                        </InputSelect>
+                    }
+                    else
+                    {
+                        <InputSelect @bind-Value="SelectedGroupTheme" class="form-control form-control-sm">
+                            <option value="cyberpunk">Cyberpunk</option>
+                            <option value="ocean">Ocean</option>
+                            <option value="nature">Nature</option>
+                            <option value="classic">Classic</option>
+                        </InputSelect>
+                    }
                 </div>
                 
                 <div class="setting-field">
@@ -441,7 +463,6 @@
     .setting-field .form-control {
         max-width: 250px;
         margin-bottom: 0;
-        padding: 0.5rem 0.75rem;
         font-size: 0.95rem;
     }
 

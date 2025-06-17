@@ -44,6 +44,7 @@ namespace MovieReviewApp.Components.Pages
         private bool showUpdates = true;
         public MovieEvent? CurrentEvent;
         public MovieEvent? NextEvent;
+        public bool IsShowingPastEvent { get; private set; } = false;
         private List<Phase> Phases { get; set; } = new();
         private readonly Random _rand = new(1337);
 
@@ -104,6 +105,40 @@ namespace MovieReviewApp.Components.Pages
             {
                 CurrentEvent = null;
                 NextEvent = null;
+            }
+
+            // Fallback: If no current event found from phases, try to find from existing events
+            if (CurrentEvent == null && _existingEvents?.Any() == true)
+            {
+                // Find the most recent event that should be current
+                MovieEvent? potentialCurrent = _existingEvents
+                    .Where(e => e.StartDate <= DateProvider.Now && e.EndDate >= DateProvider.Now)
+                    .OrderByDescending(e => e.StartDate)
+                    .FirstOrDefault();
+                
+                if (potentialCurrent != null)
+                {
+                    CurrentEvent = potentialCurrent;
+                    IsShowingPastEvent = false;
+                }
+                else
+                {
+                    // If no current event, find the most recent past event
+                    CurrentEvent = _existingEvents
+                        .Where(e => e.EndDate < DateProvider.Now)
+                        .OrderByDescending(e => e.StartDate)
+                        .FirstOrDefault();
+                    IsShowingPastEvent = CurrentEvent != null;
+                }
+            }
+
+            // Fallback for NextEvent
+            if (NextEvent == null && _existingEvents?.Any() == true)
+            {
+                NextEvent = _existingEvents
+                    .Where(e => e.StartDate > DateProvider.Now)
+                    .OrderBy(e => e.StartDate)
+                    .FirstOrDefault();
             }
 
             _isInitialized = true;

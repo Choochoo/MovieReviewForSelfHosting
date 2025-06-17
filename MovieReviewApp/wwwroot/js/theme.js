@@ -39,13 +39,26 @@ window.setGroupTheme = (groupTheme) => {
 window.setDarkMode = (isDarkMode) => {
     console.log(`setDarkMode called with: ${isDarkMode}`);
     
+    // Validate input
+    if (typeof isDarkMode !== 'boolean') {
+        console.error(`Invalid isDarkMode value: ${isDarkMode} (type: ${typeof isDarkMode})`);
+        return;
+    }
+    
     // Store dark mode preference in localStorage first
     localStorage.setItem('darkMode', isDarkMode.toString());
     console.log(`Dark mode saved to localStorage: ${isDarkMode}`);
     
     const groupTheme = window.getGroupTheme();
     console.log(`Retrieved group theme: ${groupTheme}`);
-    window.setTheme(groupTheme, isDarkMode);
+    
+    if (!groupTheme) {
+        console.error('No group theme found, setting default to cyberpunk');
+        window.setGroupThemeAttribute('cyberpunk');
+        window.setTheme('cyberpunk', isDarkMode);
+    } else {
+        window.setTheme(groupTheme, isDarkMode);
+    }
 };
 
 window.toggleDarkMode = () => {

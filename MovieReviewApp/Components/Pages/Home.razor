@@ -22,6 +22,12 @@
     }
     else if (CurrentEvent != null)
     {
+        @if (IsShowingPastEvent)
+        {
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle"></i> No current movie event scheduled. Showing the most recent past event.
+            </div>
+        }
         <div class="row">
             <div class="col-md-6">
                 <Phase MovieEvent="CurrentEvent" />

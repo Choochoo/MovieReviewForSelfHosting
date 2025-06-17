@@ -63,7 +63,7 @@ body::before {
     66% { transform: scale(0.9) rotate(240deg); }
 }
 
-/* Typography */
+/* Typography - exclude icons from gradient */
 h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     margin-top: 0;
@@ -74,6 +74,23 @@ h1, h2, h3, h4, h5, h6 {
     -webkit-text-fill-color: transparent;
     background-clip: text;
     animation: gradientShift 3s ease infinite;
+}
+
+/* Override gradient for any icons anywhere - higher specificity */
+* i, * .icon, * [class*="bi-"], * span[class*="bi-"], * .bi, * .bi::before,
+h1 i, h1 .icon, h1 [class*="bi-"], h1 span[class*="bi-"], h1 .bi, h1 .bi::before,
+h2 i, h2 .icon, h2 [class*="bi-"], h2 span[class*="bi-"], h2 .bi, h2 .bi::before,
+h3 i, h3 .icon, h3 [class*="bi-"], h3 span[class*="bi-"], h3 .bi, h3 .bi::before,
+h4 i, h4 .icon, h4 [class*="bi-"], h4 span[class*="bi-"], h4 .bi, h4 .bi::before,
+h5 i, h5 .icon, h5 [class*="bi-"], h5 span[class*="bi-"], h5 .bi, h5 .bi::before,
+h6 i, h6 .icon, h6 [class*="bi-"], h6 span[class*="bi-"], h6 .bi, h6 .bi::before,
+.nav-link i, .nav-link .icon, .nav-link [class*="bi-"], .nav-link span[class*="bi-"], .nav-link .bi, .nav-link .bi::before {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    background-clip: initial !important;
+    animation: none !important;
+    color: var(--text-primary) !important;
 }
 
 /* Fix for headings with badges - restore text visibility */
@@ -208,6 +225,28 @@ a:hover {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1), inset 0 0 5px rgba(0, 217, 255, 0.2);
+    z-index: 1000;
+    position: relative;
+}
+
+/* Fix dropdown cutoff issues */
+select.form-control {
+    position: relative;
+    z-index: 1000;
+}
+
+.settings-container {
+    overflow: visible;
+}
+
+.settings-section {
+    overflow: visible;
+}
+
+.setting-field {
+    overflow: visible;
+    position: relative;
+    z-index: 1;
 }
 
 .form-label {
@@ -246,9 +285,7 @@ a:hover {
 
 .sidebar {
     width: 290px;
-    background-color: #000000 !important;
-    background-image: none !important;
-    background: #000000 !important;
+    background-color: var(--background-secondary);
     border-right: 1px solid var(--border-color);
     position: fixed;
     height: 100vh;
@@ -256,6 +293,12 @@ a:hover {
     overflow-x: hidden;
     padding: 2rem 0;
     box-shadow: inset -1px 0 0 rgba(0, 217, 255, 0.2);
+}
+
+/* Beautiful dark cyberpunk sidebar with gradient */
+:root[data-theme*="cyberpunk"]:not([data-theme*="light"]) .sidebar {
+    background: linear-gradient(180deg, #000000 0%, #141414 100%);
+    border-right: 1px solid #333;
 }
 
 .sidebar .nav-link {
@@ -311,7 +354,7 @@ main {
     flex: 1;
     margin-left: 260px;
     padding: 2rem;
-    margin-top: 100px;
+    margin-top: 120px;
 }
 
 .main-content {
@@ -330,7 +373,7 @@ main {
     box-shadow: var(--shadow-md);
     transition: all 0.3s ease;
     margin-bottom: 2rem;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .card:hover:not(.editing) {
@@ -543,10 +586,18 @@ input[type="time"]::-webkit-calendar-picker-indicator {
     cursor: pointer;
 }
 
-/* Ensure all icon elements are visible */
-i, .icon, [class*="bi-"], [class*="fa-"], [class*="fas-"], [class*="far-"], [class*="fab-"] {
+/* Ensure all icon elements are visible and exclude from gradient animation */
+i, .icon, [class*="bi-"], [class*="fa-"], [class*="fas-"], [class*="far-"], [class*="fab-"], 
+span[class*="bi-"], .bi::before, .bi {
     color: var(--text-primary) !important;
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    -webkit-text-fill-color: initial !important;
+    background-clip: initial !important;
+    animation: none !important;
 }
+
+/* Specific styling for theme toggle SVG - handled in themes.css */
 
 /* Input group icons */
 .input-group-text i,

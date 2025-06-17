@@ -8,6 +8,7 @@ namespace MovieReviewApp.Utilities
         public int? Port { get; set; }
         public bool ShowHelp { get; set; }
         public bool ListInstances { get; set; }
+        public bool GenerateDemo { get; set; }
     }
 
     public static class CommandLineParser
@@ -50,6 +51,11 @@ namespace MovieReviewApp.Utilities
                     case "-l":
                         result.ListInstances = true;
                         break;
+
+                    case "--generate-demo":
+                    case "--demo":
+                        result.GenerateDemo = true;
+                        break;
                 }
             }
 
@@ -67,6 +73,7 @@ namespace MovieReviewApp.Utilities
             Console.WriteLine("  --instance, -i <name>    Specify instance name (e.g., Family-Movies, Work-Film-Club)");
             Console.WriteLine("  --port, -p <port>        Specify port number (default: auto-assigned)");
             Console.WriteLine("  --list, -l               List all existing instances");
+            Console.WriteLine("  --generate-demo, --demo  Generate demo data for the 'demo' instance");
             Console.WriteLine("  --help, -h               Show this help message");
             Console.WriteLine();
             Console.WriteLine("Examples:");
@@ -74,6 +81,7 @@ namespace MovieReviewApp.Utilities
             Console.WriteLine("  dotnet run --instance Work-Film-Club --port 5001");
             Console.WriteLine("  dotnet run --instance Friends-Cinema --port 5002");
             Console.WriteLine("  dotnet run --list");
+            Console.WriteLine("  dotnet run --generate-demo");
             Console.WriteLine();
             Console.WriteLine("Instance Storage:");
             Console.WriteLine($"  {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MovieReviewApp", "instances")}");

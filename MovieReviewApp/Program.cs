@@ -41,6 +41,12 @@ if (cmdArgs.ListInstances)
     return;
 }
 
+if (cmdArgs.GenerateDemo)
+{
+    await GenerateDemoDataAsync();
+    return;
+}
+
 
 
 
@@ -73,9 +79,11 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetComm
 // Set the port from instance configuration
 builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
 
-// Initialize secure configuration
-SecretsManager secretsManager = new SecretsManager(instanceManager);
+// Initialize demo protection and secure configuration
+DemoProtectionService demoProtection = new DemoProtectionService(instanceManager);
+SecretsManager secretsManager = new SecretsManager(instanceManager, demoProtection);
 builder.Services.AddSingleton(instanceManager);
+builder.Services.AddSingleton(demoProtection);
 builder.Services.AddSingleton(secretsManager);
 
 // Add secure configuration provider
@@ -185,6 +193,9 @@ builder.Services.AddScoped<AnalysisService>();
 builder.Services.AddScoped<OpenAIAnalysisService>();
 builder.Services.AddScoped<TranscriptProcessingService>();
 
+// Background Services
+builder.Services.AddHostedService<MovieReviewApp.Application.Services.MonthlyDataGenerationService>();
+
 
 // Processing Services
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
@@ -270,3 +281,86 @@ Console.WriteLine();
 
 
 app.Run();
+
+async Task GenerateDemoDataAsync()
+{
+    Console.WriteLine("🎬 Generating Movie Review App Demo Data...");
+    Console.WriteLine();
+    
+    try
+    {
+        // Initialize demo instance manager
+        InstanceManager demoInstanceManager = new InstanceManager("demo");
+        Console.WriteLine("Setting up demo instance configuration...");
+        
+        // Configure demo instance
+        InstanceConfig demoConfig = demoInstanceManager.GetInstanceConfig();
+        demoConfig.DisplayName = "Demo Movie Review Club";
+        demoConfig.Description = "Demonstration instance with 10 years of generated data";
+        demoConfig.Environment = "Demo";
+        demoConfig.Port = 5555;
+        demoInstanceManager.SaveInstanceConfig(demoConfig);
+        
+        // Initialize secure configuration for demo
+        DemoProtectionService demoDemoProtection = new DemoProtectionService(demoInstanceManager);
+        SecretsManager demoSecretsManager = new SecretsManager(demoInstanceManager, demoDemoProtection);
+        
+        // Use your existing MongoDB Atlas connection for demo
+        string mongoConnection = "mongodb+srv://jaredbrowne:CjjTcmNP92xiL3we@moviereviewcluster.oi47y0a.mongodb.net/";
+        Console.WriteLine($"📋 Using MongoDB Atlas for demo data");
+        Console.WriteLine($"   Database: moviereview_demo_demo");
+        Console.WriteLine();
+        
+        // Set up MongoDB connection
+        demoSecretsManager.SetSecret("MongoDB:ConnectionString", mongoConnection);
+        
+        // Create configuration builder for demo instance
+        WebApplicationBuilder demoBuilder = WebApplication.CreateBuilder();
+        
+        // Add secure configuration
+        ((IConfigurationBuilder)demoBuilder.Configuration).Add(new SecureConfigurationSource(demoSecretsManager));
+        
+        // Register core services needed for demo data generation
+        demoBuilder.Services.AddSingleton(demoInstanceManager);
+        demoBuilder.Services.AddSingleton(demoSecretsManager);
+        demoBuilder.Services.AddSingleton<MongoDbService>();
+        demoBuilder.Services.AddHttpClient<MovieReviewApp.Application.Services.TmdbService>();
+        demoBuilder.Services.AddScoped<MovieReviewApp.Application.Services.TmdbService>();
+        demoBuilder.Services.AddScoped<MovieReviewApp.Infrastructure.FileSystem.ImageService>();
+        demoBuilder.Services.AddScoped<MovieReviewApp.Application.Services.DemoDataService>();
+        
+        // Build the demo app container
+        WebApplication demoApp = demoBuilder.Build();
+        
+        // Generate demo data
+        using (IServiceScope scope = demoApp.Services.CreateScope())
+        {
+            MovieReviewApp.Application.Services.DemoDataService demoDataService = scope.ServiceProvider.GetRequiredService<MovieReviewApp.Application.Services.DemoDataService>();
+            
+            Console.WriteLine("Generating 2 years of movie review club data...");
+            Console.WriteLine("- Creating 7 consistent AI members");
+            Console.WriteLine("- Fetching real movie data from TMDB");
+            Console.WriteLine("- Downloading and storing movie posters");
+            Console.WriteLine("- Generating phases and movie selections with real data");
+            Console.WriteLine("- Creating realistic discussion sessions");
+            Console.WriteLine("- Building award voting history");
+            Console.WriteLine();
+            
+            await demoDataService.GenerateDemoDataAsync();
+        }
+        
+        Console.WriteLine("✅ Demo data generation complete!");
+        Console.WriteLine();
+        Console.WriteLine("🚀 To run the demo instance:");
+        Console.WriteLine("   dotnet run --instance demo --port 5555");
+        Console.WriteLine();
+        Console.WriteLine("🌐 Demo will be available at:");
+        Console.WriteLine("   http://localhost:5555");
+        Console.WriteLine();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Error generating demo data: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    }
+}

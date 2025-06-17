@@ -48,7 +48,7 @@ main {
     white-space: nowrap;
     margin-left: 1.5rem;
     text-decoration: none;
-    color: #B3B3B3;
+    color: #E0E0E0;
     transition: all 0.3s ease;
     font-size: 0.875rem;
 }
@@ -128,7 +128,7 @@ main {
     position: absolute;
     right: 1rem;
     top: 1rem;
-    color: #B3B3B3;
+    color: #E0E0E0;
     transition: color 0.3s ease;
 }
 

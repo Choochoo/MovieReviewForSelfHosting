@@ -4,13 +4,16 @@
 @using MovieReviewApp.Components.Partials
 @inject IOptions<AppSettings> AppSettings
 @inject InstanceManager InstanceManager
+@inject SettingService SettingService
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <div class="navbar-brand-container">
-            <a class="navbar-brand" href="">@GetTitle()</a>
-            <div class="theme-toggle-wrapper">
-                <ThemeToggle />
+        <div class="movie-club-header">
+            <div class="club-icon-wrapper">
+                <span class="club-icon">🎬</span>
+                <span class="club-icon">🍿</span>
             </div>
+            <a class="club-name" href="">@GetTitle()</a>
+            <div class="club-tagline">Movie Discussion Club</div>
         </div>
     </div>
 </div>
@@ -46,34 +49,46 @@
                 <span class="bi bi-music-note-beamed" aria-hidden="true"></span> Soundboard
             </NavLink>
         </div>
+        <div class="nav-item px-3">
+            <div class="nav-link theme-toggle-nav-item">
+                <span class="bi bi-palette-fill" aria-hidden="true"></span> 
+                <span class="theme-label">Theme</span>
+                <div class="theme-toggle-sidebar">
+                    <ThemeToggle />
+                </div>
+            </div>
+        </div>
     </nav>
 </div>
 
 @code {
     private string? currentTitle;
     
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        RefreshTitle();
+        await RefreshTitle();
     }
     
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        RefreshTitle();
+        await RefreshTitle();
     }
     
-    private void RefreshTitle()
+    private async Task RefreshTitle()
     {
-        var config = InstanceManager.GetInstanceConfig();
-        currentTitle = config.DisplayName;
+        try
+        {
+            var groupNameSetting = await SettingService.GetSettingAsync("GroupName");
+            currentTitle = groupNameSetting?.Value ?? "Movie Club";
+        }
+        catch
+        {
+            currentTitle = "Movie Club";
+        }
     }
     
     private string GetTitle()
     {
-        if (string.IsNullOrEmpty(currentTitle))
-        {
-            RefreshTitle();
-        }
-        return currentTitle ?? AppSettings.Value.Title;
+        return currentTitle ?? "Movie Club";
     }
 }

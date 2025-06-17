@@ -69,31 +69,35 @@ namespace MovieReviewApp.Application.Services
 
             _currentGroupTheme = groupTheme;
 
-            // Try to save to database
-            try
+            // Only save to database if not in demo mode
+            if (!_demoProtection.IsDemoInstance)
             {
-                Setting? setting = await _settingService.GetSettingAsync("group_theme");
-                if (setting == null)
+                // Try to save to database
+                try
                 {
-                    setting = new Setting
+                    Setting? setting = await _settingService.GetSettingAsync("group_theme");
+                    if (setting == null)
                     {
-                        Key = "group_theme",
-                        Value = groupTheme,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                }
-                else
-                {
-                    setting.Value = groupTheme;
-                    setting.UpdatedAt = DateTime.UtcNow;
-                }
+                        setting = new Setting
+                        {
+                            Key = "group_theme",
+                            Value = groupTheme,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                    }
+                    else
+                    {
+                        setting.Value = groupTheme;
+                        setting.UpdatedAt = DateTime.UtcNow;
+                    }
 
-                await _settingService.AddOrUpdateSettingAsync(setting);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to save group theme to database: {ex.Message}");
+                    await _settingService.AddOrUpdateSettingAsync(setting);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to save group theme to database: {ex.Message}");
+                }
             }
 
             // Trigger theme change event

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MovieReviewApp.Infrastructure.Services;
 
 namespace MovieReviewApp.Infrastructure.Configuration
 {
@@ -6,11 +7,13 @@ namespace MovieReviewApp.Infrastructure.Configuration
     {
         private readonly string _secretsFilePath;
         private readonly InstanceManager _instanceManager;
+        private readonly DemoProtectionService _demoProtection;
         private Dictionary<string, string> _secrets;
 
-        public SecretsManager(InstanceManager instanceManager)
+        public SecretsManager(InstanceManager instanceManager, DemoProtectionService demoProtection)
         {
             _instanceManager = instanceManager;
+            _demoProtection = demoProtection;
             _secretsFilePath = instanceManager.SecretsPath;
             _secrets = LoadSecrets();
         }
@@ -24,12 +27,16 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public void SetSecret(string key, string value)
         {
+            _demoProtection.ValidateNotDemo("Save API keys or secrets");
+            
             _secrets[key] = value;
             SaveSecrets();
         }
 
         public void SetSecrets(Dictionary<string, string> secrets)
         {
+            _demoProtection.ValidateNotDemo("Save API keys or secrets");
+            
             foreach (var kvp in secrets)
             {
                 _secrets[kvp.Key] = kvp.Value;

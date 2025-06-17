@@ -5,6 +5,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using MovieReviewApp.Attributes;
 using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.Services;
 
 namespace MovieReviewApp.Infrastructure.Database
 {
@@ -15,6 +16,7 @@ namespace MovieReviewApp.Infrastructure.Database
     {
         private readonly IMongoDatabase? _database;
         private readonly ILogger<MongoDbService> _logger;
+        private readonly DemoProtectionService _demoProtection;
 
         // Cache collection names for performance
         private static readonly ConcurrentDictionary<Type, string> _collectionNameCache = new();
@@ -23,9 +25,11 @@ namespace MovieReviewApp.Infrastructure.Database
             IConfiguration configuration,
             SecretsManager secretsManager,
             InstanceManager instanceManager,
+            DemoProtectionService demoProtection,
             ILogger<MongoDbService> logger)
         {
             _logger = logger;
+            _demoProtection = demoProtection;
             try
             {
                 string mongoConnection = secretsManager.GetSecret("MongoDB:ConnectionString");
@@ -180,6 +184,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task InsertAsync<T>(T entity)
         {
+            _demoProtection.ValidateNotDemo($"Insert {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
@@ -192,6 +198,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task InsertManyAsync<T>(IEnumerable<T> documents)
         {
+            _demoProtection.ValidateNotDemo($"Insert multiple {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
@@ -204,6 +212,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task UpsertAsync<T>(T entity)
         {
+            _demoProtection.ValidateNotDemo($"Upsert {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
@@ -244,6 +254,8 @@ namespace MovieReviewApp.Infrastructure.Database
             Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
+            _demoProtection.ValidateNotDemo($"Update {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return false;
 
@@ -258,6 +270,8 @@ namespace MovieReviewApp.Infrastructure.Database
             Expression<Func<T, bool>> filter,
             UpdateDefinition<T> update)
         {
+            _demoProtection.ValidateNotDemo($"Update multiple {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return 0;
 
@@ -270,6 +284,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task<bool> DeleteByIdAsync<T>(Guid id) where T : class
         {
+            _demoProtection.ValidateNotDemo($"Delete {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return false;
 
@@ -291,6 +307,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task DeleteAsync<T>(string id) where T : class
         {
+            _demoProtection.ValidateNotDemo($"Delete {typeof(T).Name}");
+            
             if (!Guid.TryParse(id, out Guid guidId))
             {
                 return;
@@ -303,6 +321,8 @@ namespace MovieReviewApp.Infrastructure.Database
         /// </summary>
         public async Task<long> DeleteManyAsync<T>(Expression<Func<T, bool>> filter)
         {
+            _demoProtection.ValidateNotDemo($"Delete multiple {typeof(T).Name}");
+            
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return 0;
 
