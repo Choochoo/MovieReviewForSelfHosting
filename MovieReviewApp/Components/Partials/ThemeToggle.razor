@@ -1,11 +1,12 @@
 
 @inject ThemeService ThemeService
 @inject IJSRuntime JSRuntime
+@inject DemoProtectionService DemoProtection
 @implements IDisposable
 
 <div class="theme-toggle @(isToggling ? "switching" : "")" @onclick="ToggleTheme">
     <div class="theme-icon">
-        @if (currentTheme == "dark")
+        @if (isDarkMode)
         {
             <!-- Sun icon for switching to light -->
             <svg viewBox="0 0 24 24">
@@ -31,12 +32,18 @@
 </div>
 
 @code {
-    private string currentTheme = "dark";
+    private bool isDarkMode = false;
     private bool isToggling = false;
 
     protected override async Task OnInitializedAsync()
     {
-        currentTheme = await ThemeService.GetThemeAsync();
+        // Set default based on instance type
+        isDarkMode = !DemoProtection.IsDemoInstance; // Demo defaults to light, normal defaults to dark
+        
+        // Initialize theme service
+        await ThemeService.InitializeAsync();
+        isDarkMode = ThemeService.IsDarkMode;
+        
         ThemeService.ThemeChanged += OnThemeChanged;
         StateHasChanged();
     }
@@ -45,7 +52,8 @@
     {
         if (firstRender)
         {
-            await ApplyTheme(currentTheme);
+            string groupTheme = await ThemeService.GetGroupThemeAsync();
+            await ApplyTheme(groupTheme, isDarkMode);
         }
     }
 
@@ -53,29 +61,93 @@
     {
         if (isToggling) return;
         
-        isToggling = true;
-        StateHasChanged();
-
-        await ThemeService.ToggleThemeAsync();
-
-        await Task.Delay(250);
-        isToggling = false;
-        StateHasChanged();
+        try
+        {
+            Console.WriteLine($"Starting theme toggle. Current isDarkMode: {isDarkMode}");
+            isToggling = true;
+            StateHasChanged(); // Update UI to show toggling state
+            
+            bool newDarkMode = !isDarkMode;
+            Console.WriteLine($"Switching to isDarkMode: {newDarkMode}");
+            
+            // Update local state first
+            isDarkMode = newDarkMode;
+            
+            // Get current group theme
+            string groupTheme = await ThemeService.GetGroupThemeAsync();
+            Console.WriteLine($"Current group theme: {groupTheme}");
+            
+            // Apply theme immediately to DOM
+            await ApplyTheme(groupTheme, newDarkMode);
+            
+            // Save dark mode preference (this will also trigger ThemeChanged event)
+            await ThemeService.SetDarkMode(newDarkMode);
+            Console.WriteLine($"Dark mode saved: {newDarkMode}");
+            
+            // Force state update
+            StateHasChanged();
+            
+            // Small delay for visual feedback
+            await Task.Delay(300);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error toggling theme: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            isToggling = false;
+            StateHasChanged();
+        }
     }
 
-    private void OnThemeChanged(string newTheme)
+    private void OnThemeChanged(string groupTheme, bool newDarkMode)
     {
-        currentTheme = newTheme;
+        Console.WriteLine($"OnThemeChanged called with groupTheme: {groupTheme}, isDarkMode: {newDarkMode}");
+        isDarkMode = newDarkMode;
         InvokeAsync(async () =>
         {
-            await ApplyTheme(newTheme);
+            await ApplyTheme(groupTheme, newDarkMode);
             StateHasChanged();
         });
     }
 
-    private async Task ApplyTheme(string theme)
+    private async Task ApplyTheme(string groupTheme, bool darkMode)
     {
-        await JSRuntime.InvokeVoidAsync("setTheme", theme);
+        try
+        {
+            Console.WriteLine($"ApplyTheme called with groupTheme: {groupTheme}, darkMode: {darkMode}");
+            
+            // Set the group theme attribute first
+            await JSRuntime.InvokeVoidAsync("setGroupThemeAttribute", groupTheme);
+            Console.WriteLine($"Set group theme attribute: {groupTheme}");
+            
+            // Apply the combined theme
+            await JSRuntime.InvokeVoidAsync("setTheme", groupTheme, darkMode);
+            Console.WriteLine($"Applied combined theme: {groupTheme}-{(darkMode ? "dark" : "light")}");
+            
+            // Verify the theme was applied by checking the DOM
+            string appliedTheme = await JSRuntime.InvokeAsync<string>("eval", "document.documentElement.getAttribute('data-theme')");
+            Console.WriteLine($"Verified applied theme in DOM: {appliedTheme}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error applying theme: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            
+            // Fallback: try to apply theme directly via eval
+            try
+            {
+                string combinedTheme = $"{groupTheme}-{(darkMode ? "dark" : "light")}";
+                await JSRuntime.InvokeVoidAsync("eval", $"document.documentElement.setAttribute('data-theme', '{combinedTheme}')");
+                Console.WriteLine($"Fallback theme application successful: {combinedTheme}");
+            }
+            catch (Exception fallbackEx)
+            {
+                Console.WriteLine($"Fallback theme application failed: {fallbackEx.Message}");
+            }
+        }
     }
 
     public void Dispose()
