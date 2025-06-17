@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-
 using MovieReviewApp.Infrastructure.Configuration;
-using MovieReviewApp.Models;
 using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Components.Pages;
 
@@ -146,13 +145,11 @@ public partial class FirstRunSetup : ComponentBase
             SecretsManager.SetSecrets(secrets);
 
             // Save instance configuration
-            var instanceConfig = new InstanceConfig
+            InstanceConfig instanceConfig = new InstanceConfig
             {
                 InstanceName = InstanceManager.InstanceName,
-                DisplayName = groupName.Trim(),
                 Environment = contentType,
                 Port = currentConfig.Port, // Keep existing port, will be set by command line
-                Description = "", // No longer used
                 CreatedDate = currentConfig.CreatedDate == default ? DateTime.UtcNow : currentConfig.CreatedDate,
                 LastUsed = DateTime.UtcNow
             };

@@ -12,13 +12,13 @@
     },
     "Demo Instance": {
       "commandName": "Project",
-      "commandLineArgs": "--instance demo --port 5555",
+      "commandLineArgs": "--instance demo",
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
       "dotnetRunMessages": true,
-      "applicationUrl": "http://localhost:5555"
+      "applicationUrl": "http://localhost:5000"
     }
   }
 }

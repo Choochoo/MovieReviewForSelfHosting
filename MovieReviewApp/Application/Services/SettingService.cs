@@ -1,8 +1,8 @@
 
-using MovieReviewApp.Infrastructure.Database;
-using MovieReviewApp.Models;
-using MovieReviewApp.Infrastructure.Services;
 using System.Text.Json;
+using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -68,13 +68,13 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
     public async Task<ApplicationSettings> GetApplicationSettingsAsync()
     {
         Setting? appSettingEntry = await GetSettingAsync("ApplicationSettings");
-        
+
         if (appSettingEntry != null && !string.IsNullOrEmpty(appSettingEntry.Value))
         {
-            return JsonSerializer.Deserialize<ApplicationSettings>(appSettingEntry.Value) 
+            return JsonSerializer.Deserialize<ApplicationSettings>(appSettingEntry.Value)
                 ?? await CreateDefaultApplicationSettingsAsync();
         }
-        
+
         return await CreateDefaultApplicationSettingsAsync();
     }
 
@@ -82,7 +82,7 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
     {
         logger.LogInformation("Creating default ApplicationSettings...");
         ApplicationSettings defaultSettings = new ApplicationSettings();
-        
+
         // Set demo-specific defaults if in demo mode
         if (demoProtectionService.IsDemoInstance)
         {
@@ -90,9 +90,9 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
             defaultSettings.AllowDemoDataModification = false;
             defaultSettings.DefaultTheme = "cyberpunk";
         }
-        
+
         string serializedSettings = JsonSerializer.Serialize(defaultSettings);
-        
+
         Setting appSettingEntry = new Setting
         {
             Key = "ApplicationSettings",
@@ -100,13 +100,7 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
-        
-        // Use initial setup mode to allow creation in demo mode
-        using (demoProtectionService.BeginInitialSetup())
-        {
-            await UpsertAsync(appSettingEntry);
-        }
-        
+
         logger.LogInformation("Created default ApplicationSettings");
         return defaultSettings;
     }
@@ -114,13 +108,13 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
     public async Task<AwardSetting> GetAwardSettingsAsync()
     {
         Setting? awardSettingEntry = await GetSettingAsync("AwardSettings");
-        
+
         if (awardSettingEntry != null && !string.IsNullOrEmpty(awardSettingEntry.Value))
         {
-            return JsonSerializer.Deserialize<AwardSetting>(awardSettingEntry.Value) 
+            return JsonSerializer.Deserialize<AwardSetting>(awardSettingEntry.Value)
                 ?? await CreateDefaultAwardSettingAsync();
         }
-        
+
         return await CreateDefaultAwardSettingAsync();
     }
 
@@ -129,7 +123,7 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
         ApplicationSettings appSettings = await GetApplicationSettingsAsync();
         AwardSetting defaultAwardSetting = AwardSetting.CreateFromApplicationSettings(appSettings);
         string serializedSettings = JsonSerializer.Serialize(defaultAwardSetting);
-        
+
         Setting awardSettingEntry = new Setting
         {
             Key = "AwardSettings",
@@ -137,13 +131,7 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
-        
-        // Use initial setup mode to allow creation in demo mode
-        using (demoProtectionService.BeginInitialSetup())
-        {
-            await UpsertAsync(awardSettingEntry);
-        }
-        
+
         return defaultAwardSetting;
     }
 
@@ -168,29 +156,6 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
             return;
         }
 
-        // Use initial setup mode to allow settings creation in demo mode
-        using (demoProtectionService.BeginInitialSetup())
-        {
-            if (demoProtectionService.IsDemoInstance)
-            {
-                await CreateDefaultGeneralSettingAsync("GroupName", "Demo Movie Club");
-                await CreateDefaultGeneralSettingAsync("RespectOrder", "true");
-                await CreateDefaultGeneralSettingAsync("StartDate", DateTime.Now.AddMonths(-3).ToString("yyyy-MM-dd"));
-                await CreateDefaultGeneralSettingAsync("TimeCount", "1");
-                await CreateDefaultGeneralSettingAsync("TimePeriod", "Week");
-                await CreateDefaultGeneralSettingAsync("group_theme", "cyberpunk");
-            }
-            else
-            {
-                await CreateDefaultGeneralSettingAsync("GroupName", "Movie Club");
-                await CreateDefaultGeneralSettingAsync("RespectOrder", "false");
-                await CreateDefaultGeneralSettingAsync("StartDate", DateTime.Now.ToString("yyyy-MM-dd"));
-                await CreateDefaultGeneralSettingAsync("TimeCount", "1");
-                await CreateDefaultGeneralSettingAsync("TimePeriod", "Month");
-                await CreateDefaultGeneralSettingAsync("group_theme", "cyberpunk");
-            }
-        }
-        
         logger.LogInformation("Finished creating default general settings");
     }
 

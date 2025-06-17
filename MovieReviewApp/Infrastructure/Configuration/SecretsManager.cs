@@ -68,24 +68,19 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         private Dictionary<string, string> LoadSecrets()
         {
-            Console.WriteLine($"SecretsManager.LoadSecrets: Checking file existence at {_secretsFilePath}");
             if (!File.Exists(_secretsFilePath))
             {
-                Console.WriteLine($"SecretsManager.LoadSecrets: File does not exist");
                 return new Dictionary<string, string>();
             }
 
             try
             {
-                Console.WriteLine($"SecretsManager.LoadSecrets: Reading file");
                 string json = File.ReadAllText(_secretsFilePath);
                 Dictionary<string, string> secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-                Console.WriteLine($"SecretsManager.LoadSecrets: Successfully loaded {secrets.Count} secrets");
                 return secrets;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"SecretsManager.LoadSecrets: Error loading secrets - {ex.Message}");
                 return new Dictionary<string, string>();
             }
         }

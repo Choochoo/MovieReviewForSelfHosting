@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.Constants;
 using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Models;
 
@@ -539,21 +540,18 @@ public class GladiaService
     /// </summary>
     public async Task<string> UploadSingleFileToGladiaAsync(string filePath)
     {
-        Console.WriteLine($"DEBUG GLADIA: UploadSingleFileToGladiaAsync called for: {filePath}");
-        Console.WriteLine($"DEBUG GLADIA: IsConfigured: {IsConfigured}");
-        Console.WriteLine($"DEBUG GLADIA: API key present: {!string.IsNullOrEmpty(_apiKey)}");
+        _logger.LogDebug("UploadSingleFileToGladiaAsync called for: {FilePath}", filePath);
 
         // Log configuration status first
         LogConfigurationStatus();
 
-        const int maxRetries = 3;
-        const int baseDelayMs = 2000;
+        const int maxRetries = GladiaConstants.MaxRetries;
+        const int baseDelayMs = GladiaConstants.BaseDelayMs;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
             try
             {
-                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt}/{maxRetries} for {Path.GetFileName(filePath)}");
                 _logger.LogInformation("Upload attempt {Attempt}/{MaxRetries} for {FileName}",
                     attempt, maxRetries, Path.GetFileName(filePath));
 
@@ -562,21 +560,21 @@ public class GladiaService
             catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex))
             {
                 int delay = baseDelayMs * (int)Math.Pow(2, attempt - 1); // Exponential backoff
-                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt} failed for {Path.GetFileName(filePath)}, retrying in {delay}ms: {ex.Message}");
-                _logger.LogWarning("Upload attempt {Attempt} failed for {FileName}, retrying in {Delay}ms: {Error}",
+                _logger.LogWarning("Upload attempt {Attempt} failed for {FileName}, retrying in {Delay}ms: {Message}",
                     attempt, Path.GetFileName(filePath), delay, ex.Message);
 
                 await Task.Delay(delay);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"DEBUG GLADIA: Upload attempt {attempt} failed with non-retryable exception: {ex.GetType().Name}: {ex.Message}");
+                _logger.LogError("Upload attempt {Attempt} failed with non-retryable exception: {ExceptionType}: {Message}",
+                    attempt, ex.GetType().Name, ex.Message);
                 throw;
             }
         }
 
         // Final attempt without retry wrapper
-        Console.WriteLine($"DEBUG GLADIA: Final upload attempt for {Path.GetFileName(filePath)}");
+        _logger.LogError("All upload attempts failed for {FileName}", Path.GetFileName(filePath));
         return await UploadSingleFileToGladiaAsyncInternal(filePath);
     }
 
@@ -596,42 +594,30 @@ public class GladiaService
     /// </summary>
     private async Task<string> UploadSingleFileToGladiaAsyncInternal(string filePath)
     {
-        Console.WriteLine($"DEBUG GLADIA: Starting upload for file: {filePath}");
+        _logger.LogDebug("Starting upload for file: {FilePath}", filePath);
 
         if (!File.Exists(filePath))
         {
-            Console.WriteLine($"DEBUG GLADIA ERROR: File not found: {filePath}");
+            _logger.LogError("File not found: {FilePath}", filePath);
             throw new FileNotFoundException($"Audio file not found: {filePath}");
         }
 
         FileInfo fileInfo = new FileInfo(filePath);
         string extension = Path.GetExtension(filePath).ToLowerInvariant();
 
-        Console.WriteLine($"DEBUG GLADIA: File info - Size: {fileInfo.Length:N0} bytes, Extension: {extension}");
         _logger.LogInformation("Uploading file {FileName} ({FileSize:N0} bytes) to Gladia",
             Path.GetFileName(filePath), fileInfo.Length);
 
-        // Check API key availability
-        Console.WriteLine($"DEBUG GLADIA: API Key configured: {!string.IsNullOrEmpty(_apiKey)}");
-        Console.WriteLine($"DEBUG GLADIA: API Key length: {_apiKey?.Length ?? 0}");
-        Console.WriteLine($"DEBUG GLADIA: Base URL: {_baseUrl}");
-        Console.WriteLine($"DEBUG GLADIA: HttpClient BaseAddress: {_httpClient.BaseAddress}");
-
-        // Check headers
-        Console.WriteLine($"DEBUG GLADIA: Request headers count: {_httpClient.DefaultRequestHeaders.Count()}");
-        foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> header in _httpClient.DefaultRequestHeaders)
+        // Validate API configuration
+        if (string.IsNullOrEmpty(_apiKey))
         {
-            string maskedValue = header.Key.ToLower().Contains("key") && header.Value.Any()
-                ? $"{header.Value.First().Substring(0, Math.Min(10, header.Value.First().Length))}..."
-                : string.Join(", ", header.Value);
-            Console.WriteLine($"DEBUG GLADIA: Header - {header.Key}: {maskedValue}");
+            throw new InvalidOperationException("Gladia API key not configured");
         }
 
         using MultipartFormDataContent form = new MultipartFormDataContent();
 
         // Use streaming instead of loading entire file into memory
-        Console.WriteLine($"DEBUG GLADIA: Opening file stream for {Path.GetFileName(filePath)}");
-        using FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920);
+        using FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: GladiaConstants.FileStreamBufferSize);
         using StreamContent fileContent = new StreamContent(fileStream);
 
         // Set appropriate content type based on file extension
@@ -646,81 +632,52 @@ public class GladiaService
             _ => "audio/mpeg"
         };
 
-        Console.WriteLine($"DEBUG GLADIA: Setting content type: {contentType}");
         fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
 
         // Create custom filename with movie name and mic identifier
         string customFilename = CreateCustomFilename(filePath);
-        Console.WriteLine($"DEBUG GLADIA: Custom filename: {customFilename}");
         form.Add(fileContent, "audio", customFilename);
 
-        Console.WriteLine($"DEBUG GLADIA: Posting to endpoint: /v2/upload");
-        Console.WriteLine($"DEBUG GLADIA: Full URL will be: {_httpClient.BaseAddress}/v2/upload");
 
         try
         {
             HttpResponseMessage response = await _httpClient.PostAsync("/v2/upload", form);
-            Console.WriteLine($"DEBUG GLADIA: Response status: {response.StatusCode}");
-            Console.WriteLine($"DEBUG GLADIA: Response headers count: {response.Headers.Count()}");
-
-            foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> header in response.Headers)
-            {
-                Console.WriteLine($"DEBUG GLADIA: Response Header - {header.Key}: {string.Join(", ", header.Value)}");
-            }
 
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"DEBUG GLADIA ERROR: Status {response.StatusCode}, Content: {errorContent}");
-
-                // Log detailed error info
-                Console.WriteLine($"DEBUG GLADIA ERROR: Reason phrase: {response.ReasonPhrase}");
-                if (response.Content.Headers.Any())
-                {
-                    Console.WriteLine($"DEBUG GLADIA ERROR: Content headers:");
-                    foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> header in response.Content.Headers)
-                    {
-                        Console.WriteLine($"  {header.Key}: {string.Join(", ", header.Value)}");
-                    }
-                }
+                _logger.LogError("Gladia upload failed with status {StatusCode}: {ErrorContent}", response.StatusCode, errorContent);
 
                 throw new Exception($"Gladia upload failed with status {response.StatusCode}: {errorContent}");
             }
 
             string content = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"DEBUG GLADIA: Success response length: {content.Length}");
-            Console.WriteLine($"DEBUG GLADIA: Response content: {content}");
-
             UploadResponse? uploadResult = JsonSerializer.Deserialize<UploadResponse>(content);
-            Console.WriteLine($"DEBUG GLADIA: Deserialized audio_url: {uploadResult?.audio_url}");
 
             if (uploadResult?.audio_url == null)
             {
-                Console.WriteLine($"DEBUG GLADIA ERROR: Missing audio_url in response: {content}");
+                _logger.LogError("Missing audio_url in Gladia response: {Content}", content);
                 throw new Exception($"Gladia upload response missing audio_url: {content}");
             }
 
             _logger.LogInformation("Successfully uploaded {FileName} to Gladia with URL: {AudioUrl}",
                 Path.GetFileName(filePath), uploadResult.audio_url);
 
-            Console.WriteLine($"DEBUG GLADIA: Upload successful, returning URL: {uploadResult.audio_url}");
             return uploadResult.audio_url;
         }
         catch (HttpRequestException httpEx)
         {
-            Console.WriteLine($"DEBUG GLADIA ERROR: HttpRequestException - {httpEx.Message}");
-            Console.WriteLine($"DEBUG GLADIA ERROR: Inner exception: {httpEx.InnerException?.Message}");
+            _logger.LogError(httpEx, "HTTP request exception during Gladia upload: {Message}", httpEx.Message);
             throw;
         }
         catch (TaskCanceledException tcEx)
         {
-            Console.WriteLine($"DEBUG GLADIA ERROR: TaskCanceledException (timeout?) - {tcEx.Message}");
+            _logger.LogError(tcEx, "Upload request timed out: {Message}", tcEx.Message);
             throw;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"DEBUG GLADIA ERROR: General exception - {ex.GetType().Name}: {ex.Message}");
-            Console.WriteLine($"DEBUG GLADIA ERROR: Stack trace: {ex.StackTrace}");
+            _logger.LogError(ex, "General exception during Gladia upload: {ExceptionType}: {Message}", ex.GetType().Name, ex.Message);
             throw;
         }
     }

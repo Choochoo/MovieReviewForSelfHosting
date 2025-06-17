@@ -3,7 +3,9 @@ using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
-//<summary> DO NOT ADD TRY CATCHES IN THIS FOLDER</summary>
+/// <summary>
+/// Base service class providing common CRUD operations for entities
+/// </summary>
 public abstract class BaseService<T>(MongoDbService databaseService, ILogger logger) where T : BaseModel
 {
     protected readonly MongoDbService _db = databaseService;
@@ -45,15 +47,37 @@ public abstract class BaseService<T>(MongoDbService databaseService, ILogger log
 
     public virtual async Task<bool> DeleteAsync(Guid id)
     {
-        _ = await _db.DeleteAsync<T>(id);
-        _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, id);
-        return true;
+        try
+        {
+            bool result = await _db.DeleteAsync<T>(id);
+            if (result)
+            {
+                _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, id);
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete {Type} {Id}: {Message}", typeof(T).Name, id, ex.Message);
+            throw;
+        }
     }
 
     public virtual async Task<bool> DeleteAsync(T entity)
     {
-        _ = await _db.DeleteAsync<T>(entity.Id);
-        _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, entity.Id);
-        return true;
+        try
+        {
+            bool result = await _db.DeleteAsync<T>(entity.Id);
+            if (result)
+            {
+                _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, entity.Id);
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete {Type} {Id}: {Message}", typeof(T).Name, entity.Id, ex.Message);
+            throw;
+        }
     }
 }
