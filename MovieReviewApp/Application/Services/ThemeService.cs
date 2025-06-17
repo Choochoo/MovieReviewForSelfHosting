@@ -33,9 +33,10 @@ namespace MovieReviewApp.Application.Services
         {
             if (_initialized) return;
 
-            // Load group theme from database
+            // Load group theme from database or application settings
+            ApplicationSettings appSettings = await _settingService.GetApplicationSettingsAsync();
             Setting? groupThemeSetting = await _settingService.GetSettingAsync("group_theme");
-            _currentGroupTheme = groupThemeSetting?.Value ?? "cyberpunk";
+            _currentGroupTheme = groupThemeSetting?.Value ?? appSettings.DefaultTheme;
 
             // Load dark mode from localStorage
             try
@@ -54,17 +55,19 @@ namespace MovieReviewApp.Application.Services
 
         public async Task<string> GetGroupThemeAsync()
         {
+            ApplicationSettings appSettings = await _settingService.GetApplicationSettingsAsync();
             Setting? setting = await _settingService.GetSettingAsync("group_theme");
-            _currentGroupTheme = setting?.Value ?? "cyberpunk";
+            _currentGroupTheme = setting?.Value ?? appSettings.DefaultTheme;
             return _currentGroupTheme;
         }
 
         public async Task SetGroupThemeAsync(string groupTheme)
         {
-            string[] validThemes = { "cyberpunk", "ocean", "nature", "classic" };
-            if (!validThemes.Contains(groupTheme))
+            // Get valid themes from application settings
+            ApplicationSettings appSettings = await _settingService.GetApplicationSettingsAsync();
+            if (!appSettings.AvailableThemes.Contains(groupTheme))
             {
-                groupTheme = "cyberpunk";
+                groupTheme = appSettings.DefaultTheme;
             }
 
             _currentGroupTheme = groupTheme;

@@ -83,27 +83,31 @@ namespace MovieReviewApp.Components.Pages
 
         protected override async Task OnInitializedAsync()
         {
+            // Ensure default settings exist
+            await SettingService.CreateDefaultGeneralSettingsAsync();
+            
             // Load settings
             settings = await SettingService.GetAllAsync();
 
-
-            // Parse settings with defaults
+            // Parse settings - they should all exist now
             Setting? respectOrderSetting = settings.FirstOrDefault(x => x.Key == "RespectOrder");
-            RespectOrder = respectOrderSetting != null && bool.TryParse(respectOrderSetting.Value, out bool respectOrderValue) ? respectOrderValue : false;
+            RespectOrder = respectOrderSetting != null && bool.TryParse(respectOrderSetting.Value, out bool respectOrderValue) && respectOrderValue;
 
             Setting? startDateSetting = settings.FirstOrDefault(x => x.Key == "StartDate");
             if (startDateSetting != null && DateTime.TryParse(startDateSetting.Value, out DateTime parsedDate))
                 StartDate = parsedDate;
+            else
+                StartDate = DateTime.Now;
 
             Setting? timeCountSetting = settings.FirstOrDefault(x => x.Key == "TimeCount");
             if (timeCountSetting != null && int.TryParse(timeCountSetting.Value, out int parsedCount))
                 TimeCount = parsedCount;
+            else
+                TimeCount = 1;
 
             Setting? timePeriodSetting = settings.FirstOrDefault(x => x.Key == "TimePeriod");
-            if (timePeriodSetting != null)
-                TimePeriod = timePeriodSetting.Value;
+            TimePeriod = timePeriodSetting?.Value ?? "Month";
 
-            // Load group name from settings (separate from instance name)
             Setting? groupNameSetting = settings.FirstOrDefault(x => x.Key == "GroupName");
             GroupName = groupNameSetting?.Value ?? "Movie Club";
 

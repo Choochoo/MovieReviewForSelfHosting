@@ -146,6 +146,9 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task LoadAllDataAsync()
         {
+            // Ensure default settings exist
+            await SettingService.CreateDefaultGeneralSettingsAsync();
+            
             // Load settings
             _settings = await SettingService.GetAllAsync();
 

@@ -50,10 +50,28 @@ namespace MovieReviewApp.Models
 
     public class AwardSetting
     {
-        public int PhasesBeforeAward { get; set; } = 2;
-        public bool AwardsEnabled { get; set; } = false;
-        public bool ShowResultsDuringVoting { get; set; } = false;
-        public bool AllowVoteChanges { get; set; } = true;
-        public int VoteChangeTimeLimit { get; set; } = 24; // hours
+        public int PhasesBeforeAward { get; set; }
+        public bool AwardsEnabled { get; set; }
+        public bool ShowResultsDuringVoting { get; set; }
+        public bool AllowVoteChanges { get; set; }
+        public int VoteChangeTimeLimit { get; set; }
+
+        public AwardSetting()
+        {
+            // Default values are now managed through ApplicationSettings
+            // These will be set by the service layer
+        }
+
+        public static AwardSetting CreateFromApplicationSettings(ApplicationSettings appSettings)
+        {
+            return new AwardSetting
+            {
+                PhasesBeforeAward = appSettings.DefaultPhasesBeforeAward,
+                AwardsEnabled = appSettings.DefaultAwardsEnabled,
+                ShowResultsDuringVoting = appSettings.DefaultShowResultsDuringVoting,
+                AllowVoteChanges = appSettings.DefaultAllowVoteChanges,
+                VoteChangeTimeLimit = appSettings.DefaultVoteChangeTimeLimit
+            };
+        }
     }
 }
