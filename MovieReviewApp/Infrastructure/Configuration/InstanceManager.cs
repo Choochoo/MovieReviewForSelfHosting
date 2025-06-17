@@ -18,7 +18,6 @@ namespace MovieReviewApp.Infrastructure.Configuration
             {
                 // Use custom path if provided
                 basePath = customDataPath;
-                Console.WriteLine($"InstanceManager: Using custom data path from environment: {basePath}");
             }
             else if (OperatingSystem.IsWindows() || IsRunningInWSL())
             {
@@ -56,11 +55,6 @@ namespace MovieReviewApp.Infrastructure.Configuration
             _instanceName = instanceName ?? GetDefaultInstanceName();
             _instancePath = Path.Combine(_instancesRootPath, _instanceName);
             
-            Console.WriteLine($"InstanceManager: Running in WSL: {IsRunningInWSL()}");
-            Console.WriteLine($"InstanceManager: Base path: {basePath}");
-            Console.WriteLine($"InstanceManager: Instance path: {_instancePath}");
-            Console.WriteLine($"InstanceManager: Secrets path: {SecretsPath}");
-            Console.WriteLine($"InstanceManager: Config path: {ConfigPath}");
             
             Directory.CreateDirectory(_instancePath);
         }

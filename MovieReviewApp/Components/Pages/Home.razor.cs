@@ -301,11 +301,11 @@ namespace MovieReviewApp.Components.Pages
                     List<SiteUpdate> updates = await SiteUpdateService.GetRecentUpdatesAsync(lastVisit);
                     await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
 
-                    // Only call StateHasChanged if we actually have updates to show
+                    // Only update if we actually have updates to show
                     if (updates.Any() && !RecentUpdates.Any())
                     {
                         RecentUpdates = updates;
-                        StateHasChanged();
+                        // Remove StateHasChanged() to prevent re-render/blink
                     }
                 }
                 catch (Exception ex)

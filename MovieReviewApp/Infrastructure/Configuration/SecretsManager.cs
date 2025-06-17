@@ -12,9 +12,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         {
             _instanceManager = instanceManager;
             _secretsFilePath = instanceManager.SecretsPath;
-            Console.WriteLine($"SecretsManager: Loading secrets from {_secretsFilePath}");
             _secrets = LoadSecrets();
-            Console.WriteLine($"SecretsManager: Loaded {_secrets.Count} secrets");
         }
 
         public bool IsFirstRun => _instanceManager.IsFirstRun;

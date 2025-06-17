@@ -15,7 +15,6 @@ namespace MovieReviewApp.Middleware
         {
             // Skip setup check for setup page itself and static files
             string? path = context.Request.Path.Value?.ToLower();
-            Console.WriteLine($"FirstRunSetupMiddleware: Processing path: {path}");
             
             if (path != null && (
                 path.StartsWith("/setup") ||
@@ -34,52 +33,32 @@ namespace MovieReviewApp.Middleware
             // Only redirect if we're not already on setup page and missing required config
             if (path != "/setup")
             {
-                Console.WriteLine($"FirstRunSetupMiddleware: Checking IsFirstRun...");
                 // Check if this is first run
                 if (secretsManager.IsFirstRun)
                 {
-                    Console.WriteLine($"FirstRunSetupMiddleware: IsFirstRun=true for path {path}");
-                    Console.WriteLine($"FirstRunSetupMiddleware: Checking file existence:");
-                    Console.WriteLine($"  Secrets file: {instanceManager.SecretsPath} - Exists: {File.Exists(instanceManager.SecretsPath)}");
-                    Console.WriteLine($"  Config file: {instanceManager.ConfigPath} - Exists: {File.Exists(instanceManager.ConfigPath)}");
                     if (!context.Response.HasStarted)
                     {
-                        Console.WriteLine($"FirstRunSetupMiddleware: Redirecting to /setup (first run)");
                         context.Response.StatusCode = 302;
                         context.Response.Headers.Location = "/setup";
                         await context.Response.CompleteAsync();
                         return;
                     }
-                }
-                else
-                {
-                    Console.WriteLine($"FirstRunSetupMiddleware: IsFirstRun=false");
                 }
 
                 // Check if required secrets are missing
-                Console.WriteLine($"FirstRunSetupMiddleware: Checking HasRequiredSecrets...");
                 if (!secretsManager.HasRequiredSecrets())
                 {
-                    Console.WriteLine($"FirstRunSetupMiddleware: Missing required secrets for path {path}");
-                    Console.WriteLine($"  Missing: {string.Join(", ", secretsManager.GetMissingSecrets())}");
                     if (!context.Response.HasStarted)
                     {
-                        Console.WriteLine($"FirstRunSetupMiddleware: Redirecting to /setup (missing secrets)");
                         context.Response.StatusCode = 302;
                         context.Response.Headers.Location = "/setup";
                         await context.Response.CompleteAsync();
                         return;
                     }
                 }
-                else
-                {
-                    Console.WriteLine($"FirstRunSetupMiddleware: All required secrets present");
-                }
             }
 
-            Console.WriteLine($"FirstRunSetupMiddleware: Passing to next middleware for path {path}");
             await _next(context);
-            Console.WriteLine($"FirstRunSetupMiddleware: Completed processing for path {path}");
         }
     }
 
