@@ -8,280 +8,296 @@
 {
     <div class="alert alert-warning mb-3">
         <i class="bi bi-exclamation-triangle"></i>
-        <strong>Demo Mode:</strong> Settings are read-only in demo mode. Changes cannot be saved to preserve the demo experience.
+        <strong>Demo Mode:</strong> Most settings are read-only in demo mode. Theme changes can be previewed but won't be saved permanently.
     </div>
 }
 
 <div class="settings-container">
     <div class="settings-section">
-        <h3 class="section-title">General Settings</h3>
+        <h3 class="section-title" @onclick="ToggleGeneral">
+            <i class="bi @(showGeneral ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            General Settings
+        </h3>
         
-        <div class="general-settings-grid">
-            <div class="settings-fields">
-                <div class="setting-field">
-                    <label class="setting-label">Group Name:</label>
-                    <input type="text" @bind="GroupName" class="form-control" placeholder="Enter group name" />
-                </div>
-                
-                <div class="setting-field">
-                    <label class="setting-label">Respect Order:</label>
-                    <div class="checkbox-wrapper">
-                        <input class="form-check-input" type="checkbox" @bind="RespectOrder" id="respectOrder">
-                        <label for="respectOrder" class="checkbox-label">
-                            <span class="text-muted">Maintain person selection order (Not randomly selected from List)</span>
-                        </label>
+        @if (showGeneral)
+        {
+            <div class="general-settings-content">
+                <div class="settings-fields">
+                    <div class="setting-field">
+                        <label class="setting-label">Group Name</label>
+                        <input type="text" @bind="GroupName" class="form-control" placeholder="Enter group name" />
                     </div>
-                </div>
-                
-                <div class="setting-field">
-                    <label class="setting-label">Start Date:</label>
-                    <InputDate @bind-Value="StartDate" class="form-control form-control-sm" />
-                </div>
-
-                <div class="setting-field">
-                    <label class="setting-label">Theme Style:</label>
-                    @if (demoProtection.IsDemoInstance)
-                    {
-                        <InputSelect @bind-Value="SelectedGroupTheme" class="form-control form-control-sm" disabled>
-                            <option value="cyberpunk">Cyberpunk</option>
-                            <option value="ocean">Ocean</option>
-                            <option value="nature">Nature</option>
-                            <option value="classic">Classic</option>
-                        </InputSelect>
-                    }
-                    else
-                    {
-                        <InputSelect @bind-Value="SelectedGroupTheme" class="form-control form-control-sm">
-                            <option value="cyberpunk">Cyberpunk</option>
-                            <option value="ocean">Ocean</option>
-                            <option value="nature">Nature</option>
-                            <option value="classic">Classic</option>
-                        </InputSelect>
-                    }
-                </div>
-                
-                <div class="setting-field">
-                    <label class="setting-label">Occurrence:</label>
-                    <div class="occurrence-controls">
-                        <span class="text-muted">Every</span>
-                        <InputNumber @bind-Value="TimeCount" class="form-control form-control-sm number-input" />
-                        <InputSelect @bind-Value="TimePeriod" class="form-control form-control-sm">
-                            <option value="">Period</option>
-                            @foreach (var period in TimePeriods)
+                    
+                    <div class="setting-field">
+                        <label class="setting-label">Theme Style</label>
+                        <InputSelect @bind-Value="SelectedGroupTheme" @bind-Value:after="OnThemeChanged" class="form-control">
+                            @foreach (string theme in AvailableThemes)
                             {
-                                <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
+                                string displayName = char.ToUpper(theme[0]) + theme.Substring(1);
+                                <option value="@theme">@displayName</option>
                             }
                         </InputSelect>
                     </div>
+
+                    <div class="setting-field">
+                        <label class="setting-label">Start Date</label>
+                        <InputDate @bind-Value="StartDate" class="form-control" />
+                    </div>
+
+                    <div class="setting-field">
+                        <label class="setting-label">Respect Order</label>
+                        <div class="checkbox-group">
+                            <input class="form-check-input" type="checkbox" @bind="RespectOrder" id="respectOrder">
+                            <span class="text-muted">Maintain person selection order</span>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-field">
+                        <label class="setting-label">Occurrence</label>
+                        <div class="occurrence-controls">
+                            <span class="text-muted">Every</span>
+                            <InputNumber @bind-Value="TimeCount" class="form-control number-input" />
+                            <InputSelect @bind-Value="TimePeriod" class="form-control">
+                                @foreach (var period in TimePeriods)
+                                {
+                                    <option value="@period.Value">@period.Value@(TimeCount > 1 ? "s" : "")</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-save">
+                    <button type="button" class="btn btn-primary" @onclick="async () => await SaveGeneralSettings()">
+                        Save General Settings
+                    </button>
                 </div>
             </div>
-            
-            <div class="settings-save">
-                <button type="button" class="btn btn-primary" @onclick="async () => await SaveGeneralSettings()">
-                    Save General Settings
-                </button>
-            </div>
-        </div>
+        }
     </div>
 
+    <!-- People Management Section -->
     <div class="settings-section">
-        <h3 class="section-title">People Management</h3>
+        <h3 class="section-title" @onclick="TogglePeople" style="cursor: pointer;">
+            <i class="bi @(showPeople ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            People Management
+        </h3>
         
-        <div class="people-table">
-            <table class="table table-compact">
-                <thead>
-                    <tr>
-                        <th class="col-order">Order</th>
-                        <th class="col-name">Name</th>
-                        <th class="col-actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (People != null && People.Any())
-                    {
-                        @foreach (var person in People.OrderBy(p => p?.Order))
+        @if (showPeople)
+        {
+            <div class="people-table">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>
+                            <th class="col-order">Order</th>
+                            <th class="col-name">Name</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (People != null && People.Any())
                         {
-                            @if (person != null)
+                            @foreach (var person in People.OrderBy(p => p?.Order))
                             {
-                                <tr>
-                                    <td class="col-order">
-                                        <div class="order-controls">
-                                            <span class="order-number">@person.Order</span>
-                                            <div class="order-buttons">
-                                                <button type="button" class="btn btn-xs btn-outline-secondary"
-                                                        @onclick="async () => await MoveUp(person)"
-                                                        disabled="@(person.Order <= 1)">
-                                                    ↑
-                                                </button>
-                                                <button type="button" class="btn btn-xs btn-outline-secondary"
-                                                        @onclick="async () => await MoveDown(person)"
-                                                        disabled="@(person.Order >= People.Count)">
-                                                    ↓
-                                                </button>
+                                @if (person != null)
+                                {
+                                    <tr>
+                                        <td class="col-order">
+                                            <div class="order-controls">
+                                                <span class="order-number">@person.Order</span>
+                                                <div class="order-buttons">
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveUp(person)"
+                                                            disabled="@(person.Order <= 1)">
+                                                        ↑
+                                                    </button>
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveDown(person)"
+                                                            disabled="@(person.Order >= People.Count)">
+                                                        ↓
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td class="col-name">
-                                        @if (person.IsEditing)
-                                        {
-                                            <input type="text" @bind="person.Name" class="form-control form-control-sm" />
-                                        }
-                                        else
-                                        {
-                                            <span class="person-name">@person.Name</span>
-                                        }
-                                    </td>
-                                    <td class="col-actions">
-                                        @if (person.IsEditing)
-                                        {
-                                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await Save(person)">Save</button>
-                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Cancel(person)">Cancel</button>
-                                        }
-                                        else
-                                        {
-                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Edit(person)">Edit</button>
-                                            <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await Delete(person)">Delete</button>
-                                        }
-                                    </td>
-                                </tr>
+                                        </td>
+                                        <td class="col-name">
+                                            @if (person.IsEditing)
+                                            {
+                                                <input type="text" @bind="person.Name" class="form-control form-control-sm" />
+                                            }
+                                            else
+                                            {
+                                                <span class="person-name">@person.Name</span>
+                                            }
+                                        </td>
+                                        <td class="col-actions">
+                                            @if (person.IsEditing)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await Save(person)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Cancel(person)">Cancel</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Edit(person)">Edit</button>
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await Delete(person)">Delete</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="3" class="text-center text-muted">No people added yet</td>
+                        else
+                        {
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No people added yet</td>
+                            </tr>
+                        }
+                        <tr class="add-row">
+                            <td class="col-order"></td>
+                            <td class="col-name">
+                                <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
+                            </td>
+                            <td class="col-actions">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
+                            </td>
                         </tr>
-                    }
-                    <tr class="add-row">
-                        <td class="col-order"></td>
-                        <td class="col-name">
-                            <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
-                        </td>
-                        <td class="col-actions">
-                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                    </tbody>
+                </table>
+            </div>
+        }
     </div>
     
+    <!-- Award Settings Section -->
     <div class="settings-section">
-        <AwardSettings />
+        <h3 class="section-title" @onclick="ToggleAwards" style="cursor: pointer;">
+            <i class="bi @(showAwards ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            Award Settings
+        </h3>
+        
+        @if (showAwards)
+        {
+            <AwardSettings />
+        }
     </div>
 
+    <!-- Discussion Questions Section -->
     <div class="settings-section">
-        <h3 class="section-title">Discussion Questions</h3>
+        <h3 class="section-title" @onclick="ToggleQuestions" style="cursor: pointer;">
+            <i class="bi @(showQuestions ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            Discussion Questions
+        </h3>
         
-        <div class="questions-table">
-            <table class="table table-compact">
-                <thead>
-                    <tr>
-                        <th class="col-order">Order</th>
-                        <th class="col-question">Question</th>
-                        <th class="col-active">Active</th>
-                        <th class="col-actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (DiscussionQuestions != null && DiscussionQuestions.Any())
-                    {
-                        @foreach (var question in DiscussionQuestions.OrderBy(q => q?.Order))
+        @if (showQuestions)
+        {
+            <div class="questions-table">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>
+                            <th class="col-order">Order</th>
+                            <th class="col-question">Question</th>
+                            <th class="col-active">Active</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (DiscussionQuestions != null && DiscussionQuestions.Any())
                         {
-                            @if (question != null)
+                            @foreach (var question in DiscussionQuestions.OrderBy(q => q?.Order))
                             {
-                                <tr class="@(question.IsActive ? "" : "inactive-question")">
-                                    <td class="col-order">
-                                        <div class="order-controls">
-                                            <span class="order-number">@question.Order</span>
-                                            <div class="order-buttons">
-                                                <button type="button" class="btn btn-xs btn-outline-secondary"
-                                                        @onclick="async () => await MoveQuestionUp(question)"
-                                                        disabled="@(question.Order <= 1)">
-                                                    ↑
-                                                </button>
-                                                <button type="button" class="btn btn-xs btn-outline-secondary"
-                                                        @onclick="async () => await MoveQuestionDown(question)"
-                                                        disabled="@(question.Order >= DiscussionQuestions.Count)">
-                                                    ↓
-                                                </button>
+                                @if (question != null)
+                                {
+                                    <tr class="@(question.IsActive ? "" : "inactive-question")">
+                                        <td class="col-order">
+                                            <div class="order-controls">
+                                                <span class="order-number">@question.Order</span>
+                                                <div class="order-buttons">
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveQuestionUp(question)"
+                                                            disabled="@(question.Order <= 1)">
+                                                        ↑
+                                                    </button>
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveQuestionDown(question)"
+                                                            disabled="@(question.Order >= DiscussionQuestions.Count)">
+                                                        ↓
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td class="col-question">
-                                        @if (question.IsEditing)
-                                        {
-                                            <input type="text" @bind="question.Question" class="form-control form-control-sm" />
-                                        }
-                                        else
-                                        {
-                                            <span class="question-text">@question.Question</span>
-                                        }
-                                    </td>
-                                    <td class="col-active">
-                                        @if (question.IsEditing)
-                                        {
-                                            <input class="form-check-input" type="checkbox" @bind="question.IsActive" />
-                                        }
-                                        else
-                                        {
-                                            <span class="badge @(question.IsActive ? "bg-success" : "bg-secondary")">
-                                                @(question.IsActive ? "Active" : "Inactive")
-                                            </span>
-                                        }
-                                    </td>
-                                    <td class="col-actions">
-                                        @if (question.IsEditing)
-                                        {
-                                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await SaveQuestion(question)">Save</button>
-                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="async () => await CancelQuestionEdit(question)">Cancel</button>
-                                        }
-                                        else
-                                        {
-                                            <button type="button" class="btn btn-sm btn-secondary" @onclick="() => EditQuestion(question)">Edit</button>
-                                            <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await DeleteQuestion(question)">Delete</button>
-                                        }
-                                    </td>
-                                </tr>
+                                        </td>
+                                        <td class="col-question">
+                                            @if (question.IsEditing)
+                                            {
+                                                <input type="text" @bind="question.Question" class="form-control form-control-sm" />
+                                            }
+                                            else
+                                            {
+                                                <span class="question-text">@question.Question</span>
+                                            }
+                                        </td>
+                                        <td class="col-active">
+                                            @if (question.IsEditing)
+                                            {
+                                                <input class="form-check-input" type="checkbox" @bind="question.IsActive" />
+                                            }
+                                            else
+                                            {
+                                                <span class="badge @(question.IsActive ? "bg-success" : "bg-secondary")">
+                                                    @(question.IsActive ? "Active" : "Inactive")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="col-actions">
+                                            @if (question.IsEditing)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await SaveQuestion(question)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="async () => await CancelQuestionEdit(question)">Cancel</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => EditQuestion(question)">Edit</button>
+                                                <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await DeleteQuestion(question)">Delete</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="4" class="text-center text-muted">No discussion questions added yet</td>
+                        else
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No discussion questions added yet</td>
+                            </tr>
+                        }
+                        <tr class="add-row">
+                            <td class="col-order"></td>
+                            <td class="col-question">
+                                <input type="text" @bind="@NewQuestionText" class="form-control form-control-sm" placeholder="Enter new discussion question" />
+                            </td>
+                            <td class="col-active">
+                                <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
+                            </td>
+                            <td class="col-actions">
+                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
+                            </td>
                         </tr>
-                    }
-                    <tr class="add-row">
-                        <td class="col-order"></td>
-                        <td class="col-question">
-                            <input type="text" @bind="@NewQuestionText" class="form-control form-control-sm" placeholder="Enter new discussion question" />
-                        </td>
-                        <td class="col-active">
-                            <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
-                        </td>
-                        <td class="col-actions">
-                            <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="mt-3">
-            <small class="text-muted">
-                <i class="bi bi-info-circle"></i>
-                These questions will be used on the Home page and extracted from audio transcripts during analysis.
-                Only active questions will be displayed and analyzed.
-            </small>
-        </div>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    These questions will be used on the Home page and extracted from audio transcripts during analysis.
+                    Only active questions will be displayed and analyzed.
+                </small>
+            </div>
+        }
     </div>
 
+    <!-- Advanced Settings Section -->
     <div class="settings-section">
         <h3 class="section-title" @onclick="ToggleAdvanced" style="cursor: pointer;">
             <i class="bi @(showAdvanced ? "bi-chevron-down" : "bi-chevron-right")"></i>
-            Advanced
+            Advanced Settings
         </h3>
         
         @if (showAdvanced)
@@ -389,362 +405,3 @@
     </div>
 </div>
 
-<style>
-    .settings-container {
-        max-width: 1400px;
-        margin: 0 auto;
-    }
-
-    .settings-section {
-        background: var(--surface-color);
-        border: 1px solid var(--border-color);
-        border-radius: 0.75rem;
-        padding: 2rem;
-        margin-bottom: 2.5rem;
-    }
-
-    .section-title {
-        font-size: 1.5rem;
-        margin-bottom: 2rem;
-        padding-bottom: 1rem;
-        border-bottom: 2px solid var(--accent-primary);
-        color: var(--text-primary);
-    }
-
-    .general-settings-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-    }
-
-    .settings-fields {
-        display: flex;
-        flex-direction: column;
-        gap: 2rem;
-    }
-
-    .setting-field {
-        display: grid;
-        grid-template-columns: 160px 1fr;
-        gap: 1.5rem;
-        align-items: center;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        transition: background-color 0.2s ease;
-    }
-
-    .setting-field:hover {
-        background-color: rgba(0, 0, 0, 0.02);
-    }
-
-    .setting-label {
-        font-weight: 600;
-        color: var(--text-secondary);
-        font-size: 0.95rem;
-        text-align: right;
-        margin-bottom: 0;
-    }
-
-    .occurrence-controls {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .settings-save {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        margin-top: 1rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border-color);
-    }
-
-    .setting-field .form-control {
-        max-width: 250px;
-        margin-bottom: 0;
-        font-size: 0.95rem;
-    }
-
-    .number-input {
-        max-width: 90px !important;
-    }
-
-    .form-check-input {
-        margin-top: 0;
-        margin-bottom: 0;
-        width: 1.4rem;
-        height: 1.4rem;
-        cursor: pointer;
-        margin-left: 0;
-    }
-
-    .occurrence-controls .form-control {
-        margin-bottom: 0;
-    }
-
-    .occurrence-controls .text-muted {
-        font-size: 0.95rem;
-        margin-right: 0.25rem;
-    }
-
-    .btn-primary {
-        padding: 0.625rem 1.5rem;
-        font-size: 0.95rem;
-        font-weight: 500;
-    }
-
-    .checkbox-wrapper {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .checkbox-label {
-        margin-bottom: 0;
-        cursor: pointer;
-        user-select: none;
-    }
-
-    .checkbox-label .text-muted {
-        font-size: 0.875rem;
-    }
-
-    /* Compact table styles */
-    .people-table, .questions-table {
-        overflow-x: auto;
-    }
-
-    .table-compact {
-        font-size: 0.9rem;
-    }
-
-    .table-compact th {
-        padding: 0.5rem;
-        font-weight: 600;
-    }
-
-    .table-compact td {
-        padding: 0.4rem 0.5rem;
-        vertical-align: middle;
-    }
-
-    .col-order {
-        width: 120px;
-    }
-
-    .col-name {
-        width: auto;
-    }
-
-    .col-actions {
-        width: 200px;
-        text-align: right;
-    }
-
-    .col-question {
-        width: auto;
-    }
-
-    .col-active {
-        width: 100px;
-        text-align: center;
-    }
-
-    .question-text {
-        font-weight: 500;
-    }
-
-    .inactive-question {
-        opacity: 0.6;
-        background-color: rgba(108, 117, 125, 0.1);
-    }
-
-    .order-controls {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .order-number {
-        font-weight: 600;
-        min-width: 30px;
-    }
-
-    .order-buttons {
-        display: flex;
-        gap: 0.25rem;
-    }
-
-    .btn-xs {
-        padding: 0.1rem 0.4rem;
-        font-size: 0.75rem;
-        line-height: 1.2;
-    }
-
-    .person-name {
-        font-weight: 500;
-    }
-
-    .add-row {
-        background-color: rgba(0, 217, 255, 0.05);
-    }
-
-    .add-row td {
-        padding: 0.75rem 0.5rem;
-    }
-
-    /* Button spacing */
-    .btn + .btn {
-        margin-left: 0.25rem;
-    }
-
-    /* Form control sizes */
-    .form-control-sm {
-        height: calc(1.5em + 0.5rem + 2px);
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-    }
-
-    .btn-sm {
-        padding: 0.25rem 0.75rem;
-        font-size: 0.875rem;
-    }
-
-    /* Responsive adjustments */
-    @@media (max-width: 768px) {
-        .settings-section {
-            padding: 1.5rem;
-        }
-
-        .section-title {
-            font-size: 1.25rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .general-settings-grid {
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .settings-fields {
-            gap: 1.5rem;
-        }
-
-        .setting-field {
-            grid-template-columns: 1fr;
-            gap: 0.75rem;
-            padding: 0.75rem;
-        }
-
-        .setting-label {
-            text-align: left;
-            font-size: 0.9rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .occurrence-controls {
-            flex-wrap: wrap;
-        }
-
-        .setting-field .form-control {
-            max-width: 100%;
-        }
-
-        .checkbox-wrapper {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .col-actions {
-            width: auto;
-        }
-
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.8rem;
-        }
-    }
-
-    /* Advanced Settings Styles */
-    .advanced-settings {
-        margin-top: 1rem;
-    }
-
-    .api-key-section {
-        background-color: var(--surface-color, #f8f9fa);
-        border: 1px solid var(--border-color, #e9ecef);
-        border-radius: 0.5rem;
-        padding: 1.5rem;
-    }
-
-    .api-key-grid {
-        display: grid;
-        gap: 1.5rem;
-    }
-
-    .api-key-item {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .api-key-description {
-        margin-bottom: 0.25rem;
-    }
-
-    .api-key-description a {
-        color: var(--accent-primary, #007bff);
-        text-decoration: none;
-    }
-
-    .api-key-description a:hover {
-        text-decoration: underline;
-    }
-
-    .api-label {
-        font-weight: 600;
-        color: var(--text-primary, #212529);
-        margin-bottom: 0.25rem;
-    }
-
-    .api-input-group {
-        display: flex;
-        gap: 0.5rem;
-        align-items: stretch;
-    }
-
-    .api-input-group .form-control {
-        flex: 1;
-    }
-
-    .api-input-group .btn {
-        white-space: nowrap;
-    }
-
-    .btn-success {
-        background-color: #28a745;
-        border-color: #28a745;
-        color: white;
-    }
-
-    .btn-success:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
-    }
-
-    .section-title i {
-        margin-right: 0.5rem;
-        font-size: 0.9em;
-    }
-
-    @@media (max-width: 768px) {
-        .api-input-group {
-            flex-direction: column;
-        }
-        
-        .api-key-section {
-            padding: 1rem;
-        }
-    }
-</style>

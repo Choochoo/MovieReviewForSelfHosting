@@ -50,12 +50,9 @@
             </NavLink>
         </div>
         <div class="nav-item px-3">
-            <div class="nav-link theme-toggle-nav-item">
-                <span class="bi bi-palette-fill" aria-hidden="true"></span> 
-                <span class="theme-label">Theme</span>
-                <div class="theme-toggle-sidebar">
-                    <ThemeToggle />
-                </div>
+            <div class="nav-link theme-nav-link" @onclick="TriggerThemeToggle">
+                <span class="bi bi-palette-fill" aria-hidden="true"></span> Theme
+                <ThemeToggle @ref="themeToggleRef" />
             </div>
         </div>
     </nav>
@@ -63,6 +60,7 @@
 
 @code {
     private string? currentTitle;
+    private ThemeToggle? themeToggleRef;
     
     protected override async Task OnInitializedAsync()
     {
@@ -90,5 +88,13 @@
     private string GetTitle()
     {
         return currentTitle ?? "Movie Club";
+    }
+    
+    private async Task TriggerThemeToggle()
+    {
+        if (themeToggleRef != null)
+        {
+            await themeToggleRef.TriggerToggle();
+        }
     }
 }

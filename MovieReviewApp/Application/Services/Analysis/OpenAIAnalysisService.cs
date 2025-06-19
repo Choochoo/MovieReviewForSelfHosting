@@ -102,7 +102,7 @@ public class OpenAIAnalysisService
             {
                 _logger.LogDebug("OpenAI API attempt {Attempt} of {MaxRetries}", attempt, maxRetries);
 
-                var requestBody = new
+                object requestBody = new
                 {
                     model = "gpt-4-turbo-preview",
                     messages = new[]
@@ -190,7 +190,7 @@ For each category, find the absolute best example that matches the criteria. If 
     private string CreateResponseSchema()
     {
         // Create a sample response with all expected fields
-        var sampleResponse = new OpenAIAnalysisResponse
+        OpenAIAnalysisResponse sampleResponse = new OpenAIAnalysisResponse
         {
             MostOffensiveTake = CreateSampleCategoryWinner(),
             HottestTake = CreateSampleCategoryWinner(),
@@ -211,7 +211,7 @@ For each category, find the absolute best example that matches the criteria. If 
         };
 
         // Serialize with indentation
-        var options = new JsonSerializerOptions
+        JsonSerializerOptions options = new JsonSerializerOptions
         {
             WriteIndented = true,
             PropertyNamingPolicy = null,

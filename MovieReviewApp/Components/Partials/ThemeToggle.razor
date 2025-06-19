@@ -1,7 +1,10 @@
 
+@using MovieReviewApp.Infrastructure.Configuration
+
 @inject ThemeService ThemeService
 @inject IJSRuntime JSRuntime
 @inject DemoProtectionService DemoProtection
+@inject InstanceManager InstanceManager
 @implements IDisposable
 
 <div class="theme-toggle @(isToggling ? "switching" : "")" @onclick="ToggleTheme">
@@ -31,14 +34,6 @@
     </div>
 </div>
 
-<style>
-    .theme-icon svg {
-        width: 16px;
-        height: 16px;
-        fill: currentColor;
-        stroke: currentColor;
-    }
-</style>
 
 @code {
     private bool isDarkMode = false;
@@ -46,12 +41,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Set default based on instance type
-        isDarkMode = !DemoProtection.IsDemoInstance; // Demo defaults to light, normal defaults to dark
-        
-        // Initialize theme service
+        // Initialize theme service first
         await ThemeService.InitializeAsync();
-        isDarkMode = ThemeService.IsDarkMode;
+        
+        // Get the actual dark mode state from JavaScript (which handles demo logic properly)
+        try
+        {
+            isDarkMode = await JSRuntime.InvokeAsync<bool>("getDarkMode");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to get dark mode from JavaScript: {ex.Message}");
+            // Fallback to theme service state
+            isDarkMode = ThemeService.IsDarkMode;
+        }
         
         ThemeService.ThemeChanged += OnThemeChanged;
         StateHasChanged();
@@ -61,6 +64,9 @@
     {
         if (firstRender)
         {
+            // Set the instance name on the document body for JavaScript detection
+            await JSRuntime.InvokeVoidAsync("eval", $"document.body.setAttribute('data-instance', '{InstanceManager.InstanceName}');");
+            
             string groupTheme = await ThemeService.GetGroupThemeAsync();
             await ApplyTheme(groupTheme, isDarkMode);
         }
@@ -82,8 +88,8 @@
             // Update local state first
             isDarkMode = newDarkMode;
             
-            // Get current group theme
-            string groupTheme = await ThemeService.GetGroupThemeAsync();
+            // Get current group theme from memory (not database)
+            string groupTheme = ThemeService.CurrentGroupTheme;
             Console.WriteLine($"Current group theme: {groupTheme}");
             
             // Apply theme immediately to DOM
@@ -157,6 +163,11 @@
                 Console.WriteLine($"Fallback theme application failed: {fallbackEx.Message}");
             }
         }
+    }
+
+    public async Task TriggerToggle()
+    {
+        await ToggleTheme();
     }
 
     public void Dispose()

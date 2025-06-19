@@ -67,22 +67,34 @@ window.toggleDarkMode = () => {
 };
 
 window.getDarkMode = () => {
-    // Check if this is demo mode by looking at URL or other indicators
+    // Check if this is demo mode by looking at various indicators
     const isDemoMode = window.location.pathname.includes('demo') || 
                        window.location.hostname.includes('demo') ||
-                       document.body.dataset.instance === 'demo';
-    const defaultDarkMode = !isDemoMode; // Demo mode defaults to light, normal mode defaults to dark
-    return localStorage.getItem('darkMode') === 'true' || 
-           (localStorage.getItem('darkMode') === null && defaultDarkMode);
+                       document.body.dataset.instance === 'demo' ||
+                       document.documentElement.dataset.instance === 'demo';
+    
+    const storedValue = localStorage.getItem('darkMode');
+    
+    // If there's a stored value, use it
+    if (storedValue !== null) {
+        return storedValue === 'true';
+    }
+    
+    // For first-time users with no cookie: demo defaults to light (false), normal defaults to dark (true)
+    return !isDemoMode;
 };
 
 window.getGroupTheme = () => {
     // This will be set from the database via Blazor, default to cyberpunk
-    return document.documentElement.dataset.groupTheme || 'cyberpunk';
+    const groupTheme = document.documentElement.dataset.groupTheme || 'cyberpunk';
+    console.log(`getGroupTheme() returning: ${groupTheme} (from dataset: ${document.documentElement.dataset.groupTheme})`);
+    return groupTheme;
 };
 
 window.setGroupThemeAttribute = (groupTheme) => {
+    console.log(`setGroupThemeAttribute called with: ${groupTheme}`);
     document.documentElement.dataset.groupTheme = groupTheme;
+    console.log(`Set group theme attribute: ${groupTheme}`);
 };
 
 // Legacy function for backward compatibility
@@ -95,10 +107,13 @@ window.getStoredTheme = () => {
 // Apply theme immediately on page load (before DOM ready for faster rendering)
 (function() {
     const isDemoMode = window.location.pathname.includes('demo') || 
-                       window.location.hostname.includes('demo');
-    const defaultDarkMode = !isDemoMode;
-    const isDarkMode = localStorage.getItem('darkMode') === 'true' || 
-                      (localStorage.getItem('darkMode') === null && defaultDarkMode);
+                       window.location.hostname.includes('demo') ||
+                       document.body?.dataset?.instance === 'demo' ||
+                       document.documentElement?.dataset?.instance === 'demo';
+    
+    const storedValue = localStorage.getItem('darkMode');
+    const isDarkMode = storedValue !== null ? storedValue === 'true' : !isDemoMode;
+    
     const groupTheme = 'cyberpunk'; // Will be updated by Blazor
     const combinedTheme = `${groupTheme}-${isDarkMode ? 'dark' : 'light'}`;
     document.documentElement.setAttribute('data-theme', combinedTheme);
@@ -106,11 +121,7 @@ window.getStoredTheme = () => {
 
 // Initialize theme when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    const isDemoMode = window.location.pathname.includes('demo') || 
-                       window.location.hostname.includes('demo');
-    const defaultDarkMode = !isDemoMode;
-    const isDarkMode = localStorage.getItem('darkMode') === 'true' || 
-                      (localStorage.getItem('darkMode') === null && defaultDarkMode);
+    const isDarkMode = window.getDarkMode();
     const groupTheme = window.getGroupTheme();
     const combinedTheme = `${groupTheme}-${isDarkMode ? 'dark' : 'light'}`;
     document.documentElement.setAttribute('data-theme', combinedTheme);

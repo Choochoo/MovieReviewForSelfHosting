@@ -67,6 +67,9 @@ namespace MovieReviewApp.Components.Pages
 
         private bool _isInitialized = false;
 
+        /// <summary>
+        /// Initializes the component by loading all required data asynchronously.
+        /// </summary>
         protected override async Task OnInitializedAsync()
         {
             // Load all data asynchronously at initialization
@@ -144,6 +147,9 @@ namespace MovieReviewApp.Components.Pages
             _isInitialized = true;
         }
 
+        /// <summary>
+        /// Loads all required data from services and caches it for component use.
+        /// </summary>
         private async Task LoadAllDataAsync()
         {
             // Ensure default settings exist
@@ -192,6 +198,9 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
+        /// <summary>
+        /// Generates the movie schedule based on phases and award settings.
+        /// </summary>
         private async Task GenerateScheduleAsync(DateTime startDate, string[] allNames)
         {
             if (_dbPhases == null || AwardSettings == null) return;
@@ -263,6 +272,9 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
+        /// <summary>
+        /// Generates a single phase with movie events for the specified people.
+        /// </summary>
         private async Task<Phase> GeneratePhaseAsync(int phaseNumber, DateTime startDate, List<string> peopleNames)
         {
             Phase phase = new Phase
@@ -353,6 +365,9 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
+        /// <summary>
+        /// Gets movies eligible for awards for the specified phase.
+        /// </summary>
         public List<string> GetEligibleMoviesForPhase(int phaseNumber)
         {
             if (_existingEvents == null || AwardSettings == null) return new List<string>();
@@ -368,6 +383,9 @@ namespace MovieReviewApp.Components.Pages
         // Removed GetPreviousAwardEvent() to prevent async deadlocks
         // Award events are now displayed in the chronological timeline
 
+        /// <summary>
+        /// Preloads all question results to avoid async calls during UI rendering.
+        /// </summary>
         private async Task PreloadQuestionResultsAsync()
         {
             List<Task> resultTasks = new List<Task>();
@@ -399,6 +417,9 @@ namespace MovieReviewApp.Components.Pages
         }
 
         // Method to create chronological timeline with phases and award events
+        /// <summary>
+        /// Creates a chronological timeline combining phases and award events.
+        /// </summary>
         public List<ITimelineItem> GetChronologicalTimeline()
         {
             List<ITimelineItem> timeline = new List<ITimelineItem>();
@@ -457,7 +478,7 @@ namespace MovieReviewApp.Components.Pages
 
         public void ToggleResults(Guid awardEventId, Guid questionId)
         {
-            var key = $"show_{awardEventId}_{questionId}";
+            string key = $"show_{awardEventId}_{questionId}";
             if (!showResultsDict.ContainsKey(key))
                 showResultsDict[key] = false;
             

@@ -6,6 +6,9 @@ using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Components.Partials
 {
+    /// <summary>
+    /// Component for handling award voting functionality.
+    /// </summary>
     public partial class AwardVoting
     {
         [Parameter]
@@ -65,6 +68,9 @@ namespace MovieReviewApp.Components.Partials
             awardEvent?.Questions.Any() == true &&
             allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
 
+        /// <summary>
+        /// Initializes the component and loads required data.
+        /// </summary>
         protected override async Task OnInitializedAsync()
         {
             await LoadDataAsync();
@@ -183,6 +189,10 @@ namespace MovieReviewApp.Components.Partials
             passwordInputs[categoryId] = "";
         }
 
+        /// <summary>
+        /// Casts a vote for a specific question.
+        /// </summary>
+        /// <param name="questionId">The ID of the question to vote on.</param>
         private async Task CastVote(Guid questionId)
         {
             if (!selectedMovies.ContainsKey(questionId) ||
@@ -213,9 +223,14 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Removes a previously cast vote.
+        /// </summary>
+        /// <param name="questionId">The ID of the question.</param>
+        /// <param name="voteId">The ID of the vote to remove.</param>
         private async Task RemoveVote(Guid questionId, Guid voteId)
         {
-            var confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
+            bool confirmDelete = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to remove this vote? You can cast a new vote after removing it.");
             if (!confirmDelete) return;
 
             if (await AwardVoteService.DeleteAsync(voteId))
@@ -306,13 +321,13 @@ namespace MovieReviewApp.Components.Partials
 
         private bool IsPastResultShowing(Guid eventId, Guid questionId)
         {
-            var key = $"past_{eventId}_{questionId}";
+            string key = $"past_{eventId}_{questionId}";
             return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
         }
 
         private void TogglePastResults(Guid eventId, Guid questionId)
         {
-            var key = $"past_{eventId}_{questionId}";
+            string key = $"past_{eventId}_{questionId}";
             if (!showPastResultsDict.ContainsKey(key))
                 showPastResultsDict[key] = false;
 
@@ -323,7 +338,7 @@ namespace MovieReviewApp.Components.Partials
         {
             if (isPastEvent)
             {
-                var key = $"past_{eventId}_{questionId}";
+                string key = $"past_{eventId}_{questionId}";
                 return showPastResultsDict.ContainsKey(key) && showPastResultsDict[key];
             }
             else
@@ -336,7 +351,7 @@ namespace MovieReviewApp.Components.Partials
         {
             if (isPastEvent)
             {
-                var key = $"past_{eventId}_{questionId}";
+                string key = $"past_{eventId}_{questionId}";
                 if (!showPastResultsDict.ContainsKey(key))
                     showPastResultsDict[key] = false;
 
@@ -358,7 +373,7 @@ namespace MovieReviewApp.Components.Partials
 
         private List<AwardEvent> GetAllAwardEvents()
         {
-            var allEvents = new List<AwardEvent> { awardEvent };
+            List<AwardEvent> allEvents = new List<AwardEvent> { awardEvent };
             allEvents.AddRange(pastAwardEvents);
             return allEvents;
         }
@@ -390,9 +405,15 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Gets cached question results for a specific event and question.
+        /// </summary>
+        /// <param name="eventId">The ID of the award event.</param>
+        /// <param name="questionId">The ID of the question.</param>
+        /// <returns>List of question results ordered by total points.</returns>
         private async Task<List<QuestionResult>> GetQuestionResults(Guid eventId, Guid questionId)
         {
-            var key = (eventId, questionId);
+            (Guid EventId, Guid QuestionId) key = (eventId, questionId);
             if (!_cachedResults.ContainsKey(key))
             {
                 _cachedResults[key] = (await AwardQuestionService.GetQuestionResultsAsync(eventId, questionId))
@@ -402,6 +423,9 @@ namespace MovieReviewApp.Components.Partials
             return _cachedResults[key];
         }
 
+        /// <summary>
+        /// Gets the total possible points based on number of voters.
+        /// </summary>
         public int totalPossiblePoints => _totalPossiblePoints;
     }
 }

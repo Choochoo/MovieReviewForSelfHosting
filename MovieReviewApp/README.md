@@ -1,37 +1,127 @@
 # 🎬 Movie Review App
 
-A beautiful, modern web application for managing movie selections, discussions, and reviews with your friends and family. Features a cyberpunk-inspired dark theme with secure API key management and **multiple instance support** for complete isolation between different groups.
+> **A sophisticated Blazor Server application for movie discussion groups with AI-powered audio analysis and multi-instance architecture**
 
-## ✨ Features
+A professional-grade web application built with .NET 9.0 and MongoDB, featuring advanced audio processing, AI-powered conversation analysis, and complete multi-tenancy support. I use this with my two movie groups: one with my family and one with my friends. Perfect for movie clubs, family groups, and professional film discussions.
 
-- **Multiple Isolated Instances** - Run unlimited instances for different groups (Family, Work, Friends, etc.)
-- **Movie Theater History View** - Browse your movie history like a professional streaming site
-- **Secure API Integration** - TMDB for movie data, Gladia for audio transcription
-- **Award System** - Vote for your favorite movies of the year
-- **Audio Processing** - Transcribe and process discussion recordings
-- **Facebook Integration** - Optional Messenger integration for notifications
-- **Responsive Design** - Beautiful cyberpunk UI that works on all devices
-- **Secure Configuration** - First-run setup with encrypted secrets storage per instance
+![Home Dashboard](../screenshots/home-dashboard.png)
+*Modern cyberpunk-inspired interface with timeline view*
 
-## 🏠 Instance System
+## 🏆 Key Highlights
 
-Each instance is completely isolated with its own:
-- ✅ **Database** - Separate MongoDB database per instance
-- ✅ **Configuration** - Own API keys, settings, and preferences
-- ✅ **Users & Movies** - No shared data between instances
-- ✅ **Port & Access** - Each runs independently on different ports
-- ✅ **Chat Integration** - Instance-specific Facebook groups
+- **🎯 Multi-Instance Architecture** - Complete isolation between groups with separate databases and configurations
+- **🤖 AI-Powered Analysis** - OpenAI and Claude integration for conversation insights and entertainment highlights
+- **🎵 Advanced Audio Processing** - Multi-microphone transcription with speaker diarization via Gladia API
+- **🏛️ Clean Architecture** - SOLID principles with dependency injection and repository patterns
+- **🔒 Enterprise Security** - Encrypted per-instance configuration and API key management
+- **📱 Responsive Design** - Beautiful dark theme optimized for all devices
+
+## ✨ Core Features
+
+### 🎭 Movie Management
+- **Smart Movie Selection** - TMDB integration with poster fetching and synopsis caching
+- **Phase-Based Scheduling** - Automatic rotation through participants with configurable cycles
+- **Award Voting System** - Comprehensive voting for best movies, performances, and moments
+- **Discussion Questions** - Curated prompts to enhance movie conversations
+
+![Movie Timeline](../screenshots/movie-timeline.png)
+*Chronological timeline with phases and award events*
+
+![Movie Timeline Details](../screenshots/movie-timeline-details.png)
+*Detailed view of movie session with comprehensive information*
+
+### 🎵 Audio Processing Pipeline
+- **Multi-Microphone Support** - Process individual participant audio files
+- **Automatic Optimization** - Smart WAV to MP3 conversion for files >100MB using FFmpeg
+- **Speaker Diarization** - Gladia API integration for speaker identification
+- **State Machine Processing** - Robust workflow with retry logic and error handling
+
+![Audio Processing](../screenshots/audio-processing.png)
+*Real-time audio processing with progress tracking*
+
+### 🤖 AI-Powered Analysis
+- **Conversation Highlights** - OpenAI analysis for funniest moments and best quotes
+- **Speaker Statistics** - Word counts, interruption tracking, and participation metrics
+- **Best Moments Extraction** - Automated identification of entertainment highlights
+- **Detailed Insights** - Claude integration for comprehensive discussion analysis
+
+![AI Analysis](../screenshots/ai-analysis.png)
+*AI-generated conversation insights and entertainment highlights*
+
+### 🎨 Customizable Themes & Appearance
+- **7 Theme Families** - Choose from Cyberpunk, Ocean, Nature, Western, Vintage, Noir, or SciFi styles
+- **Dark/Light Mode** - Toggle between dark and light variants for each theme
+- **14 Total Variants** - Every theme family has both dark and light modes
+- **Per-Instance Themes** - Each group can have their own unique visual identity
+- **Easy Switching** - Change themes instantly from the Settings page
+
+![Theme Customization](../screenshots/theme-options.png)
+*Choose from 7 beautiful theme families with dark/light mode options*
+
+#### Available Theme Families
+
+| Theme | Description | Best For |
+|-------|-------------|----------|
+| **🌃 Cyberpunk** | Neon blues and purples with futuristic styling | Tech-savvy groups, sci-fi fans |
+| **🌊 Ocean** | Calming blues and teals inspired by the sea | Relaxed discussions, family groups |
+| **🌿 Nature** | Earth tones with green accents | Outdoor enthusiasts, nature lovers |
+| **🤠 Western** | Warm browns and golds with rustic styling | Adventure fans, period film enthusiasts |
+| **📜 Vintage** | Classic sepia tones with retro aesthetics | Classic film buffs, nostalgia lovers |
+| **🕵️ Noir** | High contrast blacks and whites with dramatic styling | Mystery fans, film noir enthusiasts |
+| **🚀 SciFi** | Sleek metallics and electric accents | Science fiction groups, futuristic themes |
+
+#### Dark & Light Modes
+Each theme family includes both **dark** and **light** variants:
+- **Dark Mode**: Rich, deep colors perfect for evening viewing sessions
+- **Light Mode**: Clean, bright interface ideal for daytime discussions
+
+> **💡 Pro Tip**: Each instance remembers its theme preference, so your family group can use Nature Dark while your work film club uses Vintage Light!
+
+## 🏗️ Multi-Instance Architecture
+
+![Instance Setup](../screenshots/instance-setup.png)
+*First-run setup wizard for new instances*
+
+### Complete Isolation
+Each instance maintains complete separation:
+
+| Component | Isolation Level | Description |
+|-----------|----------------|-------------|
+| **Database** | ✅ Separate MongoDB | Independent collections per instance |
+| **Configuration** | ✅ Encrypted Storage | Per-instance API keys and settings |
+| **File Storage** | ✅ Organized Folders | Instance-specific audio and image storage |
+| **Network** | ✅ Port-Based | Each instance runs on its own port |
+| **Security** | ✅ Encrypted Secrets | No shared sensitive data |
+
+### Use Cases
+```bash
+# Family movie nights
+dotnet run --instance "Family-Movies" --port 5000
+
+# Work film club
+dotnet run --instance "Work-Film-Club" --port 5001
+
+# Friends cinema group
+dotnet run --instance "Friends-Cinema" --port 5002
+
+# Book-to-movie adaptations club
+dotnet run --instance "Book-Adaptations" --port 5003
+```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- .NET 9.0
-- MongoDB instance (local or cloud)
-- **FFmpeg** (required for audio processing) - see [Audio Processing Setup](#-audio-processing-setup) below
-- API keys for:
-  - [TMDB](https://www.themoviedb.org/settings/api) (required, free)
-  - [Gladia](https://gladia.io/) (optional, for audio transcription)
+- **.NET 9.0** - Latest long-term support version
+- **MongoDB** - Local instance or cloud (MongoDB Atlas recommended)
+- **FFmpeg** - Required for audio optimization and conversion
+- **API Keys**:
+  - [**TMDB**](https://www.themoviedb.org/settings/api) - Movie data and posters (required, free)
+  - [**Gladia**](https://gladia.io/) - Audio transcription with speaker diarization (optional)
+  - [**OpenAI**](https://platform.openai.com/) - Conversation analysis (optional)
+  - [**Claude**](https://console.anthropic.com/) - Detailed insights (optional)
+
+> **💡 Demo Mode Available**: Try the app without any API keys using the demo instance
 
 ### Installation
 
@@ -59,6 +149,11 @@ Each instance is completely isolated with its own:
    - Configure Facebook integration (optional)
    - Choose content type (General or Family)
    - Complete the setup and start using the app!
+
+4. **Customize Your Experience**
+   - Visit **Settings** to choose your preferred theme (Cyberpunk, Nature, Ocean, Western, Vintage, Noir, or SciFi)
+   - Toggle between Dark/Light mode with the theme switcher
+   - Each instance remembers its own theme preferences
 
 ## 🎯 Running Multiple Instances
 
@@ -253,67 +348,80 @@ This is a personal family project, but feel free to fork and adapt for your own 
 - **"Error while copying content to a stream"**: Usually resolved by MP3 conversion (requires FFmpeg)
 - **Conversion failures**: Check FFmpeg installation with `ffmpeg -version` in terminal/command prompt
 
-## 🏗️ Project Architecture
+## 🏗️ Technical Architecture
 
-The application follows **Clean Architecture** principles with clear separation of concerns:
+*Clean Architecture implementation with dependency injection*
 
-### Architecture Overview
+### Core Design Patterns
+
+- **🏛️ Clean Architecture** - Clear separation of concerns across layers
+- **📦 Repository Pattern** - Data access abstraction with MongoDB
+- **💉 Dependency Injection** - Interface-based service registration
+- **🔄 State Machine Pattern** - Audio processing workflow management
+- **🛡️ Factory Pattern** - Secure configuration provider creation
+
+### Technology Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|----------|
+| **Frontend** | Blazor Server + SignalR | Real-time UI with C# |
+| **Backend** | .NET 9.0 + ASP.NET Core | High-performance web framework |
+| **Database** | MongoDB 7.0+ | Document storage with GridFS |
+| **Audio** | NAudio + FFmpeg | Audio processing and conversion |
+| **AI Services** | OpenAI + Claude APIs | Conversation analysis |
+| **Transcription** | Gladia API | Speaker diarization |
+
+### Project Structure
 
 ```
-Application/
-├── Services/              # Business logic services
-│   ├── AudioClipService.cs      # Audio clip generation
-│   ├── MovieReviewService.cs    # Core movie review logic
-│   ├── MovieSessionService.cs   # Movie session management
-│   └── ThemeService.cs          # Theme management
-│
-Infrastructure/
-├── Configuration/         # Application configuration
-├── Database/             # Data access layer
-│   └── MongoDbService.cs       # MongoDB implementation
-├── FileSystem/           # File operations
-│   └── ImageService.cs         # Image processing
-├── Repositories/         # Data repositories
-│   ├── AwardEventRepository.cs
-│   ├── PersonRepository.cs
-│   └── SoundClipRepository.cs
-└── Services/             # External service integrations
-    ├── GladiaService.cs        # Audio transcription
-    ├── MessengerService.cs     # Facebook integration
-    └── SecureConfigurationProvider.cs
-│
-Core/
-└── Interfaces/           # Domain interfaces
-    └── IDatabaseService.cs     # Database abstraction
-│
-Utilities/                # Helper classes and extensions
-├── DateExtensions.cs           # Date utility methods
-└── EnumHelper.cs              # Enum utilities
+📁 Application/
+├── 🧠 Services/Analysis/       # AI-powered conversation analysis
+├── 🎵 Services/Processing/     # Audio processing state machine
+├── 📊 Models/                  # Domain models and DTOs
+└── 🔧 Services/               # Core business logic
+
+📁 Infrastructure/
+├── ⚙️ Configuration/          # Multi-instance management
+├── 🗄️ Database/              # MongoDB abstraction layer
+├── 📁 FileSystem/             # File operations and storage
+└── 🌐 Services/              # External API integrations
+
+📁 Components/
+├── 📄 Pages/                  # Main application pages
+├── 🧩 Partials/              # Reusable UI components
+└── 🎨 Layout/                # Application shell
+
+📁 Models/                     # Core domain entities
+📁 Utilities/                  # Helper extensions and tools
 ```
 
-### Key Architecture Principles
+### 🛠️ Development Standards
 
-- **Clean Architecture**: Organized into distinct layers with clear dependencies
-- **Repository Pattern**: Data access through repositories implementing interfaces
-- **Dependency Injection**: All services use interface abstraction (IDatabaseService)
-- **SOLID Principles**: Especially Dependency Inversion with interface-based design
-- **Instance Isolation**: Complete separation between different group instances
+#### Code Quality
+- **✅ Explicit Type Declarations** - No `var` keyword usage (enforced by .editorconfig)
+- **📝 XML Documentation** - Comprehensive method documentation
+- **🧪 SOLID Principles** - Dependency inversion with interface abstractions
+- **🔒 Security-First** - No hardcoded secrets, encrypted configuration storage
+- **⚡ Performance** - Async/await patterns, efficient MongoDB queries
 
-### Coding Standards
+#### Key Design Decisions
 
-#### Type Declaration Standards
-- **NEVER use `var` keyword**: All variable declarations must use explicit types
-- **Enforced by .editorconfig**: Build will fail if `var` is used anywhere
-- **Examples**:
-  ```csharp
-  // CORRECT
-  List<MovieSession> sessions = await _database.GetAllAsync<MovieSession>();
-  string fileName = Path.GetFileName(filePath);
-  Dictionary<string, int> counts = new Dictionary<string, int>();
-  
-  // INCORRECT - Build error
-  var sessions = await _database.GetAllAsync<MovieSession>();
-  ```
+```csharp
+// ✅ Explicit types and dependency injection
+public class MovieSessionService
+{
+    private readonly IDatabaseService _database;
+    
+    /// <summary>
+    /// Analyzes movie session audio with AI-powered insights.
+    /// </summary>
+    public async Task<AnalysisResult> AnalyzeSessionAsync(Guid sessionId)
+    {
+        List<AudioSegment> segments = await _database.GetAllAsync<AudioSegment>();
+        return await _aiAnalysisService.ProcessSegmentsAsync(segments);
+    }
+}
+```
 
 ### Service Registration
 
@@ -340,33 +448,76 @@ builder.Services.AddScoped<PersonRepository>();
 builder.Services.AddScoped<SoundClipRepository>();
 ```
 
-## 🔧 Development
+## 🚀 Getting Started
 
-### Prerequisites
-- .NET 8.0
-- MongoDB instance
-- FFmpeg (for audio processing)
+### Demo Mode
+```bash
+# Try the app immediately with demo data
+dotnet run --instance "demo"
+# Visit http://localhost:5088
+```
 
 ### Development Setup
+
 1. **Clone and build**:
    ```bash
-   git clone [repo-url]
-   cd MovieReviewApp
+   git clone https://github.com/Choochoo/MovieReviewApp.git
+   cd MovieReviewApp/MovieReviewApp
+   dotnet restore
    dotnet build
    ```
 
 2. **Start development instance**:
    ```bash
    dotnet run --instance "dev"
-   # Follow setup wizard at http://localhost:5000/setup
+   # Visit http://localhost:5000/setup
    ```
 
-### Build Commands
+3. **Production build**:
+   ```bash
+   dotnet build -c Release
+   dotnet publish -c Release
+   ```
+
+### Configuration Management
+
 ```bash
-dotnet build                    # Standard build with validation
-dotnet build -c Release        # Release build for production
+# List all instances
+dotnet run --list
+
+# Create new instance
+dotnet run --instance "my-group" --port 5010
+
+# Reset instance configuration
+# Delete: %APPDATA%/MovieReviewApp/instances/my-group/
 ```
 
 ---
 
-Made with ❤️ for movie lovers everywhere!
+## 📊 Performance & Metrics
+
+- **⚡ Load Time** - Sub-second page loads with SignalR real-time updates
+- **🗄️ Storage** - Efficient MongoDB document storage with GridFS for large files
+- **📈 Scalability** - Multi-instance architecture supports unlimited concurrent groups
+- **🔒 Security** - Encrypted configuration storage with per-instance isolation
+- **📱 Responsive** - Optimized for desktop, tablet, and mobile devices
+
+## 🎯 Use Cases
+
+- **🏠 Family Movie Nights** - Track movies, discussions, and favorite moments
+- **🏢 Corporate Film Clubs** - Professional movie discussion groups
+- **🎓 Film Studies** - Academic analysis with AI-powered insights
+- **👥 Friend Groups** - Social movie watching with conversation highlights
+- **📚 Book Clubs** - Book-to-movie adaptation discussions
+
+---
+
+<div align="center">
+
+**Made with ❤️ for movie lovers everywhere!**
+
+*Built with .NET 9.0, MongoDB, and modern web technologies*
+
+[🌟 Star this repo](https://github.com/Choochoo/MovieReviewApp) • [🐛 Report issues](https://github.com/Choochoo/MovieReviewApp/issues) • [📖 Documentation](https://github.com/yourusername/MovieReviewApp/wiki)
+
+</div>

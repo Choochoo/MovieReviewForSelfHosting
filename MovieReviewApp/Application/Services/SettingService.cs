@@ -135,6 +135,33 @@ public class SettingService(MongoDbService databaseService, ILogger<SettingServi
         return defaultAwardSetting;
     }
 
+    public async Task UpdateApplicationSettingsToLatestAsync()
+    {
+        logger.LogInformation("Updating ApplicationSettings to latest version...");
+        ApplicationSettings latestSettings = new ApplicationSettings();
+        
+        // Set demo-specific defaults if in demo mode
+        if (demoProtectionService.IsDemoInstance)
+        {
+            latestSettings.IsDemoMode = true;
+            latestSettings.AllowDemoDataModification = false;
+            latestSettings.DefaultTheme = "cyberpunk";
+        }
+
+        string serializedSettings = JsonSerializer.Serialize(latestSettings);
+
+        Setting appSettingEntry = new Setting
+        {
+            Key = "ApplicationSettings",
+            Value = serializedSettings,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await AddOrUpdateSettingInternalAsync(appSettingEntry);
+        logger.LogInformation("Updated ApplicationSettings with latest themes");
+    }
+
     public async Task<string> GetSettingValueAsync(string key, string defaultValue = "")
     {
         Setting? setting = await GetSettingAsync(key);

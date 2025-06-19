@@ -10,7 +10,9 @@
     {
         // Theme Settings
         public string DefaultTheme { get; set; } = "cyberpunk";
-        public List<string> AvailableThemes { get; set; } = new() { "cyberpunk", "ocean", "nature", "classic" };
+        public List<string> AvailableThemes { get; set; } = new() { 
+            "cyberpunk", "nature", "ocean", "western", "vintage", "noir", "scifi"
+        };
         
         // File Upload Settings  
         public long MaxFileUploadSizeBytes { get; set; } = 10L * 1024 * 1024 * 1024; // 10GB

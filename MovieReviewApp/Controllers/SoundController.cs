@@ -10,12 +10,24 @@ namespace MovieReviewApp.Controllers
         private readonly SoundClipService _soundClipService;
         private readonly ILogger<SoundController> _logger;
 
+        /// <summary>
+        /// Initializes a new instance of the SoundController class.
+        /// </summary>
+        /// <param name="soundClipService">The sound clip service.</param>
+        /// <param name="logger">The logger for the controller.</param>
         public SoundController(SoundClipService soundClipService, ILogger<SoundController> logger)
         {
             _soundClipService = soundClipService;
             _logger = logger;
         }
 
+        /// <summary>
+        /// Uploads a sound file for a specific person.
+        /// </summary>
+        /// <param name="personId">The ID of the person associated with the sound.</param>
+        /// <param name="file">The audio file to upload.</param>
+        /// <param name="description">Optional description of the sound clip.</param>
+        /// <returns>Details of the uploaded sound clip.</returns>
         [HttpPost("upload")]
         public async Task<IActionResult> UploadSound([FromForm] string personId, [FromForm] IFormFile file, [FromForm] string? description = null)
         {
@@ -47,6 +59,11 @@ namespace MovieReviewApp.Controllers
             }
         }
 
+        /// <summary>
+        /// Uploads a sound file from a URL for a specific person.
+        /// </summary>
+        /// <param name="request">The request containing person ID, URL, and optional description.</param>
+        /// <returns>Details of the uploaded sound clip.</returns>
         [HttpPost("upload-url")]
         public async Task<IActionResult> UploadSoundFromUrl([FromBody] UploadUrlRequest request)
         {
@@ -73,6 +90,11 @@ namespace MovieReviewApp.Controllers
             }
         }
 
+        /// <summary>
+        /// Deletes a sound clip by ID.
+        /// </summary>
+        /// <param name="id">The ID of the sound clip to delete.</param>
+        /// <returns>OK if successful, NotFound if sound not found.</returns>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSound(Guid id)
         {
@@ -111,6 +133,11 @@ namespace MovieReviewApp.Controllers
             return allowedTypes.Contains(file.ContentType?.ToLower());
         }
 
+        /// <summary>
+        /// Serves a sound file by filename.
+        /// </summary>
+        /// <param name="fileName">The name of the sound file to serve.</param>
+        /// <returns>The sound file content with appropriate content type.</returns>
         [HttpGet("/api/sound/serve/{fileName}")]
         public async Task<IActionResult> GetSound(string fileName)
         {
@@ -143,19 +170,27 @@ namespace MovieReviewApp.Controllers
             }
         }
 
+        /// <summary>
+        /// Tests the sound controller endpoint.
+        /// </summary>
+        /// <returns>Test response with current timestamp.</returns>
         [HttpGet("/api/sound/test")]
         public IActionResult TestSoundEndpoint()
         {
             return Ok(new { message = "Sound controller is working", timestamp = DateTime.UtcNow });
         }
 
+        /// <summary>
+        /// Provides debug information about all sound clips.
+        /// </summary>
+        /// <returns>Debug information including file existence and metadata.</returns>
         [HttpGet("/api/sound/debug")]
         public async Task<IActionResult> DebugSounds()
         {
             try
             {
                 List<Models.SoundClip> allSounds = await _soundClipService.GetAllAsync();
-                var debugInfo = allSounds.Where(s => s.IsActive).Select(s => new
+                List<object> debugInfo = allSounds.Where(s => s.IsActive).Select(s => (object)new
                 {
                     id = s.Id,
                     fileName = s.FileName,

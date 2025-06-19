@@ -11,15 +11,24 @@ namespace MovieReviewApp.Controllers
         private readonly ImageService _imageService;
         private const int MaxFileSize = 20 * 1024 * 1024; // 20MB
 
+        /// <summary>
+        /// Initializes a new instance of the ImageController class.
+        /// </summary>
+        /// <param name="imageService">The image service.</param>
         public ImageController(ImageService imageService)
         {
             _imageService = imageService;
         }
 
+        /// <summary>
+        /// Retrieves an image by its ID.
+        /// </summary>
+        /// <param name="imageId">The ID of the image to retrieve.</param>
+        /// <returns>The image file with appropriate content type.</returns>
         [HttpGet("{imageId}")]
         public async Task<IActionResult> GetImage(Guid imageId)
         {
-            var image = await _imageService.GetImageAsync(imageId);
+            ImageStorage? image = await _imageService.GetImageAsync(imageId);
             if (image == null)
             {
                 return NotFound();
@@ -28,6 +37,11 @@ namespace MovieReviewApp.Controllers
             return File(image.ImageData, image.ContentType);
         }
 
+        /// <summary>
+        /// Uploads an image file.
+        /// </summary>
+        /// <param name="file">The image file to upload.</param>
+        /// <returns>The ID of the uploaded image.</returns>
         [HttpPost("upload")]
         public async Task<IActionResult> UploadImage([FromForm] IFormFile file)
         {
@@ -36,7 +50,7 @@ namespace MovieReviewApp.Controllers
                 return BadRequest("Invalid image file");
             }
 
-            var imageId = await SaveImageFromFile(file);
+            Guid? imageId = await SaveImageFromFile(file);
             if (!imageId.HasValue)
             {
                 return BadRequest("Failed to save image");
@@ -45,6 +59,11 @@ namespace MovieReviewApp.Controllers
             return Ok(new { imageId });
         }
 
+        /// <summary>
+        /// Uploads an image from a URL.
+        /// </summary>
+        /// <param name="request">The request containing the URL to download from.</param>
+        /// <returns>The ID of the uploaded image.</returns>
         [HttpPost("upload-from-url")]
         public async Task<IActionResult> UploadFromUrl([FromBody] UrlUploadRequest request)
         {
@@ -53,7 +72,7 @@ namespace MovieReviewApp.Controllers
                 return BadRequest("URL is required");
             }
 
-            var imageId = await _imageService.SaveImageFromUrlAsync(request.Url);
+            Guid? imageId = await _imageService.SaveImageFromUrlAsync(request.Url);
             if (!imageId.HasValue)
             {
                 return BadRequest("Failed to download and save image from URL");
@@ -86,7 +105,7 @@ namespace MovieReviewApp.Controllers
         {
             try
             {
-                using var memoryStream = new MemoryStream();
+                using MemoryStream memoryStream = new MemoryStream();
                 await file.CopyToAsync(memoryStream);
                 byte[] imageData = memoryStream.ToArray();
 

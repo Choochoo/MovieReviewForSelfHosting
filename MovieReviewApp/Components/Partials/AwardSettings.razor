@@ -4,8 +4,6 @@
 @inject ILogger<AwardSettings> Logger
 @inject AwardQuestionService awardQuestionService
 
-<h3 class="section-title">Award Settings</h3>
-
 <div class="award-settings-content">
     <div class="award-toggle">
         <input class="form-check-input" type="checkbox" @bind="settings.AwardsEnabled" id="awardsEnabled">
@@ -16,13 +14,10 @@
 
     @if (settings.AwardsEnabled)
     {
-        <div class="award-options">
             <div class="award-option">
                 <label class="option-label">Phases Before Award:</label>
                 <input type="number" class="form-control form-control-sm" @bind="settings.PhasesBeforeAward" min="1" />
             </div>
-
-        </div>
 
         <div class="questions-section">
             <div class="questions-header">
@@ -31,12 +26,12 @@
                     <i class="bi bi-plus-circle"></i> Add Question
                 </button>
             </div>
-
+            
             @if (!questions.Any())
             {
                 <div class="empty-state">
                     <i class="bi bi-trophy"></i>
-                    <p>No questions added yet. Click "Add Question" to create your first award question.</p>
+                    <p>No award questions added yet. Add some questions to get started!</p>
                 </div>
             }
             else
@@ -46,30 +41,27 @@
                     {
                         <div class="question-item">
                             <div class="question-main">
-                                <input type="text" class="form-control form-control-sm question-input" 
-                                       @bind="question.Question"
-                                       placeholder="Enter award question..." />
+                                <input type="text" 
+                                       class="form-control question-input" 
+                                       placeholder="Enter award question..."
+                                       @bind="question.Question" />
                             </div>
-                            
                             <div class="question-controls">
                                 <div class="votes-control">
                                     <label>Max Votes:</label>
-                                    <input type="number" class="form-control form-control-sm votes-input"
-                                           @bind="question.MaxVotes" min="1" max="10" />
+                                    <input type="number" 
+                                           class="form-control form-control-sm votes-input" 
+                                           @bind="question.MaxVotes"
+                                           min="1" />
                                 </div>
-                                
                                 <div class="active-control">
-                                    <input class="form-check-input" type="checkbox"
-                                           @bind="question.IsActive"
-                                           id="@($"active_{question.Id}")">
-                                    <label class="form-check-label" for="@($"active_{question.Id}")">
-                                        Active
-                                    </label>
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           @bind="question.IsActive" />
+                                    <label class="form-check-label">Active</label>
                                 </div>
-                                
-                                <button class="btn btn-sm btn-danger delete-btn"
-                                        @onclick="() => DeleteQuestion(question)"
-                                        title="Delete Question">
+                                <button class="btn btn-danger btn-sm delete-btn" 
+                                        @onclick="() => DeleteQuestion(question)">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>
@@ -79,8 +71,8 @@
             }
         </div>
     }
-
-    <div class="award-actions">
+    
+    <div class="settings-save">
         <button class="btn btn-primary" @onclick="SaveSettings" disabled="@isSaving">
             @if (isSaving)
             {
@@ -107,27 +99,21 @@
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+        padding: 2rem;
     }
 
     .award-toggle {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-    }
-
-    .award-options {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1.5rem;
-        padding: 1rem;
-        background: rgba(0, 217, 255, 0.05);
-        border-radius: 0.5rem;
+        padding: 0.5rem;
     }
 
     .award-option {
         display: flex;
         align-items: center;
         gap: 0.75rem;
+        padding: 0.5rem;
     }
 
     .option-label {
@@ -142,7 +128,7 @@
     }
 
     .questions-section {
-        margin-top: 1rem;
+        padding: 0.5rem;
     }
 
     .questions-header {
@@ -150,7 +136,7 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 1rem;
-        padding-bottom: 0.75rem;
+        padding: 0.75rem;
         border-bottom: 1px solid var(--border-color);
     }
 
@@ -177,6 +163,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        padding: 0.5rem;
     }
 
     .question-item {
@@ -242,12 +229,11 @@
         padding: 0.25rem 0.5rem;
     }
 
-    .award-actions {
+    .settings-save {
         display: flex;
-        align-items: center;
-        gap: 1rem;
+        justify-content: flex-end;
         margin-top: 1rem;
-        padding-top: 1.5rem;
+        padding: 1rem;
         border-top: 1px solid var(--border-color);
     }
 
@@ -266,9 +252,6 @@
 
     /* Responsive */
     @@media (max-width: 768px) {
-        .award-options {
-            grid-template-columns: 1fr;
-        }
 
         .question-item {
             grid-template-columns: 1fr;

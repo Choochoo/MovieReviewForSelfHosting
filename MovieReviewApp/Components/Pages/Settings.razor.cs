@@ -55,9 +55,16 @@ namespace MovieReviewApp.Components.Pages
         private List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public string NewQuestionText { get; set; } = "";
         public bool NewQuestionIsActive { get; set; } = true;
+        
+        // Available themes list loaded from ApplicationSettings
+        private List<string> AvailableThemes { get; set; } = new();
 
         // Advanced Settings
         private bool showAdvanced = false;
+        private bool showGeneral = true;
+        private bool showPeople = false;
+        private bool showAwards = false;
+        private bool showQuestions = false;
         private string openAIApiKey = "";
         private string claudeApiKey = "";
         private string tmdbApiKey = "";
@@ -85,6 +92,9 @@ namespace MovieReviewApp.Components.Pages
         {
             // Ensure default settings exist
             await SettingService.CreateDefaultGeneralSettingsAsync();
+            
+            // Update ApplicationSettings to latest version (includes new themes)
+            await SettingService.UpdateApplicationSettingsToLatestAsync();
             
             // Load settings
             settings = await SettingService.GetAllAsync();
@@ -119,6 +129,10 @@ namespace MovieReviewApp.Components.Pages
             SelectedGroupTheme = await themeService.GetGroupThemeAsync();
             await themeService.InitializeAsync();
             IsDarkMode = themeService.IsDarkMode;
+            
+            // Load available themes from ApplicationSettings
+            ApplicationSettings applicationSettings = await SettingService.GetApplicationSettingsAsync();
+            AvailableThemes = applicationSettings.AvailableThemes;
         }
 
 
@@ -168,6 +182,13 @@ namespace MovieReviewApp.Components.Pages
             }
             _ = await PersonService.UpsertAsync(person);
             person.IsEditing = false;
+        }
+
+        private async Task OnThemeChanged()
+        {
+            // Apply theme immediately when dropdown changes
+            await themeService.SetGroupThemeAsync(SelectedGroupTheme);
+            StateHasChanged();
         }
 
         private async Task SaveGeneralSettings()
@@ -381,6 +402,26 @@ namespace MovieReviewApp.Components.Pages
             {
                 LoadCurrentApiKeys();
             }
+        }
+
+        private void ToggleGeneral()
+        {
+            showGeneral = !showGeneral;
+        }
+
+        private void TogglePeople()
+        {
+            showPeople = !showPeople;
+        }
+
+        private void ToggleAwards()
+        {
+            showAwards = !showAwards;
+        }
+
+        private void ToggleQuestions()
+        {
+            showQuestions = !showQuestions;
         }
 
         private void LoadCurrentApiKeys()

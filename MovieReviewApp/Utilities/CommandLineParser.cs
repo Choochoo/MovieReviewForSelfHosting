@@ -12,6 +12,11 @@ namespace MovieReviewApp.Utilities
 
     public static class CommandLineParser
     {
+        /// <summary>
+        /// Parses command line arguments into a CommandLineArgs object.
+        /// </summary>
+        /// <param name="args">The command line arguments to parse.</param>
+        /// <returns>Parsed command line arguments.</returns>
         public static CommandLineArgs Parse(string[] args)
         {
             CommandLineArgs result = new CommandLineArgs();
@@ -57,6 +62,9 @@ namespace MovieReviewApp.Utilities
             return result;
         }
 
+        /// <summary>
+        /// Displays help information for command line usage.
+        /// </summary>
         public static void ShowHelp()
         {
             Console.WriteLine("Movie Review App - Instance Manager");
@@ -81,6 +89,9 @@ namespace MovieReviewApp.Utilities
             Console.WriteLine($"  {Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MovieReviewApp", "instances")}");
         }
 
+        /// <summary>
+        /// Lists all existing Movie Review App instances with their details.
+        /// </summary>
         public static void ListInstances()
         {
             InstanceManager instanceManager = new InstanceManager();
@@ -96,7 +107,7 @@ namespace MovieReviewApp.Utilities
                 return;
             }
 
-            foreach (var instanceName in instances)
+            foreach (string instanceName in instances)
             {
                 try
                 {
@@ -126,6 +137,10 @@ namespace MovieReviewApp.Utilities
             Console.WriteLine($"  dotnet run --instance <name> --port <port>");
         }
 
+        /// <summary>
+        /// Prompts the user to select an instance interactively from available options.
+        /// </summary>
+        /// <returns>The selected instance name or null if selection fails.</returns>
         public static string? SelectInstanceInteractively()
         {
             InstanceManager instanceManager = new InstanceManager();

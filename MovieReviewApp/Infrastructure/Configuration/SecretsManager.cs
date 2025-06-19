@@ -79,7 +79,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
                 Dictionary<string, string> secrets = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
                 return secrets;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return new Dictionary<string, string>();
             }

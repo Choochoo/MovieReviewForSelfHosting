@@ -55,6 +55,9 @@ namespace MovieReviewApp.Components.Partials
         private bool showDemoNotification = false;
         private string demoNotificationMessage = "";
 
+        /// <summary>
+        /// Initializes the component and loads TMDB API configuration.
+        /// </summary>
         protected override async Task OnInitializedAsync()
         {
             try
@@ -109,7 +112,7 @@ namespace MovieReviewApp.Components.Partials
 
             try
             {
-                var response = await Http.GetAsync($"/api/movie/synopsis?title={Uri.EscapeDataString(MovieEvent.Movie)}");
+                HttpResponseMessage response = await Http.GetAsync($"/api/movie/synopsis?title={Uri.EscapeDataString(MovieEvent.Movie)}");
                 if (response.IsSuccessStatusCode)
                 {
                     Synopsis = await response.Content.ReadAsStringAsync();
@@ -121,6 +124,9 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Fetches movie synopsis from TMDB API and caches it.
+        /// </summary>
         private async Task GetMovieSynopsisAsync(string movieTitle)
         {
             if (string.IsNullOrEmpty(movieTitle))
@@ -147,11 +153,11 @@ namespace MovieReviewApp.Components.Partials
                 string encodedTitle = Uri.EscapeDataString(movieTitle);
                 string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
 
-                var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
                 request.Headers.Add("User-Agent", "MovieReviewApp/1.0");
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-                using var response = await Http.SendAsync(request);
+                using HttpResponseMessage response = await Http.SendAsync(request);
                 string responseBody = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
@@ -161,18 +167,18 @@ namespace MovieReviewApp.Components.Partials
                     return;
                 }
 
-                var searchResult = JObject.Parse(responseBody);
+                JObject searchResult = JObject.Parse(responseBody);
 
                 if (searchResult["results"] != null && searchResult["results"].HasValues)
                 {
                     int movieId = (int)searchResult["results"][0]["id"];
                     string detailsUrl = $"https://api.themoviedb.org/3/movie/{movieId}?api_key={_apiKey}";
 
-                    var detailsRequest = new HttpRequestMessage(HttpMethod.Get, detailsUrl);
+                    HttpRequestMessage detailsRequest = new HttpRequestMessage(HttpMethod.Get, detailsUrl);
                     detailsRequest.Headers.Add("User-Agent", "MovieReviewApp/1.0");
                     detailsRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-                    using var detailsResponse = await Http.SendAsync(detailsRequest);
+                    using HttpResponseMessage detailsResponse = await Http.SendAsync(detailsRequest);
                     string detailsBody = await detailsResponse.Content.ReadAsStringAsync();
 
                     if (!detailsResponse.IsSuccessStatusCode)
@@ -182,7 +188,7 @@ namespace MovieReviewApp.Components.Partials
                         return;
                     }
 
-                    var movieDetails = JObject.Parse(detailsBody);
+                    JObject movieDetails = JObject.Parse(detailsBody);
                     Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
 
                     if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) &&
@@ -260,6 +266,9 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Saves the movie event with optional text spicing and image processing.
+        /// </summary>
         private async Task SaveAsync()
         {
             if (isLoading) return;
@@ -274,7 +283,7 @@ namespace MovieReviewApp.Components.Partials
                         isSpicing = true;
                         StateHasChanged();
                         
-                        var spicedText = await PromptService.SpiceUpTextAsync(MovieEvent.Reasoning, selectedStyle);
+                        string spicedText = await PromptService.SpiceUpTextAsync(MovieEvent.Reasoning, selectedStyle);
                         if (!string.IsNullOrEmpty(spicedText))
                         {
                             MovieEvent.Reasoning = spicedText;
@@ -285,7 +294,7 @@ namespace MovieReviewApp.Components.Partials
 
                     if (!string.IsNullOrEmpty(MovieEvent.PosterUrl) && !MovieEvent.ImageId.HasValue)
                     {
-                        var imageId = await ImageService.SaveImageFromUrlAsync(MovieEvent.PosterUrl);
+                        Guid? imageId = await ImageService.SaveImageFromUrlAsync(MovieEvent.PosterUrl);
                         if (imageId.HasValue)
                         {
                             MovieEvent.ImageId = imageId;
@@ -311,7 +320,7 @@ namespace MovieReviewApp.Components.Partials
                     
                     await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
 
-                    var updatedMovieEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
+                    MovieEvent? updatedMovieEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
                     if (updatedMovieEvent != null)
                     {
                         MovieEvent = updatedMovieEvent;

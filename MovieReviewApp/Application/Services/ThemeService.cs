@@ -50,6 +50,17 @@ namespace MovieReviewApp.Application.Services
                 _isDarkMode = !_demoProtection.IsDemoInstance;
             }
 
+            // Apply the initial theme to the DOM
+            try
+            {
+                await _jsRuntime.InvokeVoidAsync("setGroupThemeAttribute", _currentGroupTheme);
+                await _jsRuntime.InvokeVoidAsync("setTheme", _currentGroupTheme, _isDarkMode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to initialize theme in DOM: {ex.Message}");
+            }
+
             _initialized = true;
         }
 
@@ -103,6 +114,17 @@ namespace MovieReviewApp.Application.Services
                 }
             }
 
+            // Update the DOM with the new group theme
+            try
+            {
+                await _jsRuntime.InvokeVoidAsync("setGroupThemeAttribute", groupTheme);
+                await _jsRuntime.InvokeVoidAsync("setTheme", groupTheme, _isDarkMode);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to apply group theme to DOM: {ex.Message}");
+            }
+
             // Trigger theme change event
             ThemeChanged?.Invoke(_currentGroupTheme, _isDarkMode);
         }
@@ -111,14 +133,17 @@ namespace MovieReviewApp.Application.Services
         {
             _isDarkMode = isDark;
             
-            // Save to localStorage via JavaScript
+            // Ensure group theme attribute is set before applying dark mode
             try
             {
-                await _jsRuntime.InvokeVoidAsync("setDarkMode", isDark);
+                // First make sure the group theme is set in DOM
+                await _jsRuntime.InvokeVoidAsync("setGroupThemeAttribute", _currentGroupTheme);
+                // Then apply the combined theme directly
+                await _jsRuntime.InvokeVoidAsync("setTheme", _currentGroupTheme, isDark);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to save dark mode to localStorage: {ex.Message}");
+                Console.WriteLine($"Failed to apply dark mode: {ex.Message}");
             }
             
             ThemeChanged?.Invoke(_currentGroupTheme, _isDarkMode);

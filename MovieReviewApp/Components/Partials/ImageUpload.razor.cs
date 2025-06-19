@@ -6,6 +6,9 @@ using MovieReviewApp.Infrastructure.FileSystem;
 
 namespace MovieReviewApp.Components.Partials
 {
+    /// <summary>
+    /// Component for handling image uploads from files, URLs, or clipboard.
+    /// </summary>
     public partial class ImageUpload : IAsyncDisposable
     {
         [Parameter]
@@ -35,9 +38,12 @@ namespace MovieReviewApp.Components.Partials
         private string componentId = Guid.NewGuid().ToString();
         private DotNetObjectReference<ImageUpload>? dotNetRef;
 
+        /// <summary>
+        /// Initializes the component and sets up the preview image.
+        /// </summary>
         protected override async Task OnInitializedAsync()
         {
-            await UpdatePreviewImage();
+            UpdatePreviewImage();
             dotNetRef = DotNetObjectReference.Create(this);
         }
 
@@ -58,10 +64,10 @@ namespace MovieReviewApp.Components.Partials
 
         protected override async Task OnParametersSetAsync()
         {
-            await UpdatePreviewImage();
+            UpdatePreviewImage();
         }
 
-        private async Task UpdatePreviewImage()
+        private Task UpdatePreviewImage()
         {
             if (ImageId.HasValue)
             {
@@ -73,6 +79,7 @@ namespace MovieReviewApp.Components.Partials
             }
             
             StateHasChanged();
+            return Task.CompletedTask;
         }
 
         private async Task HandleFileSelected(InputFileChangeEventArgs e)
@@ -91,11 +98,11 @@ namespace MovieReviewApp.Components.Partials
             try
             {
                 const long maxFileSize = 20 * 1024 * 1024; // 20MB
-                using var stream = file.OpenReadStream(maxFileSize);
-                using var memoryStream = new MemoryStream();
+                using Stream stream = file.OpenReadStream(maxFileSize);
+                using MemoryStream memoryStream = new MemoryStream();
                 await stream.CopyToAsync(memoryStream);
 
-                var imageId = await ImageService.SaveImageAsync(memoryStream.ToArray(), file.Name);
+                Guid? imageId = await ImageService.SaveImageAsync(memoryStream.ToArray(), file.Name);
                 if (imageId.HasValue)
                 {
                     ImageId = imageId;
@@ -104,7 +111,7 @@ namespace MovieReviewApp.Components.Partials
                     PosterUrl = null;
                     await PosterUrlChanged.InvokeAsync(PosterUrl);
                     
-                    await UpdatePreviewImage();
+                    UpdatePreviewImage();
                 }
                 else
                 {
@@ -132,7 +139,7 @@ namespace MovieReviewApp.Components.Partials
 
             try
             {
-                var imageId = await ImageService.SaveImageFromUrlAsync(urlInput);
+                Guid? imageId = await ImageService.SaveImageFromUrlAsync(urlInput);
                 if (imageId.HasValue)
                 {
                     ImageId = imageId;
@@ -142,7 +149,7 @@ namespace MovieReviewApp.Components.Partials
                     await PosterUrlChanged.InvokeAsync(PosterUrl);
                     
                     urlInput = string.Empty;
-                    await UpdatePreviewImage();
+                    UpdatePreviewImage();
                 }
                 else
                 {
@@ -167,7 +174,7 @@ namespace MovieReviewApp.Components.Partials
             PosterUrl = null;
             await PosterUrlChanged.InvokeAsync(PosterUrl);
             urlInput = string.Empty;
-            await UpdatePreviewImage();
+            UpdatePreviewImage();
         }
 
         private async Task OpenFileDialog()
@@ -208,12 +215,17 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Handles pasted images from the clipboard.
+        /// </summary>
+        /// <param name="base64Data">The base64 encoded image data.</param>
+        /// <param name="fileName">The name of the file.</param>
         [JSInvokable]
         public async Task HandlePastedImage(string base64Data, string fileName)
         {
             try
             {
-                var estimatedSize = (base64Data.Length * 3) / 4;
+                int estimatedSize = (base64Data.Length * 3) / 4;
                 if (estimatedSize > 20 * 1024 * 1024) // 20MB limit
                 {
                     ErrorMessage = "Pasted image is too large (max 20MB). Please use a smaller image.";
@@ -221,7 +233,7 @@ namespace MovieReviewApp.Components.Partials
                     return;
                 }
                 
-                var imageData = Convert.FromBase64String(base64Data);
+                byte[] imageData = Convert.FromBase64String(base64Data);
                 await ProcessImageData(imageData, fileName);
             }
             catch (Exception ex)
@@ -231,12 +243,17 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Handles dropped image files.
+        /// </summary>
+        /// <param name="base64Data">The base64 encoded image data.</param>
+        /// <param name="fileName">The name of the file.</param>
         [JSInvokable]
         public async Task HandleDroppedFiles(string base64Data, string fileName)
         {
             try
             {
-                var imageData = Convert.FromBase64String(base64Data);
+                byte[] imageData = Convert.FromBase64String(base64Data);
                 await ProcessImageData(imageData, fileName);
             }
             catch (Exception ex)
@@ -254,7 +271,7 @@ namespace MovieReviewApp.Components.Partials
 
             try
             {
-                var imageId = await ImageService.SaveImageAsync(imageData, fileName);
+                Guid? imageId = await ImageService.SaveImageAsync(imageData, fileName);
                 if (imageId.HasValue)
                 {
                     ImageId = imageId;
@@ -263,7 +280,7 @@ namespace MovieReviewApp.Components.Partials
                     PosterUrl = null;
                     await PosterUrlChanged.InvokeAsync(PosterUrl);
                     
-                    await UpdatePreviewImage();
+                    UpdatePreviewImage();
                 }
                 else
                 {
@@ -281,6 +298,9 @@ namespace MovieReviewApp.Components.Partials
             }
         }
 
+        /// <summary>
+        /// Disposes of resources used by the component.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             dotNetRef?.Dispose();
