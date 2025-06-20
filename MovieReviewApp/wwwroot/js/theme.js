@@ -114,15 +114,10 @@ window.getStoredTheme = () => {
     const storedValue = localStorage.getItem('darkMode');
     const isDarkMode = storedValue !== null ? storedValue === 'true' : !isDemoMode;
     
+    // Set initial theme without waiting for Blazor
     const groupTheme = 'cyberpunk'; // Will be updated by Blazor
     const combinedTheme = `${groupTheme}-${isDarkMode ? 'dark' : 'light'}`;
     document.documentElement.setAttribute('data-theme', combinedTheme);
-})();
-
-// Initialize theme when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    const isDarkMode = window.getDarkMode();
-    const groupTheme = window.getGroupTheme();
-    const combinedTheme = `${groupTheme}-${isDarkMode ? 'dark' : 'light'}`;
-    document.documentElement.setAttribute('data-theme', combinedTheme);
-}); 
+    
+    console.log(`Initial theme set: ${combinedTheme}`);
+})(); 

@@ -67,8 +67,23 @@
             // Set the instance name on the document body for JavaScript detection
             await JSRuntime.InvokeVoidAsync("eval", $"document.body.setAttribute('data-instance', '{InstanceManager.InstanceName}');");
             
+            // Sync the current theme state with JavaScript, but don't trigger a change
             string groupTheme = await ThemeService.GetGroupThemeAsync();
-            await ApplyTheme(groupTheme, isDarkMode);
+            
+            // Set group theme attribute
+            await JSRuntime.InvokeVoidAsync("setGroupThemeAttribute", groupTheme);
+            
+            // Get the current dark mode from JavaScript (which has the correct value)
+            try
+            {
+                bool jsIsDarkMode = await JSRuntime.InvokeAsync<bool>("getDarkMode");
+                isDarkMode = jsIsDarkMode;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to sync dark mode from JavaScript: {ex.Message}");
+            }
         }
     }
 

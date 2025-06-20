@@ -46,11 +46,42 @@ function fixStuckButtons() {
 // Set global volume multiplier
 window.setGlobalVolume = function(volumeLevel) {
     globalVolumeMultiplier = Math.max(0, Math.min(1, volumeLevel)); // Clamp between 0 and 1
+    
+    // Update volume of all currently playing audio elements
+    activeAudioElements.forEach((audio, buttonId) => {
+        if (audio && !audio.ended && !audio.paused) {
+            audio.volume = Math.min(globalVolumeMultiplier, 1.0);
+        }
+    });
 };
 
 // Set current person ID for paste functionality
 window.setCurrentPersonId = function(personId) {
     currentPersonId = personId;
+};
+
+// Auto-cache all sounds for a person when their soundboard is visited
+window.preloadPersonSounds = async function(sounds) {
+    if (!sounds || !Array.isArray(sounds)) return;
+    
+    console.log(`Starting pre-cache of ${sounds.length} sounds...`);
+    
+    // Cache sounds in background without blocking UI
+    setTimeout(async () => {
+        let cachedCount = 0;
+        for (const sound of sounds) {
+            try {
+                if (sound.url) {
+                    await cacheSound(sound.url);
+                    cachedCount++;
+                    console.log(`Cached sound ${cachedCount}/${sounds.length}: ${sound.originalFileName}`);
+                }
+            } catch (error) {
+                console.warn(`Failed to cache sound: ${sound.originalFileName}`, error);
+            }
+        }
+        console.log(`Pre-cache complete: ${cachedCount}/${sounds.length} sounds cached`);
+    }, 100); // Small delay to not block initial page render
 };
 
 // Expose button fix function globally
@@ -85,15 +116,16 @@ function clearCorruptedCache() {
     if (!db) return;
     
     try {
-        const transaction = db.transaction(['audioCache'], 'readwrite');
-        const objectStore = transaction.objectStore('audioCache');
+        const transaction = db.transaction(['blobCache'], 'readwrite');
+        const objectStore = transaction.objectStore('blobCache');
         const clearRequest = objectStore.clear();
         
         clearRequest.onsuccess = function() {
             audioCache.clear();
+            console.log('Cleared corrupted cache');
         };
     } catch (error) {
-        // Silent cleanup
+        console.warn('Failed to clear cache:', error);
     }
 }
 
@@ -433,8 +465,11 @@ window.playSound = async function(url) {
             }
         }
         
+        // Try to get cached blob first, then fallback to URL
+        const audioSource = await getCachedBlobUrl(url) || url;
+        
         // Use HTML5 audio for best quality and compatibility
-        await playWithQualityPreservation(url, enhancedReset, button, fallbackTimer, buttonId);
+        await playWithQualityPreservation(audioSource, enhancedReset, button, fallbackTimer, buttonId);
         
     } catch (error) {
         // Reset button on error and clear fallback timer
@@ -483,7 +518,7 @@ async function playWithQualityPreservation(url, resetCallback, button, fallbackT
     });
     
     // Set volume with global multiplier - simple and preserves quality
-    audio.volume = Math.min(0.5 * globalVolumeMultiplier, 1.0); // Max 50% to prevent ear damage
+    audio.volume = Math.min(globalVolumeMultiplier, 1.0); // Apply user's volume setting
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
     
@@ -510,7 +545,7 @@ function findPlayButtonForUrl(url) {
     return null;
 }
 
-// Cache a sound file
+// Cache a sound file as a blob for instant playback
 async function cacheSound(url) {
     try {
         // Check if already cached
@@ -525,29 +560,48 @@ async function cacheSound(url) {
         }
 
         const arrayBuffer = await response.arrayBuffer();
+        const blob = new Blob([arrayBuffer], { type: response.headers.get('content-type') || 'audio/mpeg' });
 
-        if (audioContext) {
-            // Decode audio data for Web Audio API
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            audioCache.set(url, audioBuffer);
-            
-            // Also cache in IndexedDB for persistence
-            await storeInIndexedDB(url, arrayBuffer);
-            
-            return audioBuffer;
-        } else {
-            // Store raw array buffer if Web Audio API not available
-            audioCache.set(url, arrayBuffer);
-            return arrayBuffer;
-        }
+        // Store both blob and buffer for different use cases
+        audioCache.set(url, { blob, arrayBuffer });
+        
+        // Cache in IndexedDB for persistence
+        await storeBlobInIndexedDB(url, blob, response.headers.get('content-type') || 'audio/mpeg');
+        
+        return { blob, arrayBuffer };
     } catch (error) {
+        console.warn('Failed to cache sound:', url, error);
+        return null;
+    }
+}
+
+// Get cached blob URL for instant playback
+async function getCachedBlobUrl(url) {
+    try {
+        // Check memory cache first
+        const cached = audioCache.get(url);
+        if (cached && cached.blob) {
+            return URL.createObjectURL(cached.blob);
+        }
+
+        // Check IndexedDB cache
+        const cachedBlob = await getBlobFromIndexedDB(url);
+        if (cachedBlob) {
+            // Also store in memory cache for faster subsequent access
+            audioCache.set(url, { blob: cachedBlob });
+            return URL.createObjectURL(cachedBlob);
+        }
+
+        return null;
+    } catch (error) {
+        console.warn('Failed to get cached blob URL:', url, error);
         return null;
     }
 }
 
 // IndexedDB setup and operations
 let dbName = 'SoundboardCache';
-let dbVersion = 1;
+let dbVersion = 3; // Upgraded for blob-only storage
 let db;
 
 function initializeIndexedDB() {
@@ -555,50 +609,76 @@ function initializeIndexedDB() {
     
     request.onsuccess = function(event) {
         db = event.target.result;
-        loadCachedSounds();
+        loadCachedBlobs();
     };
     
     request.onupgradeneeded = function(event) {
         db = event.target.result;
-        const objectStore = db.createObjectStore('audioCache', { keyPath: 'url' });
-        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+        
+        // Delete old stores if they exist
+        if (db.objectStoreNames.contains('audioCache')) {
+            db.deleteObjectStore('audioCache');
+        }
+        
+        // Create blob cache store
+        if (!db.objectStoreNames.contains('blobCache')) {
+            const blobStore = db.createObjectStore('blobCache', { keyPath: 'url' });
+            blobStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
     };
 }
 
-async function storeInIndexedDB(url, audioBuffer) {
+// Store blob in IndexedDB for persistence
+async function storeBlobInIndexedDB(url, blob, contentType) {
     if (!db) return;
 
     try {
-        const transaction = db.transaction(['audioCache'], 'readwrite');
-        const objectStore = transaction.objectStore('audioCache');
-        
-        // Convert AudioBuffer to serializable format
-        const channelData = [];
-        for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
-            channelData.push(Array.from(audioBuffer.getChannelData(i)));
-        }
+        const transaction = db.transaction(['blobCache'], 'readwrite');
+        const objectStore = transaction.objectStore('blobCache');
         
         const cacheEntry = {
             url: url,
-            sampleRate: audioBuffer.sampleRate,
-            length: audioBuffer.length,
-            numberOfChannels: audioBuffer.numberOfChannels,
-            channelData: channelData,
+            blob: blob,
+            contentType: contentType,
             timestamp: Date.now()
         };
         
         objectStore.put(cacheEntry);
     } catch (error) {
-        // Silent storage
+        console.warn('Failed to store blob in IndexedDB:', error);
     }
 }
 
-async function loadCachedSounds() {
-    if (!db || !audioContext) return;
+// Get blob from IndexedDB
+async function getBlobFromIndexedDB(url) {
+    if (!db) return null;
 
     try {
-        const transaction = db.transaction(['audioCache'], 'readonly');
-        const objectStore = transaction.objectStore('audioCache');
+        const transaction = db.transaction(['blobCache'], 'readonly');
+        const objectStore = transaction.objectStore('blobCache');
+        const request = objectStore.get(url);
+        
+        return new Promise((resolve, reject) => {
+            request.onsuccess = function() {
+                resolve(request.result ? request.result.blob : null);
+            };
+            request.onerror = function() {
+                resolve(null);
+            };
+        });
+    } catch (error) {
+        console.warn('Failed to get blob from IndexedDB:', error);
+        return null;
+    }
+}
+
+// Load cached blobs from IndexedDB on startup
+async function loadCachedBlobs() {
+    if (!db) return;
+
+    try {
+        const transaction = db.transaction(['blobCache'], 'readonly');
+        const objectStore = transaction.objectStore('blobCache');
         const request = objectStore.getAll();
         
         request.onsuccess = function() {
@@ -607,67 +687,22 @@ async function loadCachedSounds() {
             
             cachedEntries.forEach(entry => {
                 try {
-                    // Validate entry data before reconstruction
-                    if (!entry.channelData || !Array.isArray(entry.channelData) || 
-                        !entry.numberOfChannels || !entry.length || !entry.sampleRate ||
-                        entry.numberOfChannels <= 0 || entry.length <= 0 || entry.sampleRate <= 0) {
-                        return;
+                    if (entry.blob && entry.url) {
+                        // Store in memory cache for quick access
+                        audioCache.set(entry.url, { blob: entry.blob });
+                        loadedCount++;
                     }
-                    
-                    // Validate channel data
-                    let hasValidData = true;
-                    for (let i = 0; i < entry.numberOfChannels; i++) {
-                        if (!entry.channelData[i] || !Array.isArray(entry.channelData[i])) {
-                            hasValidData = false;
-                            break;
-                        }
-                        // Check for finite values
-                        for (let j = 0; j < Math.min(10, entry.channelData[i].length); j++) {
-                            if (!isFinite(entry.channelData[i][j])) {
-                                hasValidData = false;
-                                break;
-                            }
-                        }
-                        if (!hasValidData) break;
-                    }
-                    
-                    if (!hasValidData) {
-                        // Remove the bad entry
-                        const deleteTransaction = db.transaction(['audioCache'], 'readwrite');
-                        const deleteStore = deleteTransaction.objectStore('audioCache');
-                        deleteStore.delete(entry.url);
-                        return;
-                    }
-                    
-                    // Reconstruct AudioBuffer from cached data
-                    const audioBuffer = audioContext.createBuffer(
-                        entry.numberOfChannels,
-                        entry.length,
-                        entry.sampleRate
-                    );
-                    
-                    for (let i = 0; i < entry.numberOfChannels; i++) {
-                        const channelData = audioBuffer.getChannelData(i);
-                        channelData.set(new Float32Array(entry.channelData[i]));
-                    }
-                    
-                    audioCache.set(entry.url, audioBuffer);
-                    loadedCount++;
                 } catch (error) {
-                    // Remove the problematic entry
-                    try {
-                        const deleteTransaction = db.transaction(['audioCache'], 'readwrite');
-                        const deleteStore = deleteTransaction.objectStore('audioCache');
-                        deleteStore.delete(entry.url);
-                    } catch (deleteError) {
-                        // Silent cleanup
-                    }
+                    console.warn('Failed to load cached blob:', entry.url, error);
                 }
             });
             
+            if (loadedCount > 0) {
+                console.log(`Loaded ${loadedCount} cached sound blobs`);
+            }
         };
     } catch (error) {
-        // Silent loading
+        console.warn('Failed to load cached blobs:', error);
     }
 }
 
@@ -679,8 +714,8 @@ async function cleanupCache() {
     const cutoffTime = Date.now() - maxAge;
 
     try {
-        const transaction = db.transaction(['audioCache'], 'readwrite');
-        const objectStore = transaction.objectStore('audioCache');
+        const transaction = db.transaction(['blobCache'], 'readwrite');
+        const objectStore = transaction.objectStore('blobCache');
         const index = objectStore.index('timestamp');
         const range = IDBKeyRange.upperBound(cutoffTime);
         
@@ -693,7 +728,7 @@ async function cleanupCache() {
             }
         };
     } catch (error) {
-        // Silent cleanup
+        console.warn('Cache cleanup failed:', error);
     }
 }
 

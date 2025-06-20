@@ -238,7 +238,7 @@ else
     private string urlInput = string.Empty;
     private string errorMessage = string.Empty;
     private ElementReference fileInput;
-    private int globalVolume = 80; // Default to 30% for safety
+    private int globalVolume = 30; // Default to 30% for safety
 
     protected override async Task OnInitializedAsync()
     {
@@ -331,6 +331,18 @@ else
             try
             {
                 await JSRuntime.InvokeVoidAsync("setCurrentPersonId", selectedPersonId);
+                
+                // Pre-cache all sound blobs for instant playback
+                if (currentSounds?.Any() == true)
+                {
+                    var soundsForCaching = currentSounds.Select(s => new
+                    {
+                        url = SoundClipService.GetSoundClipUrl(s),
+                        originalFileName = s.OriginalFileName
+                    }).ToArray();
+                    
+                    await JSRuntime.InvokeVoidAsync("preloadPersonSounds", soundsForCaching);
+                }
             }
             catch (InvalidOperationException)
             {

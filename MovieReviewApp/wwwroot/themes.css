@@ -868,6 +868,69 @@ h1, h2, h3, h4, h5, h6 {
 :root[data-theme="cyberpunk-dark"] .section-title {
   background: linear-gradient(90deg, var(--background-secondary), var(--surface-color));
   border-bottom: 1px solid var(--accent-primary);
+  color: var(--text-primary) !important;
+}
+
+/* Fix section titles in all dark themes */
+:root[data-theme="dark"] .section-title,
+:root[data-theme="cyberpunk-dark"] .section-title,
+:root[data-theme="nature-dark"] .section-title,
+:root[data-theme="ocean-dark"] .section-title,
+:root[data-theme="western-dark"] .section-title,
+:root[data-theme="vintage-dark"] .section-title,
+:root[data-theme="noir-dark"] .section-title,
+:root[data-theme="scifi-dark"] .section-title,
+:root[data-theme="dark"] h1.section-title,
+:root[data-theme="cyberpunk-dark"] h1.section-title,
+:root[data-theme="nature-dark"] h1.section-title,
+:root[data-theme="ocean-dark"] h1.section-title,
+:root[data-theme="western-dark"] h1.section-title,
+:root[data-theme="vintage-dark"] h1.section-title,
+:root[data-theme="noir-dark"] h1.section-title,
+:root[data-theme="scifi-dark"] h1.section-title,
+:root[data-theme="dark"] h2.section-title,
+:root[data-theme="cyberpunk-dark"] h2.section-title,
+:root[data-theme="nature-dark"] h2.section-title,
+:root[data-theme="ocean-dark"] h2.section-title,
+:root[data-theme="western-dark"] h2.section-title,
+:root[data-theme="vintage-dark"] h2.section-title,
+:root[data-theme="noir-dark"] h2.section-title,
+:root[data-theme="scifi-dark"] h2.section-title,
+:root[data-theme="dark"] h3.section-title,
+:root[data-theme="cyberpunk-dark"] h3.section-title,
+:root[data-theme="nature-dark"] h3.section-title,
+:root[data-theme="ocean-dark"] h3.section-title,
+:root[data-theme="western-dark"] h3.section-title,
+:root[data-theme="vintage-dark"] h3.section-title,
+:root[data-theme="noir-dark"] h3.section-title,
+:root[data-theme="scifi-dark"] h3.section-title,
+:root[data-theme="dark"] h4.section-title,
+:root[data-theme="cyberpunk-dark"] h4.section-title,
+:root[data-theme="nature-dark"] h4.section-title,
+:root[data-theme="ocean-dark"] h4.section-title,
+:root[data-theme="western-dark"] h4.section-title,
+:root[data-theme="vintage-dark"] h4.section-title,
+:root[data-theme="noir-dark"] h4.section-title,
+:root[data-theme="scifi-dark"] h4.section-title,
+:root[data-theme="dark"] h5.section-title,
+:root[data-theme="cyberpunk-dark"] h5.section-title,
+:root[data-theme="nature-dark"] h5.section-title,
+:root[data-theme="ocean-dark"] h5.section-title,
+:root[data-theme="western-dark"] h5.section-title,
+:root[data-theme="vintage-dark"] h5.section-title,
+:root[data-theme="noir-dark"] h5.section-title,
+:root[data-theme="scifi-dark"] h5.section-title,
+:root[data-theme="dark"] h6.section-title,
+:root[data-theme="cyberpunk-dark"] h6.section-title,
+:root[data-theme="nature-dark"] h6.section-title,
+:root[data-theme="ocean-dark"] h6.section-title,
+:root[data-theme="western-dark"] h6.section-title,
+:root[data-theme="vintage-dark"] h6.section-title,
+:root[data-theme="noir-dark"] h6.section-title,
+:root[data-theme="scifi-dark"] h6.section-title {
+  color: var(--text-primary) !important;
+  background: none !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
 }
 
 :root[data-theme="cyberpunk-dark"] .form-control {

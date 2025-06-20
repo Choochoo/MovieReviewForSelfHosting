@@ -22,7 +22,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
 
         public string? GetSecret(string key)
         {
-            return _secrets.TryGetValue(key, out var value) ? value : null;
+            return _secrets.TryGetValue(key, out string? value) ? value : null;
         }
 
         public void SetSecret(string key, string value)
@@ -37,7 +37,7 @@ namespace MovieReviewApp.Infrastructure.Configuration
         {
             _demoProtection.ValidateNotDemo("Save API keys or secrets");
             
-            foreach (var kvp in secrets)
+            foreach (KeyValuePair<string, string> kvp in secrets)
             {
                 _secrets[kvp.Key] = kvp.Value;
             }
