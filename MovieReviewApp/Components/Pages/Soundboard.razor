@@ -229,7 +229,7 @@ else
     
     private List<Person>? people;
     private List<DiscussionQuestion>? discussionQuestions;
-    private List<SoundClip>? currentSounds;
+    private List<SoundClipStorage>? currentSounds;
     private Dictionary<string, int> soundCounts = new();
     private string? selectedPersonId;
     private Person? selectedPerson;
@@ -510,7 +510,7 @@ else
         }
     }
 
-    private async Task PlaySound(SoundClip sound)
+    private async Task PlaySound(SoundClipStorage sound)
     {
         try
         {
@@ -527,7 +527,7 @@ else
         }
     }
 
-    private async Task DeleteSound(SoundClip sound)
+    private async Task DeleteSound(SoundClipStorage sound)
     {
         try
         {

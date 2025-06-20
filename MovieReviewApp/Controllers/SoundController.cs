@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using MovieReviewApp.Application.Services;
+using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Controllers
 {
@@ -43,7 +44,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                Models.SoundClip soundClip = await _soundClipService.SaveSoundClipAsync(personId, file, description);
+                SoundClipStorage soundClip = await _soundClipService.SaveSoundClipAsync(personId, file, description);
                 return Ok(new
                 {
                     id = soundClip.Id.ToString(),
@@ -74,7 +75,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                Models.SoundClip soundClip = await _soundClipService.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
+                SoundClipStorage soundClip = await _soundClipService.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
                 return Ok(new
                 {
                     id = soundClip.Id.ToString(),
@@ -134,38 +135,31 @@ namespace MovieReviewApp.Controllers
         }
 
         /// <summary>
-        /// Serves a sound file by filename.
+        /// Serves a sound file by ID.
         /// </summary>
-        /// <param name="fileName">The name of the sound file to serve.</param>
+        /// <param name="id">The ID of the sound clip to serve.</param>
         /// <returns>The sound file content with appropriate content type.</returns>
-        [HttpGet("/api/sound/serve/{fileName}")]
-        public async Task<IActionResult> GetSound(string fileName)
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetSound(Guid id)
         {
             try
             {
-                _logger.LogInformation("Serving sound file via API: {FileName}", fileName);
+                _logger.LogInformation("Serving sound clip via API: {Id}", id);
 
-                Models.SoundClip? soundClip = (await _soundClipService.GetAllAsync()).FirstOrDefault(s => s.FileName == fileName);
+                SoundClipStorage? soundClip = await _soundClipService.GetSoundClipAsync(id);
                 if (soundClip == null || !soundClip.IsActive)
                 {
-                    _logger.LogWarning("Sound clip not found or inactive: {FileName}", fileName);
+                    _logger.LogWarning("Sound clip not found or inactive: {Id}", id);
                     return NotFound();
                 }
 
-                if (!System.IO.File.Exists(soundClip.FilePath))
-                {
-                    _logger.LogWarning("Sound file does not exist on disk: {FilePath}", soundClip.FilePath);
-                    return NotFound();
-                }
+                _logger.LogInformation("Successfully serving sound clip: {Id}, Size: {Size} bytes", id, soundClip.AudioData.Length);
 
-                byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(soundClip.FilePath);
-                _logger.LogInformation("Successfully serving sound file: {FileName}, Size: {Size} bytes", fileName, fileBytes.Length);
-
-                return File(fileBytes, soundClip.ContentType, enableRangeProcessing: true);
+                return File(soundClip.AudioData, soundClip.ContentType, enableRangeProcessing: true);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to serve sound file {FileName}", fileName);
+                _logger.LogError(ex, "Failed to serve sound clip {Id}", id);
                 return StatusCode(500);
             }
         }
@@ -183,29 +177,29 @@ namespace MovieReviewApp.Controllers
         /// <summary>
         /// Provides debug information about all sound clips.
         /// </summary>
-        /// <returns>Debug information including file existence and metadata.</returns>
+        /// <returns>Debug information including blob storage metadata.</returns>
         [HttpGet("/api/sound/debug")]
         public async Task<IActionResult> DebugSounds()
         {
             try
             {
-                List<Models.SoundClip> allSounds = await _soundClipService.GetAllAsync();
+                List<SoundClipStorage> allSounds = await _soundClipService.GetAllAsync();
                 List<object> debugInfo = allSounds.Where(s => s.IsActive).Select(s => (object)new
                 {
                     id = s.Id,
                     fileName = s.FileName,
                     originalFileName = s.OriginalFileName,
-                    filePath = s.FilePath,
-                    fileExists = System.IO.File.Exists(s.FilePath),
+                    audioBlobSize = s.AudioData.Length,
                     fileSize = s.FileSize,
                     contentType = s.ContentType,
                     url = _soundClipService.GetSoundClipUrl(s),
-                    personId = s.PersonId
+                    personId = s.PersonId,
+                    hash = s.Hash
                 }).ToList();
 
                 return Ok(new
                 {
-                    message = "Sound debug info",
+                    message = "Sound debug info (blob storage)",
                     timestamp = DateTime.UtcNow,
                     totalSounds = debugInfo.Count,
                     sounds = debugInfo

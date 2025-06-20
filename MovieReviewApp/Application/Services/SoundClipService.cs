@@ -1,54 +1,58 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
+using System.Security.Cryptography;
 
 namespace MovieReviewApp.Application.Services;
 
 /// <summary>
 /// Service responsible for managing sound clips and their lifecycle.
-/// Handles CRUD operations, file management, and sound clip state.
+/// Handles CRUD operations, blob storage, and sound clip state.
 /// </summary>
 public class SoundClipService(
     MongoDbService databaseService,
-    ILogger<SoundClipService> logger,
-    IWebHostEnvironment webHostEnvironment)
-    : BaseService<SoundClip>(databaseService, logger)
+    ILogger<SoundClipService> logger)
+    : BaseService<SoundClipStorage>(databaseService, logger)
 {
-    private readonly IWebHostEnvironment _webHostEnvironment = webHostEnvironment;
 
     // Base CRUD methods are inherited from BaseService<SoundClip>
     // GetAllAsync, GetByIdAsync(Guid), CreateAsync, UpdateAsync, DeleteAsync(Guid)
 
 
-    public async Task<List<SoundClip>> GetByPersonIdAsync(string personId)
+    public async Task<List<SoundClipStorage>> GetByPersonIdAsync(string personId)
     {
-        IEnumerable<SoundClip> soundClips = await _db.GetAllAsync<SoundClip>();
+        IEnumerable<SoundClipStorage> soundClips = await _db.GetAllAsync<SoundClipStorage>();
         return soundClips
             .Where(s => s.PersonId == personId && s.IsActive)
             .OrderBy(s => s.CreatedAt)
             .ToList();
     }
 
-    public async Task<SoundClip> SaveAsync(string personId, IFormFile file, string? description = null)
+    public async Task<SoundClipStorage> SaveAsync(string personId, IFormFile file, string? description = null)
     {
-        string uploadsPath = GetUploadsPath();
-        _ = Directory.CreateDirectory(uploadsPath);
+        using MemoryStream memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream);
+        byte[] audioData = memoryStream.ToArray();
 
-        string fileName = $"{Guid.NewGuid()}_{file.FileName}";
-        string filePath = Path.Combine(uploadsPath, fileName);
-
-        using (FileStream stream = new FileStream(filePath, FileMode.Create))
+        // Check for duplicates using hash
+        string hash = ComputeHash(audioData);
+        SoundClipStorage? existingSoundClip = await GetByHashAsync(hash);
+        if (existingSoundClip != null)
         {
-            await file.CopyToAsync(stream);
+            _logger.LogInformation("Sound clip with hash {Hash} already exists, returning existing", hash);
+            return existingSoundClip;
         }
 
-        SoundClip soundClip = new SoundClip
+        string fileName = $"{Guid.NewGuid()}_{file.FileName}";
+
+        SoundClipStorage soundClip = new SoundClipStorage
         {
             PersonId = personId,
             FileName = fileName,
             OriginalFileName = file.FileName,
-            FilePath = filePath,
             ContentType = file.ContentType,
+            AudioData = audioData,
             FileSize = file.Length,
+            Hash = hash,
             Description = description,
             CreatedAt = DateTime.UtcNow
         };
@@ -56,7 +60,7 @@ public class SoundClipService(
         return await CreateAsync(soundClip);
     }
 
-    public async Task<SoundClip> SaveFromUrlAsync(string personId, string url, string? description = null)
+    public async Task<SoundClipStorage> SaveFromUrlAsync(string personId, string url, string? description = null)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
             throw new ArgumentException("Invalid URL format", nameof(url));
@@ -66,9 +70,6 @@ public class SoundClipService(
 
         HttpResponseMessage response = await httpClient.GetAsync(url);
         _ = response.EnsureSuccessStatusCode();
-
-        string uploadsPath = GetUploadsPath();
-        _ = Directory.CreateDirectory(uploadsPath);
 
         string? contentType = response.Content.Headers.ContentType?.MediaType;
 
@@ -89,27 +90,34 @@ public class SoundClipService(
             };
         }
 
-        string extension = GetExtensionFromContentType(contentType);
-        string fileName = $"{Guid.NewGuid()}{extension}";
-        string filePath = Path.Combine(uploadsPath, fileName);
+        byte[] audioData = await response.Content.ReadAsByteArrayAsync();
 
-        byte[] fileBytes = await response.Content.ReadAsByteArrayAsync();
-
-        if (fileBytes.Length < 1024)
+        if (audioData.Length < 1024)
             throw new InvalidOperationException("Downloaded file is too small to be valid audio");
 
-        await File.WriteAllBytesAsync(filePath, fileBytes);
+        // Check for duplicates using hash
+        string hash = ComputeHash(audioData);
+        var existingSoundClip = await GetByHashAsync(hash);
+        if (existingSoundClip != null)
+        {
+            _logger.LogInformation("Sound clip with hash {Hash} already exists, returning existing", hash);
+            return existingSoundClip;
+        }
 
+        string extension = GetExtensionFromContentType(contentType);
+        string fileName = $"{Guid.NewGuid()}{extension}";
         string originalFileName = GetCleanFileName(uri);
 
-        SoundClip soundClip = new SoundClip
+        SoundClipStorage soundClip = new SoundClipStorage
         {
             PersonId = personId,
             FileName = fileName,
             OriginalFileName = originalFileName,
-            FilePath = filePath,
             ContentType = contentType,
-            FileSize = fileBytes.Length,
+            AudioData = audioData,
+            FileSize = audioData.Length,
+            Hash = hash,
+            OriginalUrl = url,
             Description = description,
             CreatedAt = DateTime.UtcNow
         };
@@ -119,25 +127,30 @@ public class SoundClipService(
 
     public async Task<Dictionary<string, int>> GetCountsByPersonAsync()
     {
-        IEnumerable<SoundClip> soundClips = await _db.GetAllAsync<SoundClip>();
+        IEnumerable<SoundClipStorage> soundClips = await _db.GetAllAsync<SoundClipStorage>();
         return soundClips
             .Where(s => s.IsActive)
             .GroupBy(s => s.PersonId)
             .ToDictionary(g => g.Key, g => g.Count());
     }
 
-    public string GetSoundClipUrl(SoundClip soundClip)
+    public string GetSoundClipUrl(SoundClipStorage soundClip)
     {
-        return $"/sounds/{soundClip.FileName}";
+        return $"/api/sound/{soundClip.Id}";
+    }
+
+    public async Task<SoundClipStorage?> GetSoundClipAsync(Guid soundClipId)
+    {
+        return await GetByIdAsync(soundClipId);
     }
 
     // Wrapper methods for backward compatibility with SoundController
-    public async Task<SoundClip> SaveSoundClipAsync(string personId, IFormFile file, string? description = null)
+    public async Task<SoundClipStorage> SaveSoundClipAsync(string personId, IFormFile file, string? description = null)
     {
         return await SaveAsync(personId, file, description);
     }
 
-    public async Task<SoundClip> SaveSoundClipFromUrlAsync(string personId, string url, string? description = null)
+    public async Task<SoundClipStorage> SaveSoundClipFromUrlAsync(string personId, string url, string? description = null)
     {
         return await SaveFromUrlAsync(personId, url, description);
     }
@@ -147,14 +160,22 @@ public class SoundClipService(
         return await GetCountsByPersonAsync();
     }
 
-    public async Task<List<SoundClip>> GetSoundClipsForPersonAsync(string personId)
+    public async Task<List<SoundClipStorage>> GetSoundClipsForPersonAsync(string personId)
     {
         return await GetByPersonIdAsync(personId);
     }
 
-    private string GetUploadsPath()
+    private async Task<SoundClipStorage?> GetByHashAsync(string hash)
     {
-        return Path.Combine(_webHostEnvironment.WebRootPath, "sounds");
+        var soundClips = await _db.GetAllAsync<SoundClipStorage>();
+        return soundClips.FirstOrDefault(s => s.Hash == hash);
+    }
+
+    private static string ComputeHash(byte[] data)
+    {
+        using var sha256 = SHA256.Create();
+        byte[] hash = sha256.ComputeHash(data);
+        return Convert.ToBase64String(hash);
     }
 
     private static string GetExtensionFromContentType(string contentType)
