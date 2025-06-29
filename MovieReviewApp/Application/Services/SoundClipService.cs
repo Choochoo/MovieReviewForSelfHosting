@@ -14,7 +14,7 @@ public class SoundClipService(
     : BaseService<SoundClipStorage>(databaseService, logger)
 {
 
-    // Base CRUD methods are inherited from BaseService<SoundClip>
+    // Base CRUD methods are inherited from BaseService<SoundClipStorage>
     // GetAllAsync, GetByIdAsync(Guid), CreateAsync, UpdateAsync, DeleteAsync(Guid)
 
 
