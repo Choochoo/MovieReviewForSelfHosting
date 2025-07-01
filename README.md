@@ -1,4 +1,4 @@
-# [♦] Movie Review App
+# 🎬 Movie Review App
 
 > **A fun Blazor Server app for movie groups with AI-powered audio analysis and multi-instance support**
 
@@ -10,34 +10,34 @@ A web app built with .NET 9.0 and MongoDB that helps movie groups track their fi
 ![Home Dashboard](screenshots/home-dashboard.png)
 *Clean interface with timeline view of your movie journey*
 
-## [■] Quick Navigation
+## 📚 Quick Navigation
 
-- [[*]] What Makes It Special
-- [[+]] What It Does
-- [[~]] Themes & Looks
-- [[#]] How It Works
-- [[>]] Getting Started
-- [[!]] Keeping Things Safe
-- [[♪]] Audio Processing Setup
-- [[&]] Development
-- [[^]] Deployment
-- [[%]] Performance & Metrics
-- [[o]] Use Cases
-- [[?]] Glossary
-- [[!]] Troubleshooting
+- [🏆 What Makes It Special](#-what-makes-it-special)
+- [✨ What It Does](#-what-it-does)
+- [🎨 Themes & Looks](#-themes--looks)
+- [🏗️ How It Works](#️-how-it-works)
+- [🚀 Getting Started](#-getting-started)
+- [🔒 Keeping Things Safe](#-keeping-things-safe)
+- [🎵 Audio Processing Setup](#-audio-processing-setup)
+- [🛠️ Development](#️-development)
+- [🚀 Deployment](#-deployment)
+- [📊 Performance & Metrics](#-performance--metrics)
+- [🎯 Use Cases](#-use-cases)
+- [📖 Glossary](#-glossary)
+- [❓ Troubleshooting](#-troubleshooting)
 
-## [[*]] What Makes It Special
+## 🏆 What Makes It Special
 
-- **[>] Multiple Groups** - Keep your family movie nights separate from your friend group discussions
-- **[AI] AI Magic** - Uses OpenAI and Claude to find the funniest moments and best quotes from your discussions
-- **[♪] Smart Audio** - Records and transcribes your movie discussions with speaker identification
-- **[#] Clean Code** - Built right with proper separation of concerns and dependency injection
-- **[!] Safe & Secure** - Each group's data is completely separate and encrypted
-- **[+] Works Everywhere** - Looks great on desktop, tablet, and phone
+- **🎯 Multiple Groups** - Keep your family movie nights separate from your friend group discussions
+- **🤖 AI Magic** - Uses OpenAI and Claude to find the funniest moments and best quotes from your discussions
+- **🎵 Smart Audio** - Records and transcribes your movie discussions with speaker identification
+- **🏛️ Clean Code** - Built right with proper separation of concerns and dependency injection
+- **🔒 Safe & Secure** - Each group's data is completely separate and encrypted
+- **📱 Works Everywhere** - Looks great on desktop, tablet, and phone
 
-## [[+]] What It Does
+## ✨ What It Does
 
-### [♦] Movie Management
+### 🎭 Movie Management
 - **Find Movies** - Search TMDB for any movie with posters and descriptions
 - **Take Turns** - Automatically rotates who picks the next movie
 - **Vote on Awards** - Vote for best movies, performances, and moments
@@ -49,7 +49,7 @@ A web app built with .NET 9.0 and MongoDB that helps movie groups track their fi
 ![Movie Timeline Details](screenshots/movie-timeline-details.png)
 *Detailed view of each movie session*
 
-### [♪] Audio Processing Pipeline
+### 🎵 Audio Processing Pipeline
 - **Record Everyone** - Handle multiple microphones for each person
 - **Smart Compression** - Automatically converts large files to save space
 - **Who Said What** - Identifies different speakers in your recordings
@@ -58,7 +58,7 @@ A web app built with .NET 9.0 and MongoDB that helps movie groups track their fi
 ![Audio Processing](screenshots/audio-processing.png)
 *See your audio being processed in real-time*
 
-### [AI] AI-Powered Analysis
+### 🤖 AI-Powered Analysis
 - **Find the Fun** - AI picks out the funniest moments and best quotes
 - **Who Talks Most** - Track who's participating and how much
 - **Best Moments** - Automatically identifies the most entertaining parts
@@ -67,7 +67,7 @@ A web app built with .NET 9.0 and MongoDB that helps movie groups track their fi
 ![AI Analysis](screenshots/ai-analysis.png)
 *AI-generated insights from your movie discussions*
 
-### [~] Themes & Looks
+### 🎨 Themes & Looks
 - **7 Different Styles** - Choose from Cyberpunk, Ocean, Nature, Western, Vintage, Noir, or SciFi
 - **Dark or Light** - Switch between dark and light modes for each theme
 - **14 Total Options** - Every theme comes in both dark and light versions
@@ -81,22 +81,22 @@ A web app built with .NET 9.0 and MongoDB that helps movie groups track their fi
 
 | Theme | What It's Like | Perfect For |
 |-------|----------------|-------------|
-| **[≡] Cyberpunk** | Neon blues and purples with futuristic vibes | Tech lovers, sci-fi fans |
-| **[~] Ocean** | Calming blues and teals like the sea | Relaxed groups, family time |
-| **[♠] Nature** | Earth tones with green accents | Nature lovers, outdoor enthusiasts |
-| **[*] Western** | Warm browns and golds with rustic charm | Adventure fans, period film lovers |
-| **[□] Vintage** | Classic sepia tones with retro feel | Classic film buffs, nostalgia seekers |
-| **[▲] Noir** | High contrast blacks and whites with drama | Mystery fans, film noir enthusiasts |
-| **[◊] SciFi** | Sleek metallics and electric accents | Science fiction groups, futuristic themes |
+| **🌃 Cyberpunk** | Neon blues and purples with futuristic vibes | Tech lovers, sci-fi fans |
+| **🌊 Ocean** | Calming blues and teals like the sea | Relaxed groups, family time |
+| **🌿 Nature** | Earth tones with green accents | Nature lovers, outdoor enthusiasts |
+| **🤠 Western** | Warm browns and golds with rustic charm | Adventure fans, period film lovers |
+| **📜 Vintage** | Classic sepia tones with retro feel | Classic film buffs, nostalgia seekers |
+| **🕵️ Noir** | High contrast blacks and whites with drama | Mystery fans, film noir enthusiasts |
+| **🚀 SciFi** | Sleek metallics and electric accents | Science fiction groups, futuristic themes |
 
 #### Dark & Light Modes
 Each theme comes in two flavors:
 - **Dark Mode**: Rich, deep colors perfect for evening movie sessions
 - **Light Mode**: Clean, bright interface great for daytime discussions
 
-> **[!] Pro Tip**: Each group remembers its theme choice, so your family can use Nature Dark while your work film club uses Vintage Light!
+> **💡 Pro Tip**: Each group remembers its theme choice, so your family can use Nature Dark while your work film club uses Vintage Light!
 
-## [[#]] How It Works
+## 🏗️ How It Works
 
 ![Instance Setup](screenshots/instance-setup.png)
 *Easy setup wizard for new groups*
@@ -106,11 +106,11 @@ Each group is completely separate:
 
 | What | How Separate | What This Means |
 |------|--------------|-----------------|
-| **Database** | [✓] Separate MongoDB | Each group's data is completely isolated |
-| **Settings** | [✓] Encrypted Storage | API keys and settings are private per group |
-| **Files** | [✓] Organized Folders | Audio and images are stored separately |
-| **Network** | [✓] Different Ports | Each group runs on its own port |
-| **Security** | [✓] Encrypted Secrets | No shared sensitive information |
+| **Database** | ✅ Separate MongoDB | Each group's data is completely isolated |
+| **Settings** | ✅ Encrypted Storage | API keys and settings are private per group |
+| **Files** | ✅ Organized Folders | Audio and images are stored separately |
+| **Network** | ✅ Different Ports | Each group runs on its own port |
+| **Security** | ✅ Encrypted Secrets | No shared sensitive information |
 
 ### Real-World Examples
 ```bash
@@ -127,7 +127,7 @@ dotnet run --instance "Friends-Cinema" --port 5002
 dotnet run --instance "Book-Adaptations" --port 5003
 ```
 
-## [[>]] Getting Started
+## 🚀 Getting Started
 
 ### What You Need
 
@@ -140,7 +140,7 @@ dotnet run --instance "Book-Adaptations" --port 5003
   - [**OpenAI**](https://platform.openai.com/) - Conversation analysis (optional)
   - [**Claude**](https://console.anthropic.com/) - Detailed insights (optional)
 
-> **[!] Try It First**: You can test the app without any API keys using the demo mode
+> **💡 Try It First**: You can test the app without any API keys using the demo mode
 
 ### Installation
 
@@ -174,7 +174,7 @@ dotnet run --instance "Book-Adaptations" --port 5003
    - Switch between Dark/Light mode with the theme switcher
    - Each group remembers its own theme choices
 
-## [>] Running Multiple Groups
+## 🎯 Running Multiple Groups
 
 ```bash
 # Family movie nights
@@ -203,14 +203,14 @@ dotnet run --help
 dotnet run --instance "My-Group" --port 5005
 ```
 
-## [[!]] Keeping Things Safe
+## 🔒 Keeping Things Safe
 
 - **Private Storage** - Each group has its own encrypted settings
 - **Easy Setup** - No need to edit config files manually
 - **Template Files** - Public code includes template files with placeholder values
 - **No Secrets in Code** - Comprehensive .gitignore keeps sensitive data out
 
-## [□] Where Your Data Lives
+## 📁 Where Your Data Lives
 
 Each group stores its data separately:
 - **Windows**: `%APPDATA%/MovieReviewApp/instances/{group-name}/`
@@ -221,7 +221,7 @@ Each group stores its data separately:
 - `secrets.json` - API keys and sensitive settings
 - `config.json` - Group settings (display name, port, content type)
 
-## [~] UI Features
+## 🎨 UI Features
 
 ### Theater View
 - **3-column movie grid** on desktop (2 on tablet, 1 on mobile)
@@ -234,7 +234,7 @@ Each group stores its data separately:
 - **All movie data** visible at once
 - **Sortable columns** for different viewing preferences
 
-## [[♪]] Audio Processing Setup
+## 🎵 Audio Processing Setup
 
 ### FFmpeg Installation (Required)
 
@@ -282,7 +282,7 @@ sudo dnf install ffmpeg
 **Input formats**: WAV, MP3, M4A, AAC, OGG, FLAC, MP4, MOV, AVI, MKV, WEBM, M4V, 3GP  
 **Upload optimization**: Large WAV files are automatically converted to MP3 for better performance
 
-## [[&]] Development
+## 🛠️ Development
 
 ### Development Setup
 
@@ -311,7 +311,7 @@ dotnet build
 dotnet run
 ```
 
-## [[^]] Deployment
+## 🚀 Deployment
 
 For production deployment:
 
@@ -329,22 +329,22 @@ Key points for IIS deployment:
 - Each group maintains separate configuration and database
 - No port configuration needed in the UI - handled via deployment configuration
 
-## [©] License
+## 📝 License
 
 This project is for personal use. Please respect API terms of service for TMDB and Gladia.
 
-## [&] Contributing
+## 🤝 Contributing
 
 This is a personal family project, but feel free to fork and adapt for your own use!
 
-## [!] Important Notes
+## ⚠️ Important Notes
 
 - **Never commit API keys** to version control
 - **Regenerate any exposed keys** immediately
 - **Keep your secrets.json file secure** and backed up
 - **Respect API rate limits** for all integrated services
 
-## [[?]] Troubleshooting
+## 🆘 Troubleshooting
 
 ### First Run Issues
 - Make sure MongoDB is running and accessible
@@ -367,17 +367,17 @@ This is a personal family project, but feel free to fork and adapt for your own 
 - **"Error while copying content to a stream"**: Usually resolved by MP3 conversion (requires FFmpeg)
 - **Conversion failures**: Check FFmpeg installation with `ffmpeg -version` in terminal/command prompt
 
-## [[#]] Technical Architecture
+## 🏗️ Technical Architecture
 
 *Clean Architecture implementation with dependency injection*
 
 ### Core Design Patterns
 
-- **[#] Clean Architecture** - Clear separation of concerns across layers
-- **[□] Repository Pattern** - Data access abstraction with MongoDB
-- **[>] Dependency Injection** - Interface-based service registration
-- **[~] State Machine Pattern** - Audio processing workflow management
-- **[!] Factory Pattern** - Secure configuration provider creation
+- **🏛️ Clean Architecture** - Clear separation of concerns across layers
+- **📦 Repository Pattern** - Data access abstraction with MongoDB
+- **💉 Dependency Injection** - Interface-based service registration
+- **🔄 State Machine Pattern** - Audio processing workflow management
+- **🛡️ Factory Pattern** - Secure configuration provider creation
 
 ### Technology Stack
 
@@ -393,46 +393,46 @@ This is a personal family project, but feel free to fork and adapt for your own 
 ### Project Structure
 
 ```
-[□] Application/
-├── [AI] Services/Analysis/     # AI-powered conversation analysis
-├── [♪] Services/Processing/    # Audio processing state machine
-├── [%] Models/                 # Domain models and DTOs
-└── [&] Services/               # Core business logic
+📁 Application/
+├── 🧠 Services/Analysis/       # AI-powered conversation analysis
+├── 🎵 Services/Processing/     # Audio processing state machine
+├── 📊 Models/                  # Domain models and DTOs
+└── 🔧 Services/               # Core business logic
 
-[□] Infrastructure/
-├── [*] Configuration/          # Multi-instance management
-├── [#] Database/              # MongoDB abstraction layer
-├── [□] FileSystem/            # File operations and storage
-└── [~] Services/              # External API integrations
+📁 Infrastructure/
+├── ⚙️ Configuration/          # Multi-instance management
+├── 🗄️ Database/              # MongoDB abstraction layer
+├── 📁 FileSystem/             # File operations and storage
+└── 🌐 Services/              # External API integrations
 
-[□] Components/
-├── [+] Pages/                 # Main application pages
-├── [◊] Partials/             # Reusable UI components
-└── [~] Layout/               # Application shell
+📁 Components/
+├── 📄 Pages/                  # Main application pages
+├── 🧩 Partials/              # Reusable UI components
+└── 🎨 Layout/                # Application shell
 
-[□] Models/                    # Core domain entities
-[□] Utilities/                 # Helper extensions and tools
+📁 Models/                     # Core domain entities
+📁 Utilities/                  # Helper extensions and tools
 ```
 
-### [[&]] Development Standards
+### 🛠️ Development Standards
 
 #### Code Quality
-- **[✓] Explicit Type Declarations** - No `var` keyword usage (enforced by .editorconfig)
-- **[+] XML Documentation** - Comprehensive method documentation
-- **[#] SOLID Principles** - Dependency inversion with interface abstractions
-- **[!] Security-First** - No hardcoded secrets, encrypted configuration storage
-- **[>] Performance** - Async/await patterns, efficient MongoDB queries, optimized data loading
+- **✅ Explicit Type Declarations** - No `var` keyword usage (enforced by .editorconfig)
+- **📝 XML Documentation** - Comprehensive method documentation
+- **🧪 SOLID Principles** - Dependency inversion with interface abstractions
+- **🔒 Security-First** - No hardcoded secrets, encrypted configuration storage
+- **⚡ Performance** - Async/await patterns, efficient MongoDB queries, optimized data loading
 
 #### Recent Performance Improvements
-- **[>] Optimized Data Loading** - HomePageDataService now loads only required data efficiently
-- **[%] Smart Query Optimization** - Uses count queries instead of loading full datasets where appropriate
-- **[*] Predictable Random Generation** - Deterministic sequence generation for consistent movie scheduling
-- **[&] Reduced Memory Footprint** - Optimized viewmodel with targeted data loading
+- **🚀 Optimized Data Loading** - HomePageDataService now loads only required data efficiently
+- **📊 Smart Query Optimization** - Uses count queries instead of loading full datasets where appropriate
+- **🎯 Predictable Random Generation** - Deterministic sequence generation for consistent movie scheduling
+- **⚙️ Reduced Memory Footprint** - Optimized viewmodel with targeted data loading
 
 #### Key Design Decisions
 
 ```csharp
-// [✓] Explicit types and dependency injection
+// ✅ Explicit types and dependency injection
 public class MovieSessionService
 {
     private readonly IDatabaseService _database;
@@ -488,7 +488,7 @@ builder.Services.AddScoped<SoundClipRepository>();
 - **Consistent User Experience**: Predictable movie rotation sequence
 - **Better Scalability**: Optimized for larger datasets
 
-## [[>]] Getting Started
+## 🚀 Getting Started
 
 ### Demo Mode
 ```bash
@@ -534,7 +534,7 @@ dotnet run --instance "my-group" --port 5010
 
 ---
 
-## [[%]] Performance & Metrics
+## 📊 Performance & Metrics
 
 ### System Performance
 - **Page Load Times**
@@ -573,7 +573,7 @@ dotnet run --instance "my-group" --port 5010
   - Analysis Data: ~2MB
   - Images/Posters: ~5MB
 
-## [[o]] Advanced Use Cases
+## 🎯 Advanced Use Cases
 
 ### Academic Film Studies
 - **Course Management**
@@ -610,7 +610,7 @@ dotnet run --instance "my-group" --port 5010
   - Participation grading
   - Collaborative projects
 
-## [[?]] Glossary
+## 📖 Glossary
 
 ### Core Concepts
 - **Instance**: A self-contained environment for a movie group
@@ -636,7 +636,7 @@ dotnet run --instance "my-group" --port 5010
 - **Diarization**: Speaker identification in audio
 - **Content Moderation**: Automated content filtering
 
-## [&] Advanced Setup
+## 🔧 Advanced Setup
 
 ### Performance Optimization
 ```bash
@@ -666,10 +666,10 @@ dotnet run --export-stats "group-name"
 
 <div align="center">
 
-**Made with <3 for movie lovers everywhere!**
+**Made with ❤️ for movie lovers everywhere!**
 
 *Built with .NET 9.0, MongoDB, and modern web technologies*
 
-[[*] Star this repo](https://github.com/Choochoo/MovieReviewApp) • [[!] Report issues](https://github.com/Choochoo/MovieReviewApp/issues) • [[?] Documentation](https://github.com/Choochoo/MovieReviewApp/wiki)
+[🌟 Star this repo](https://github.com/Choochoo/MovieReviewApp) • [🐛 Report issues](https://github.com/Choochoo/MovieReviewApp/issues) • [📖 Documentation](https://github.com/Choochoo/MovieReviewApp/wiki)
 
 </div> 
