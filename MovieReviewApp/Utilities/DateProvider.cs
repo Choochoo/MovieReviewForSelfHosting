@@ -4,7 +4,7 @@
     {
         private static DateTime? _customDate;// = new DateTime(2025,3,1);
 
-        public static DateTime Now => (_customDate ?? DateTime.Now).ToUniversalTime();
+        public static DateTime Now => _customDate ?? DateTime.Now;
 
         public static void SetCustomDate(DateTime? date)
         {

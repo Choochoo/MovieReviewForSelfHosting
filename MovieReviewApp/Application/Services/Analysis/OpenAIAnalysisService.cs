@@ -51,45 +51,6 @@ public class OpenAIAnalysisService
         return await CallOpenAIForAnalysisWithRetry(analysisPrompt);
     }
 
-    /// <summary>
-    /// Creates an analysis prompt for OpenAI based on the transcript and session context.
-    /// </summary>
-    public async Task<string> CreateAnalysisPromptAsync(string movieTitle, DateTime date, List<string> participants, string transcript)
-    {
-        // Load the prompt template
-        string promptTemplate = await LoadPromptTemplateAsync();
-
-        // Create the response schema
-        string responseSchema = CreateResponseSchema();
-
-        // Format participants list
-        string participantsList = string.Join(", ", participants);
-
-        // Build the full prompt
-        StringBuilder promptBuilder = new StringBuilder();
-        
-        // Add context
-        promptBuilder.AppendLine($"Movie: {movieTitle}");
-        promptBuilder.AppendLine($"Date: {date:yyyy-MM-dd}");
-        promptBuilder.AppendLine($"Participants: {participantsList}");
-        promptBuilder.AppendLine();
-        
-        // Add the prompt template
-        promptBuilder.AppendLine(promptTemplate);
-        promptBuilder.AppendLine();
-        
-        // Add response schema
-        promptBuilder.AppendLine("=== RESPONSE FORMAT ===");
-        promptBuilder.AppendLine("You must respond with a valid JSON object matching this exact structure:");
-        promptBuilder.AppendLine(responseSchema);
-        promptBuilder.AppendLine();
-        
-        // Add transcript
-        promptBuilder.AppendLine("=== TRANSCRIPT TO ANALYZE ===");
-        promptBuilder.AppendLine(transcript);
-
-        return promptBuilder.ToString();
-    }
 
     /// <summary>
     /// Calls OpenAI API with retry logic for reliability.

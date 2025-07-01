@@ -15,6 +15,10 @@ window.initializeSoundboard = function() {
     setupPasteHandler();
     initializeIndexedDB();
     setupFallbackEventHandlers();
+    setupVolumeControlsForMobile();
+    
+    // Load saved volume setting
+    loadSavedVolumeSettings();
     
     // Clear corrupted cache on initialization
     setTimeout(() => {
@@ -53,6 +57,13 @@ window.setGlobalVolume = function(volumeLevel) {
             audio.volume = Math.min(globalVolumeMultiplier, 1.0);
         }
     });
+    
+    // Store volume setting in localStorage for persistence across sessions
+    try {
+        localStorage.setItem('soundboard_volume', volumeLevel);
+    } catch (e) {
+        // Ignore localStorage errors
+    }
 };
 
 // Set current person ID for paste functionality
@@ -60,11 +71,89 @@ window.setCurrentPersonId = function(personId) {
     currentPersonId = personId;
 };
 
+// Load saved volume settings from localStorage
+function loadSavedVolumeSettings() {
+    try {
+        const savedVolume = localStorage.getItem('soundboard_volume');
+        if (savedVolume !== null) {
+            const volumeLevel = parseFloat(savedVolume);
+            if (!isNaN(volumeLevel) && volumeLevel >= 0 && volumeLevel <= 1) {
+                globalVolumeMultiplier = volumeLevel;
+                
+                // Update UI volume slider if it exists
+                const volumeSlider = document.querySelector('input[type="range"][title*="volume" i]');
+                if (volumeSlider) {
+                    volumeSlider.value = Math.round(volumeLevel * 100);
+                    // Trigger change event to update Blazor component
+                    volumeSlider.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        }
+    } catch (e) {
+        // Ignore localStorage errors
+    }
+}
+
+// Setup enhanced volume controls for mobile devices
+function setupVolumeControlsForMobile() {
+    // Add event listeners for volume slider with mobile support
+    document.addEventListener('DOMContentLoaded', function() {
+        setupVolumeSliderEvents();
+    });
+    
+    // Also setup immediately if DOM is already loaded
+    if (document.readyState !== 'loading') {
+        setupVolumeSliderEvents();
+    }
+}
+
+function setupVolumeSliderEvents() {
+    // Find volume sliders and add comprehensive event handling
+    const volumeSliders = document.querySelectorAll('input[type="range"][title*="volume" i]');
+    
+    volumeSliders.forEach(slider => {
+        // Remove existing listeners to prevent duplicates
+        slider.removeEventListener('input', handleVolumeChange);
+        slider.removeEventListener('change', handleVolumeChange);
+        slider.removeEventListener('touchstart', handleVolumeTouch);
+        slider.removeEventListener('touchend', handleVolumeTouch);
+        
+        // Add comprehensive event handling for both desktop and mobile
+        slider.addEventListener('input', handleVolumeChange);
+        slider.addEventListener('change', handleVolumeChange);
+        
+        // Mobile-specific touch events
+        slider.addEventListener('touchstart', handleVolumeTouch);
+        slider.addEventListener('touchend', handleVolumeTouch);
+        
+        // Prevent scroll while adjusting volume on mobile
+        slider.addEventListener('touchmove', function(e) {
+            e.stopPropagation();
+        });
+    });
+}
+
+function handleVolumeChange(event) {
+    const volumeValue = parseInt(event.target.value);
+    if (!isNaN(volumeValue)) {
+        window.setGlobalVolume(volumeValue / 100);
+    }
+}
+
+function handleVolumeTouch(event) {
+    // Ensure volume changes are processed on mobile touch
+    setTimeout(() => {
+        const volumeValue = parseInt(event.target.value);
+        if (!isNaN(volumeValue)) {
+            window.setGlobalVolume(volumeValue / 100);
+        }
+    }, 10);
+}
+
 // Auto-cache all sounds for a person when their soundboard is visited
 window.preloadPersonSounds = async function(sounds) {
     if (!sounds || !Array.isArray(sounds)) return;
     
-    console.log(`Starting pre-cache of ${sounds.length} sounds...`);
     
     // Cache sounds in background without blocking UI
     setTimeout(async () => {
@@ -74,13 +163,10 @@ window.preloadPersonSounds = async function(sounds) {
                 if (sound.url) {
                     await cacheSound(sound.url);
                     cachedCount++;
-                    console.log(`Cached sound ${cachedCount}/${sounds.length}: ${sound.originalFileName}`);
                 }
             } catch (error) {
-                console.warn(`Failed to cache sound: ${sound.originalFileName}`, error);
             }
         }
-        console.log(`Pre-cache complete: ${cachedCount}/${sounds.length} sounds cached`);
     }, 100); // Small delay to not block initial page render
 };
 
@@ -122,10 +208,8 @@ function clearCorruptedCache() {
         
         clearRequest.onsuccess = function() {
             audioCache.clear();
-            console.log('Cleared corrupted cache');
         };
     } catch (error) {
-        console.warn('Failed to clear cache:', error);
     }
 }
 
@@ -325,16 +409,13 @@ window.uploadSoundFile = async function(personId, file) {
 
         if (response.ok) {
             const result = await response.json();
-            console.log('File uploaded successfully:', result);
             
             // Pre-cache the uploaded sound
             await cacheSound(result.url);
         } else {
-            console.error('Upload failed:', response.statusText);
             alert('Failed to upload file: ' + response.statusText);
         }
     } catch (error) {
-        console.error('Upload error:', error);
         alert('Error uploading file: ' + error.message);
     }
 };
@@ -355,16 +436,13 @@ window.uploadSoundFromUrl = async function(personId, url) {
 
         if (response.ok) {
             const result = await response.json();
-            console.log('URL uploaded successfully:', result);
             
             // Pre-cache the uploaded sound
             await cacheSound(result.url);
         } else {
-            console.error('URL upload failed:', response.statusText);
             alert('Failed to upload from URL: ' + response.statusText);
         }
     } catch (error) {
-        console.error('URL upload error:', error);
         alert('Error uploading from URL: ' + error.message);
     }
 };
@@ -390,16 +468,13 @@ async function uploadFileForPerson(personName, file) {
 
         if (response.ok) {
             const result = await response.json();
-            console.log('File uploaded successfully:', result);
             
             // Pre-cache the uploaded sound
             await cacheSound(result.url);
         } else {
-            console.error('Upload failed:', response.statusText);
             alert('Failed to upload file: ' + response.statusText);
         }
     } catch (error) {
-        console.error('Upload error:', error);
         alert('Error uploading file: ' + error.message);
     }
 }
@@ -411,7 +486,6 @@ async function getPersonIdByName(personName) {
         // In a real implementation, you'd want an API endpoint for this
         return null; // This will be handled by the server-side fallback
     } catch (error) {
-        console.error('Error getting person ID:', error);
         return null;
     }
 }
@@ -570,7 +644,6 @@ async function cacheSound(url) {
         
         return { blob, arrayBuffer };
     } catch (error) {
-        console.warn('Failed to cache sound:', url, error);
         return null;
     }
 }
@@ -594,7 +667,6 @@ async function getCachedBlobUrl(url) {
 
         return null;
     } catch (error) {
-        console.warn('Failed to get cached blob URL:', url, error);
         return null;
     }
 }
@@ -645,7 +717,6 @@ async function storeBlobInIndexedDB(url, blob, contentType) {
         
         objectStore.put(cacheEntry);
     } catch (error) {
-        console.warn('Failed to store blob in IndexedDB:', error);
     }
 }
 
@@ -667,7 +738,6 @@ async function getBlobFromIndexedDB(url) {
             };
         });
     } catch (error) {
-        console.warn('Failed to get blob from IndexedDB:', error);
         return null;
     }
 }
@@ -693,16 +763,13 @@ async function loadCachedBlobs() {
                         loadedCount++;
                     }
                 } catch (error) {
-                    console.warn('Failed to load cached blob:', entry.url, error);
                 }
             });
             
             if (loadedCount > 0) {
-                console.log(`Loaded ${loadedCount} cached sound blobs`);
             }
         };
     } catch (error) {
-        console.warn('Failed to load cached blobs:', error);
     }
 }
 
@@ -728,7 +795,6 @@ async function cleanupCache() {
             }
         };
     } catch (error) {
-        console.warn('Cache cleanup failed:', error);
     }
 }
 

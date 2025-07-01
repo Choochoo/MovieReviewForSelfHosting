@@ -1,6 +1,8 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
 using System.Security.Cryptography;
+using MongoDB.Driver;
+using MongoDB.Bson;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -20,11 +22,22 @@ public class SoundClipService(
 
     public async Task<List<SoundClipStorage>> GetByPersonIdAsync(string personId)
     {
-        IEnumerable<SoundClipStorage> soundClips = await _db.GetAllAsync<SoundClipStorage>();
-        return soundClips
-            .Where(s => s.PersonId == personId && s.IsActive)
-            .OrderBy(s => s.CreatedAt)
-            .ToList();
+        // Load only metadata (without AudioData) using MongoDB projection to prevent memory overload
+        var filter = MongoDB.Driver.Builders<SoundClipStorage>.Filter.And(
+            MongoDB.Driver.Builders<SoundClipStorage>.Filter.Eq(s => s.PersonId, personId),
+            MongoDB.Driver.Builders<SoundClipStorage>.Filter.Eq(s => s.IsActive, true)
+        );
+        
+        var projection = MongoDB.Driver.Builders<SoundClipStorage>.Projection
+            .Exclude(s => s.AudioData); // Exclude the large AudioData field
+        
+        var collection = _db.GetCollection<SoundClipStorage>();
+        var soundClips = await collection.Find(filter)
+            .Project<SoundClipStorage>(projection)
+            .SortBy(s => s.CreatedAt)
+            .ToListAsync();
+            
+        return soundClips;
     }
 
     public async Task<SoundClipStorage> SaveAsync(string personId, IFormFile file, string? description = null)
@@ -127,11 +140,26 @@ public class SoundClipService(
 
     public async Task<Dictionary<string, int>> GetCountsByPersonAsync()
     {
-        IEnumerable<SoundClipStorage> soundClips = await _db.GetAllAsync<SoundClipStorage>();
-        return soundClips
-            .Where(s => s.IsActive)
-            .GroupBy(s => s.PersonId)
-            .ToDictionary(g => g.Key, g => g.Count());
+        // Use MongoDB aggregation pipeline to count without loading AudioData
+        var collection = _db.GetCollection<SoundClipStorage>();
+        var filter = Builders<SoundClipStorage>.Filter.Eq(s => s.IsActive, true);
+        
+        var pipeline = new BsonDocument[]
+        {
+            new("$match", new BsonDocument("IsActive", true)),
+            new("$group", new BsonDocument
+            {
+                { "_id", "$PersonId" },
+                { "count", new BsonDocument("$sum", 1) }
+            })
+        };
+        
+        var results = await collection.Aggregate<BsonDocument>(pipeline).ToListAsync();
+        
+        return results.ToDictionary(
+            doc => doc["_id"].AsString,
+            doc => doc["count"].AsInt32
+        );
     }
 
     public string GetSoundClipUrl(SoundClipStorage soundClip)
@@ -144,31 +172,18 @@ public class SoundClipService(
         return await GetByIdAsync(soundClipId);
     }
 
-    // Wrapper methods for backward compatibility with SoundController
-    public async Task<SoundClipStorage> SaveSoundClipAsync(string personId, IFormFile file, string? description = null)
-    {
-        return await SaveAsync(personId, file, description);
-    }
-
-    public async Task<SoundClipStorage> SaveSoundClipFromUrlAsync(string personId, string url, string? description = null)
-    {
-        return await SaveFromUrlAsync(personId, url, description);
-    }
-
-    public async Task<Dictionary<string, int>> GetSoundClipCountsByPersonAsync()
-    {
-        return await GetCountsByPersonAsync();
-    }
-
-    public async Task<List<SoundClipStorage>> GetSoundClipsForPersonAsync(string personId)
-    {
-        return await GetByPersonIdAsync(personId);
-    }
 
     private async Task<SoundClipStorage?> GetByHashAsync(string hash)
     {
-        var soundClips = await _db.GetAllAsync<SoundClipStorage>();
-        return soundClips.FirstOrDefault(s => s.Hash == hash);
+        // Use MongoDB query with projection to exclude AudioData for hash checking
+        var collection = _db.GetCollection<SoundClipStorage>();
+        var filter = MongoDB.Driver.Builders<SoundClipStorage>.Filter.Eq(s => s.Hash, hash);
+        var projection = MongoDB.Driver.Builders<SoundClipStorage>.Projection
+            .Exclude(s => s.AudioData); // Don't load AudioData for duplicate checking
+            
+        return await collection.Find(filter)
+            .Project<SoundClipStorage>(projection)
+            .FirstOrDefaultAsync();
     }
 
     private static string ComputeHash(byte[] data)

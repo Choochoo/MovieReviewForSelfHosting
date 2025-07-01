@@ -28,7 +28,6 @@ window.initializePasteHandler = (dotNetHelper, componentId) => {
                         
                         const base64Data = await fileToBase64(file);
                         const base64String = base64Data.split(',')[1]; // Remove data:image/...;base64, prefix
-                        console.log('Base64 string length:', base64String.length);
                         
                         // Find the image upload component in the currently editing movie
                         let targetComponent = null;
@@ -51,17 +50,7 @@ window.initializePasteHandler = (dotNetHelper, componentId) => {
                         }
                         
                         if (targetComponent) {
-                            try {
-                                console.log('Sending pasted image to component:', targetComponent.componentId);
-                                await targetComponent.dotNetHelper.invokeMethodAsync('HandlePastedImage', base64String, file.name || 'pasted-image.png');
-                            } catch (error) {
-                                console.error('Error handling pasted image:', error);
-                                console.error('Target component:', targetComponent);
-                                // Remove the failed component from the active set
-                                activeImageUploadComponents.delete(targetComponent);
-                            }
-                        } else {
-                            console.warn('No target component found for pasted image. Active components:', activeImageUploadComponents.size);
+                            await targetComponent.dotNetHelper.invokeMethodAsync('HandlePastedImage', base64String, file.name || 'pasted-image.png');
                         }
                     }
                     break;
@@ -86,11 +75,7 @@ window.initializePasteHandler = (dotNetHelper, componentId) => {
                 const base64Data = await fileToBase64(file);
                 const base64String = base64Data.split(',')[1]; // Remove data:image/...;base64, prefix
                 
-                try {
-                    await dotNetHelper.invokeMethodAsync('HandleDroppedFiles', base64String, file.name);
-                } catch (error) {
-                    console.error('Error handling dropped image:', error);
-                }
+                await dotNetHelper.invokeMethodAsync('HandleDroppedFiles', base64String, file.name);
             }
         }
     });

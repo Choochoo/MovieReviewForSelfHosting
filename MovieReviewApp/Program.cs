@@ -4,6 +4,7 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
 using MongoDB.Bson.Serialization.Serializers;
+using MongoDB.Driver;
 using MovieReviewApp.Application.Services;
 using MovieReviewApp.Application.Services.Analysis;
 using MovieReviewApp.Application.Services.Processing;
@@ -70,6 +71,10 @@ instanceConfig.LastUsed = DateTime.UtcNow;
 instanceManager.SaveInstanceConfig(instanceConfig);
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
+
+// Force content root to current directory to avoid WSL path issues
+builder.Environment.ContentRootPath = Directory.GetCurrentDirectory();
+builder.Environment.WebRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 
 // Set the port from instance configuration
 builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
@@ -182,6 +187,9 @@ builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
 builder.Services.AddScoped<DiscussionQuestionService>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<InstanceTypeService>();
+builder.Services.AddScoped<ICurrentEventService, CurrentEventService>();
+builder.Services.AddScoped<HomePageDataService>();
 
 // Analysis Services
 builder.Services.AddScoped<AnalysisService>();

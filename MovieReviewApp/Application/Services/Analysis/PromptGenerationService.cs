@@ -488,32 +488,4 @@ IMPORTANT:
   }}";
     }
 
-    /// <summary>
-    /// Creates a fallback prompt for when the full analysis fails.
-    /// </summary>
-    public string CreateFallbackPrompt(string movieTitle, List<string> participants, string transcript)
-    {
-        string participantsList = participants.Any()
-            ? string.Join(", ", participants)
-            : "Unknown participants";
-
-        return $@"Analyze this movie discussion about ""{movieTitle}"" with participants: {participantsList}.
-
-Find the most entertaining moment and provide it in this simple JSON format:
-
-{{
-  ""best_moment"": {{
-    ""speaker"": ""[Name]"",
-    ""timestamp"": ""[MM:SS]"",
-    ""quote"": ""[What they said]"",
-    ""why_its_great"": ""[Why it was entertaining]"",
-    ""entertainment_score"": [1-10]
-  }}
-}}
-
-TRANSCRIPT:
-{transcript.Substring(0, Math.Min(transcript.Length, 10000))}
-
-Respond only with JSON.";
-    }
 }

@@ -61,22 +61,6 @@ public class AwardVoteService : BaseService<AwardVote>
         return deletedCount;
     }
 
-    public async Task<Dictionary<Guid, int>> GetVoteCountsAsync(Guid awardEventId, Guid questionId)
-    {
-        List<AwardVote> votes = await GetAllAsync();
-        return votes.Where(v => v.AwardEventId == awardEventId && v.QuestionId == questionId)
-                   .GroupBy(v => v.MovieEventId)
-                   .ToDictionary(g => g.Key, g => g.Count());
-    }
-
-    public async Task<List<string>> GetAvailableVotersAsync(Guid awardEventId)
-    {
-        List<AwardVote> votes = await GetAllAsync();
-        return votes.Where(v => v.AwardEventId == awardEventId)
-                   .Select(v => v.VoterName)
-                   .Distinct()
-                   .ToList();
-    }
 
     public async Task<Dictionary<Guid, int>> GetRemainingVotesForUserAsync(string userName, Guid awardEventId, List<AwardQuestion> questions)
     {

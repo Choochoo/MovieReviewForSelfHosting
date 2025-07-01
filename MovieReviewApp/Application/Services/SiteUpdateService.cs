@@ -32,11 +32,6 @@ public class SiteUpdateService : BaseService<SiteUpdate>
         return updates.OrderByDescending(u => u.Timestamp).Take(count).ToList();
     }
 
-    public async Task<List<SiteUpdate>> GetSiteUpdatesByDateAsync(DateTime startDate, DateTime endDate)
-    {
-        List<SiteUpdate> updates = await GetAllAsync();
-        return updates.Where(u => u.Timestamp >= startDate && u.Timestamp <= endDate).ToList();
-    }
 
     public async Task<List<SiteUpdate>> GetRecentUpdatesAsync(DateTime lastVisit)
     {

@@ -364,3 +364,6 @@ FodyWeavers.xsd
 /MovieReviewApp/wwwroot/uploads/August-2024
 /MovieReviewApp/wwwroot/uploads
 /MovieReviewApp/.claude/.commands/simple-init.parallel.md
+/TEST_SETUP.md
+/.claude/settings.local.json
+/PERFORMANCE_IMPROVEMENTS.md

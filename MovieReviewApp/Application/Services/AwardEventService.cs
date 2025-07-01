@@ -13,15 +13,6 @@ public class AwardEventService(MongoDbService databaseService, ILogger<AwardEven
     // Base CRUD methods are inherited from BaseService<AwardEvent>
     // GetAllAsync, GetByIdAsync(Guid), CreateAsync, UpdateAsync, DeleteAsync(Guid)
 
-    public async Task<List<AwardEvent>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
-    {
-        List<AwardEvent> events = await GetAllAsync();
-        return events
-            .Where(e => e.StartDate >= startDate && e.EndDate <= endDate)
-            .OrderByDescending(e => e.StartDate)
-            .ToList();
-    }
-
     public async Task<AwardEvent?> GetCurrentEventAsync()
     {
         List<AwardEvent> events = await GetAllAsync();
@@ -29,24 +20,6 @@ public class AwardEventService(MongoDbService databaseService, ILogger<AwardEven
             .Where(e => e.StartDate <= DateTime.UtcNow && e.EndDate >= DateTime.UtcNow)
             .OrderByDescending(e => e.StartDate)
             .FirstOrDefault();
-    }
-
-    public async Task<List<AwardEvent>> GetUpcomingEventsAsync()
-    {
-        List<AwardEvent> events = await GetAllAsync();
-        return events
-            .Where(e => e.StartDate > DateTime.UtcNow)
-            .OrderBy(e => e.StartDate)
-            .ToList();
-    }
-
-    public async Task<List<AwardEvent>> GetPastEventsAsync()
-    {
-        List<AwardEvent> events = await GetAllAsync();
-        return events
-            .Where(e => e.EndDate < DateTime.UtcNow)
-            .OrderByDescending(e => e.EndDate)
-            .ToList();
     }
 
     public async Task<AwardEvent?> GetAwardEventForDateAsync(DateTime date)

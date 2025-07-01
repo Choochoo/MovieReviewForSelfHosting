@@ -44,7 +44,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                SoundClipStorage soundClip = await _soundClipService.SaveSoundClipAsync(personId, file, description);
+                SoundClipStorage soundClip = await _soundClipService.SaveAsync(personId, file, description);
                 return Ok(new
                 {
                     id = soundClip.Id.ToString(),
@@ -75,7 +75,7 @@ namespace MovieReviewApp.Controllers
 
             try
             {
-                SoundClipStorage soundClip = await _soundClipService.SaveSoundClipFromUrlAsync(request.PersonId, request.Url, request.Description);
+                SoundClipStorage soundClip = await _soundClipService.SaveFromUrlAsync(request.PersonId, request.Url, request.Description);
                 return Ok(new
                 {
                     id = soundClip.Id.ToString(),

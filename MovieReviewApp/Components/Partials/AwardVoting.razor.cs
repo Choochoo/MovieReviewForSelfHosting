@@ -112,7 +112,11 @@ namespace MovieReviewApp.Components.Partials
             // Load past award events
             try
             {
-                pastAwardEvents = (await AwardEventService.GetPastEventsAsync()).ToList();
+                List<AwardEvent> allEvents = await AwardEventService.GetAllAsync();
+                pastAwardEvents = allEvents
+                    .Where(e => e.EndDate < DateTime.UtcNow)
+                    .OrderByDescending(e => e.EndDate)
+                    .ToList();
                 Console.WriteLine($"Found {pastAwardEvents.Count} past award events");
                 foreach (AwardEvent past in pastAwardEvents)
                 {
@@ -137,7 +141,11 @@ namespace MovieReviewApp.Components.Partials
 
         private async Task LoadUserData()
         {
-            existingUsers = await AwardVoteService.GetAvailableVotersAsync(awardEvent.Id);
+            List<AwardVote> votes = await AwardVoteService.GetAllAsync();
+            existingUsers = votes.Where(v => v.AwardEventId == awardEvent.Id)
+                               .Select(v => v.VoterName)
+                               .Distinct()
+                               .ToList();
 
             if (!string.IsNullOrEmpty(selectedUser) && awardEvent != null)
             {

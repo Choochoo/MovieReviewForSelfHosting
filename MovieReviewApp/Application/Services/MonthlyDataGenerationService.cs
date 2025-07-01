@@ -1,5 +1,6 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
+using MongoDB.Driver;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -40,17 +41,27 @@ public class MonthlyDataGenerationService : BackgroundService
     {
         using IServiceScope scope = _scopeFactory.CreateScope();
         MongoDbService database = scope.ServiceProvider.GetRequiredService<MongoDbService>();
+        InstanceTypeService instanceTypeService = scope.ServiceProvider.GetRequiredService<InstanceTypeService>();
+        
+        // Only generate demo data for demo instance
+        if (!instanceTypeService.ShouldGenerateDemoData())
+        {
+            return;
+        }
         
         DateTime now = DateTime.Now;
         DateTime firstOfThisMonth = new DateTime(now.Year, now.Month, 1);
         DateTime firstOfNextMonth = firstOfThisMonth.AddMonths(1);
         
-        // Check if we already have data for next month
-        List<MovieEvent> nextMonthEvents = await database.FindAsync<MovieEvent>(
+        // Check if we already have data for next month using efficient query
+        IMongoCollection<MovieEvent>? collection = database.GetCollection<MovieEvent>();
+        if (collection == null) return;
+        
+        long nextMonthEventCount = await collection.CountDocumentsAsync(
             me => me.StartDate >= firstOfNextMonth && me.StartDate < firstOfNextMonth.AddMonths(1)
         );
 
-        if (nextMonthEvents.Any())
+        if (nextMonthEventCount > 0)
         {
             // Data already exists for next month
             return;
@@ -69,26 +80,35 @@ public class MonthlyDataGenerationService : BackgroundService
 
         try
         {
-            // Get current phase structure to determine what should happen next month
-            List<Phase> allPhases = (await database.GetAllAsync<Phase>())
-                .OrderBy(p => p.Number)
-                .ToList();
+            // Get phases efficiently - only get phases that might be relevant
+            IMongoCollection<Phase>? phaseCollection = database.GetCollection<Phase>();
+            if (phaseCollection == null) return;
+            
+            List<Phase> relevantPhases = await phaseCollection
+                .Find(p => p.EndDate >= nextMonth.AddMonths(-2)) // Only phases from 2 months ago
+                .SortBy(p => p.Number)
+                .ToListAsync();
 
-            List<MovieEvent> allEvents = (await database.GetAllAsync<MovieEvent>())
-                .OrderBy(me => me.StartDate)
-                .ToList();
+            // Get recent events efficiently - only events from last few months
+            IMongoCollection<MovieEvent>? eventCollection = database.GetCollection<MovieEvent>();
+            if (eventCollection == null) return;
+            
+            List<MovieEvent> recentEvents = await eventCollection
+                .Find(me => me.StartDate >= nextMonth.AddMonths(-3)) // Only events from last 3 months
+                .SortBy(me => me.StartDate)
+                .ToListAsync();
 
             // Determine if next month is an award month or movie month
-            bool isAwardMonth = await IsAwardMonth(database, nextMonth, allPhases);
+            bool isAwardMonth = await IsAwardMonth(database, nextMonth, relevantPhases);
 
             if (isAwardMonth)
             {
-                await GenerateAwardEventForMonth(database, nextMonth, allPhases);
+                await GenerateAwardEventForMonth(database, nextMonth, relevantPhases);
                 _logger.LogInformation("Generated award event for {Month:yyyy-MM}", nextMonth);
             }
             else
             {
-                await GenerateMovieEventForMonth(database, nextMonth, allPhases, allEvents);
+                await GenerateMovieEventForMonth(database, nextMonth, relevantPhases, recentEvents);
                 _logger.LogInformation("Generated movie event for {Month:yyyy-MM}", nextMonth);
             }
         }

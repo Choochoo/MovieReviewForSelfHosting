@@ -6,18 +6,13 @@ namespace MovieReviewApp.Application.Services;
 public class DiscussionQuestionService(MongoDbService databaseService, ILogger<DiscussionQuestionService> logger)
     : BaseService<DiscussionQuestion>(databaseService, logger)
 {
-    public async Task<List<DiscussionQuestion>> GetActiveAsync()
+    public async Task<List<DiscussionQuestion>> GetActiveQuestionsAsync()
     {
         List<DiscussionQuestion> questions = await GetAllAsync();
         return questions
             .Where(q => q.IsActive)
             .OrderBy(q => q.Order)
             .ToList();
-    }
-
-    public async Task<List<DiscussionQuestion>> GetActiveQuestionsAsync()
-    {
-        return await GetActiveAsync();
     }
 
     public async Task<List<DiscussionQuestion>> GetAllQuestionsAsync()
@@ -80,7 +75,7 @@ public class DiscussionQuestionService(MongoDbService databaseService, ILogger<D
 
     public async Task<List<string>> GetQuestionTextsForPromptAsync()
     {
-        List<DiscussionQuestion> questions = await GetActiveAsync();
+        List<DiscussionQuestion> questions = await GetActiveQuestionsAsync();
         return questions.Select(q => q.Question).ToList();
     }
 }

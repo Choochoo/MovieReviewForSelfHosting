@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using MongoDB.Driver;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Models.ViewModels;
 using MovieReviewApp.Application.Services;
 using MovieReviewApp.Utilities;
 
@@ -14,198 +15,62 @@ namespace MovieReviewApp.Components.Pages
         private IJSRuntime JS { get; set; } = default!;
 
         [Inject]
-        private MovieReviewService movieReviewService { get; set; } = default!;
-
-        [Inject]
-        private DiscussionQuestionService discussionQuestionsService { get; set; } = default!;
-
-        [Inject]
-        private AwardEventService AwardEventService { get; set; } = default!;
-
-        [Inject]
-        private AwardQuestionService AwardQuestionService { get; set; } = default!;
-
-        [Inject]
-        private PersonService PersonService { get; set; } = default!;
-
-        [Inject]
-        private SettingService SettingService { get; set; } = default!;
-
-        [Inject]
-        private MovieEventService MovieEventService { get; set; } = default!;
-
-        [Inject]
-        private PhaseService PhaseService { get; set; } = default!;
+        private HomePageDataService HomePageDataService { get; set; } = default!;
 
         [Inject]
         private SiteUpdateService SiteUpdateService { get; set; } = default!;
 
-        private List<SiteUpdate> RecentUpdates { get; set; } = new();
-        private bool showUpdates = true;
-        public MovieEvent? CurrentEvent;
-        public MovieEvent? NextEvent;
-        public bool IsShowingPastEvent { get; private set; } = false;
+        private HomePageViewModel? _viewModel;
         private List<Phase> Phases { get; set; } = new();
         private readonly Random _rand = new(1337);
-
-        // Properties for Razor page
-        public List<DiscussionQuestion>? DiscussionQuestions { get; private set; }
-        public bool IsCurrentPhaseAwardPhase { get; private set; }
-        public AwardSetting? AwardSettings { get; private set; }
-        public List<AwardEvent> AllAwardEvents { get; private set; } = new();
-        public List<AwardQuestion> AllAwardQuestions { get; private set; } = new();
-        public List<Person> AllPeople { get; private set; } = new();
-        public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults { get; private set; } = new();
-
-        // Cached data
-        private List<Setting>? _settings;
-        private DateTime? _startDate;
-        private bool? _respectOrder;
-        private string[]? _allNames;
-        private List<MovieEvent>? _existingEvents;
-        private List<Phase>? _dbPhases;
-
+        private bool showUpdates = true;
         private bool _isInitialized = false;
+
+        // Exposed properties for Razor page
+        public List<SiteUpdate> RecentUpdates => _viewModel?.RecentUpdates ?? new();
+        public MovieEvent? CurrentEvent => _viewModel?.CurrentEvent;
+        public MovieEvent? NextEvent => _viewModel?.NextEvent;
+        public bool IsShowingPastEvent => _viewModel?.IsShowingPastEvent ?? false;
+        public List<DiscussionQuestion> DiscussionQuestions => _viewModel?.DiscussionQuestions ?? new();
+        public bool IsCurrentPhaseAwardPhase => _viewModel?.IsCurrentPhaseAwardPhase ?? false;
+        public AwardSetting? AwardSettings => _viewModel?.AwardSettings;
+        public List<AwardEvent> AllAwardEvents => _viewModel?.AllAwardEvents ?? new();
+        public List<AwardQuestion> AllAwardQuestions => _viewModel?.AllAwardQuestions ?? new();
+        public List<Person> AllPeople => _viewModel?.AllPeople ?? new();
+        public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults => _viewModel?.QuestionResults ?? new();
 
         /// <summary>
         /// Initializes the component by loading all required data asynchronously.
         /// </summary>
         protected override async Task OnInitializedAsync()
         {
-            // Load all data asynchronously at initialization
-            await LoadAllDataAsync();
+            // Load all data in a single operation
+            _viewModel = await HomePageDataService.GetHomePageDataAsync();
 
-            // Load discussion questions
-            DiscussionQuestions = await discussionQuestionsService.GetActiveQuestionsAsync();
-
-            // Check if current phase is award phase
-            AwardEvent? currentAwardEvent = await AwardEventService.GetAwardEventForDateAsync(DateProvider.Now);
-            IsCurrentPhaseAwardPhase = currentAwardEvent != null;
-
-            // Load award settings
-            AwardSettings = await SettingService.GetAwardSettingsAsync();
-
-            // Load all award events, questions, and people for chronological display
-            Task<List<AwardEvent>> awardEventsTask = AwardEventService.GetAllAsync();
-            Task<List<AwardQuestion>> awardQuestionsTask = AwardQuestionService.GetActiveAwardQuestionsAsync();
-            Task<List<Person>> peopleTask = PersonService.GetAllAsync();
-
-            await Task.WhenAll(awardEventsTask, awardQuestionsTask, peopleTask);
-            
-            AllAwardEvents = await awardEventsTask;
-            AllAwardQuestions = await awardQuestionsTask;
-            AllPeople = await peopleTask;
-
-            // Preload all question results to avoid sync calls in UI
-            await PreloadQuestionResultsAsync();
+            // Advance random number generator based on existing event count
+            for (int i = 0; i < _viewModel.ExistingEventCount; i++)
+            {
+                _rand.Next(_viewModel.AllNames?.Length ?? 1);
+            }
 
             // Generate schedule if we have the required data
-            if (_allNames != null && _allNames.Length > 0 && _startDate.HasValue && _startDate.Value != DateTime.MinValue)
+            if (_viewModel.AllNames.Length > 0 && _viewModel.StartDate.HasValue && _viewModel.StartDate.Value != DateTime.MinValue)
             {
-                await GenerateScheduleAsync(_startDate.Value, _allNames);
-            }
-            else
-            {
-                CurrentEvent = null;
-                NextEvent = null;
-            }
-
-            // Fallback: If no current event found from phases, try to find from existing events
-            if (CurrentEvent == null && _existingEvents?.Any() == true)
-            {
-                // Find the most recent event that should be current
-                MovieEvent? potentialCurrent = _existingEvents
-                    .Where(e => e.StartDate <= DateProvider.Now && e.EndDate >= DateProvider.Now)
-                    .OrderByDescending(e => e.StartDate)
-                    .FirstOrDefault();
-                
-                if (potentialCurrent != null)
-                {
-                    CurrentEvent = potentialCurrent;
-                    IsShowingPastEvent = false;
-                }
-                else
-                {
-                    // If no current event, find the most recent past event
-                    CurrentEvent = _existingEvents
-                        .Where(e => e.EndDate < DateProvider.Now)
-                        .OrderByDescending(e => e.StartDate)
-                        .FirstOrDefault();
-                    IsShowingPastEvent = CurrentEvent != null;
-                }
-            }
-
-            // Fallback for NextEvent
-            if (NextEvent == null && _existingEvents?.Any() == true)
-            {
-                NextEvent = _existingEvents
-                    .Where(e => e.StartDate > DateProvider.Now)
-                    .OrderBy(e => e.StartDate)
-                    .FirstOrDefault();
+                await GenerateScheduleAsync(_viewModel.StartDate.Value, _viewModel.AllNames);
             }
 
             _isInitialized = true;
         }
 
-        /// <summary>
-        /// Loads all required data from services and caches it for component use.
-        /// </summary>
-        private async Task LoadAllDataAsync()
-        {
-            // Ensure default settings exist
-            await SettingService.CreateDefaultGeneralSettingsAsync();
-            
-            // Load settings
-            _settings = await SettingService.GetAllAsync();
-
-            // Parse start date
-            string? startDateSetting = _settings?.FirstOrDefault(x => x.Key == "StartDate")?.Value;
-            if (!string.IsNullOrEmpty(startDateSetting) && DateTime.TryParse(startDateSetting, out DateTime date))
-            {
-                _startDate = date;
-            }
-            else
-            {
-                _startDate = DateTime.MinValue;
-            }
-
-            // Parse respect order
-            Setting? respectOrderSetting = _settings?.FirstOrDefault(x => x.Key == "RespectOrder");
-            _respectOrder = respectOrderSetting != null &&
-                           !string.IsNullOrEmpty(respectOrderSetting.Value) &&
-                           bool.TryParse(respectOrderSetting.Value, out bool respect) &&
-                           respect;
-
-            // Load people names
-            List<Person> people = await PersonService.GetAllAsync();
-            _allNames = people.Select(x => x.Name)
-                .Where(x => !string.IsNullOrEmpty(x))
-                .ToArray();
-
-            // Load existing events
-            _existingEvents = (await MovieEventService.GetAllAsync()).ToList();
-
-            // Load phases
-            _dbPhases = (await PhaseService.GetAllAsync()).OrderBy(p => p.StartDate).ToList();
-
-            // Advance random number generator based on existing events
-            if (_existingEvents != null)
-            {
-                for (int i = 0; i < _existingEvents.Count; i++)
-                {
-                    _rand.Next(_allNames?.Length ?? 1);
-                }
-            }
-        }
 
         /// <summary>
         /// Generates the movie schedule based on phases and award settings.
         /// </summary>
         private async Task GenerateScheduleAsync(DateTime startDate, string[] allNames)
         {
-            if (_dbPhases == null || AwardSettings == null) return;
+            if (_viewModel?.DbPhases == null || AwardSettings == null) return;
 
-            foreach (var phase in _dbPhases)
+            foreach (var phase in _viewModel.DbPhases)
             {
                 // Generate events for this phase
                 Phase generatedPhase = await GeneratePhaseAsync(phase.Number, phase.StartDate, allNames.ToList());
@@ -225,12 +90,12 @@ namespace MovieReviewApp.Components.Pages
 
                     if (DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
                     {
-                        CurrentEvent = null;
-                        Phase? nextPhase = _dbPhases.FirstOrDefault(p => p.Number == phase.Number + 1);
+                        _viewModel.CurrentEvent = null;
+                        Phase? nextPhase = _viewModel.DbPhases.FirstOrDefault(p => p.Number == phase.Number + 1);
                         if (nextPhase != null)
                         {
                             Phase nextGeneratedPhase = await GeneratePhaseAsync(nextPhase.Number, nextPhase.StartDate, allNames.ToList());
-                            NextEvent = nextGeneratedPhase.Events.FirstOrDefault();
+                            _viewModel.NextEvent = nextGeneratedPhase.Events.FirstOrDefault();
                         }
                         else
                         {
@@ -239,7 +104,7 @@ namespace MovieReviewApp.Components.Pages
                             DateTime newPhaseStartDate = awardMonthEnd.AddDays(1);
                             Phase newGeneratedPhase = await GeneratePhaseAsync(newPhaseNumber, newPhaseStartDate, allNames.ToList());
                             Phases.Add(newGeneratedPhase);
-                            NextEvent = newGeneratedPhase.Events.FirstOrDefault();
+                            _viewModel.NextEvent = newGeneratedPhase.Events.FirstOrDefault();
                         }
                     }
                 }
@@ -272,12 +137,17 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
-        /// <summary>
-        /// Generates a single phase with movie events for the specified people.
-        /// </summary>
         private async Task<Phase> GeneratePhaseAsync(int phaseNumber, DateTime startDate, List<string> peopleNames)
         {
-            Phase phase = new Phase
+            Phase phase = CreatePhaseStructure(phaseNumber, startDate, peopleNames);
+            AddExistingEventsToPhase(phase, phaseNumber);
+            AddMissingEventsToPhase(phase, peopleNames);
+            return phase;
+        }
+
+        private Phase CreatePhaseStructure(int phaseNumber, DateTime startDate, List<string> peopleNames)
+        {
+            return new Phase
             {
                 Number = phaseNumber,
                 StartDate = startDate,
@@ -285,55 +155,53 @@ namespace MovieReviewApp.Components.Pages
                 Events = new List<MovieEvent>(),
                 People = string.Join(',', peopleNames)
             };
+        }
 
-            DateTime currentDate = startDate;
-            List<string> availablePeople = new List<string>(peopleNames);
-
-            // Get existing events from cached events
-            IEnumerable<MovieEvent> existingPhaseEvents = _existingEvents?.Where(e => e.PhaseNumber == phaseNumber) ?? Enumerable.Empty<MovieEvent>();
-
-            foreach (var existingEvent in existingPhaseEvents)
+        private void AddExistingEventsToPhase(Phase phase, int phaseNumber)
+        {
+            IEnumerable<MovieEvent> existingEvents = _viewModel?.ExistingEvents?.Where(e => e.PhaseNumber == phaseNumber) ?? Enumerable.Empty<MovieEvent>();
+            foreach (var existingEvent in existingEvents)
             {
-                // Set default MeetupTime if null
-                if (!existingEvent.MeetupTime.HasValue)
-                {
-                    existingEvent.MeetupTime = existingEvent.StartDate.StartOfMonth().LastFridayOfMonth().AddHours(18);
-                }
+                PhaseEventGenerator.SetDefaultMeetupTime(existingEvent);
                 phase.Events.Add(existingEvent);
-                availablePeople.Remove(existingEvent.Person);
-                currentDate = existingEvent.EndDate.AddDays(1);
             }
+        }
+
+        private void AddMissingEventsToPhase(Phase phase, List<string> peopleNames)
+        {
+            List<string> usedPeople = phase.Events.Select(e => e.Person).ToList();
+            List<string> availablePeople = peopleNames.Except(usedPeople).ToList();
+            DateTime currentMonth = CalculateNextAvailableMonth(phase);
 
             while (availablePeople.Any())
             {
-                int personIndex = _respectOrder.GetValueOrDefault() ? 0 : _rand.Next(availablePeople.Count);
+                int personIndex = _viewModel?.RespectOrder == true ? 0 : _rand.Next(availablePeople.Count);
                 string person = availablePeople[personIndex];
 
-                phase.Events.Add(new MovieEvent
-                {
-                    StartDate = currentDate,
-                    EndDate = currentDate.EndOfMonth(),
-                    Person = person,
-                    PhaseNumber = phaseNumber,
-                    FromDatabase = false,
-                    IsEditing = false,
-                    MeetupTime = currentDate.StartOfMonth().LastFridayOfMonth().AddHours(18)
-                });
-
+                MovieEvent newEvent = PhaseEventGenerator.CreateMovieEvent(person, currentMonth, phase.Number);
+                phase.Events.Add(newEvent);
+                
                 availablePeople.Remove(person);
-                currentDate = currentDate.AddMonths(1);
+                currentMonth = currentMonth.AddMonths(1);
             }
+        }
 
-            return phase;
+        private DateTime CalculateNextAvailableMonth(Phase phase)
+        {
+            return phase.Events.Any() 
+                ? phase.Events.Max(e => e.EndDate).AddDays(1).Date 
+                : phase.StartDate;
         }
 
         private void UpdateCurrentAndNextEvents(Phase phase)
         {
-            CurrentEvent = phase.Events
+            if (_viewModel == null) return;
+            
+            _viewModel.CurrentEvent = phase.Events
                 .FirstOrDefault(e => DateProvider.Now.IsWithinRange(e.StartDate, e.EndDate));
 
             DateTime nextMonthDate = DateProvider.Now.AddMonths(1);
-            NextEvent = phase.Events
+            _viewModel.NextEvent = phase.Events
                 .FirstOrDefault(e => nextMonthDate.IsWithinRange(e.StartDate, e.EndDate));
         }
 
@@ -348,15 +216,18 @@ namespace MovieReviewApp.Components.Pages
                         ? DateTime.UtcNow.AddDays(-1)
                         : DateTime.Parse(lastVisitStr);
 
-                    List<SiteUpdate> updates = await SiteUpdateService.GetRecentUpdatesAsync(lastVisit);
-                    await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
-
-                    // Only update if we actually have updates to show
-                    if (updates.Any() && !RecentUpdates.Any())
+                    // If we didn't load recent updates in the initial data fetch, load them now
+                    if (_viewModel != null && !_viewModel.RecentUpdates.Any())
                     {
-                        RecentUpdates = updates;
-                        // Remove StateHasChanged() to prevent re-render/blink
+                        List<SiteUpdate> updates = await SiteUpdateService.GetRecentUpdatesAsync(lastVisit);
+                        if (updates.Any())
+                        {
+                            _viewModel.RecentUpdates = updates;
+                            StateHasChanged();
+                        }
                     }
+                    
+                    await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
                 }
                 catch (Exception ex)
                 {
@@ -370,9 +241,9 @@ namespace MovieReviewApp.Components.Pages
         /// </summary>
         public List<string> GetEligibleMoviesForPhase(int phaseNumber)
         {
-            if (_existingEvents == null || AwardSettings == null) return new List<string>();
+            if (_viewModel?.ExistingEvents == null || AwardSettings == null) return new List<string>();
 
-            return _existingEvents
+            return _viewModel.ExistingEvents
                 .Where(m => m.PhaseNumber <= phaseNumber &&
                            m.PhaseNumber > phaseNumber - AwardSettings.PhasesBeforeAward &&
                            !string.IsNullOrEmpty(m.Movie))
@@ -383,38 +254,6 @@ namespace MovieReviewApp.Components.Pages
         // Removed GetPreviousAwardEvent() to prevent async deadlocks
         // Award events are now displayed in the chronological timeline
 
-        /// <summary>
-        /// Preloads all question results to avoid async calls during UI rendering.
-        /// </summary>
-        private async Task PreloadQuestionResultsAsync()
-        {
-            List<Task> resultTasks = new List<Task>();
-            
-            foreach (var awardEvent in AllAwardEvents)
-            {
-                foreach (var question in AllAwardQuestions.Where(q => awardEvent.Questions.Contains(q.Id)))
-                {
-                    Task task = LoadQuestionResultAsync(awardEvent.Id, question.Id);
-                    resultTasks.Add(task);
-                }
-            }
-            
-            await Task.WhenAll(resultTasks);
-        }
-
-        private async Task LoadQuestionResultAsync(Guid awardEventId, Guid questionId)
-        {
-            try
-            {
-                List<QuestionResult> results = await AwardQuestionService.GetQuestionResultsAsync(awardEventId, questionId);
-                CachedResults[(awardEventId, questionId)] = results;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error loading results for award {awardEventId}, question {questionId}: {ex.Message}");
-                CachedResults[(awardEventId, questionId)] = new List<QuestionResult>();
-            }
-        }
 
         // Method to create chronological timeline with phases and award events
         /// <summary>

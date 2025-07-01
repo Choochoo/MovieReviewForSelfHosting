@@ -11,6 +11,25 @@
 
 <PageTitle>@GetPageTitle()</PageTitle>
 
+@if (hasError)
+{
+    <div class="container">
+        <div class="alert alert-danger" role="alert">
+            <h4 class="alert-heading">Soundboard Error</h4>
+            <p><strong>@errorMessage</strong></p>
+            @if (!string.IsNullOrEmpty(errorDetails))
+            {
+                <hr>
+                <p class="mb-0"><small>@errorDetails</small></p>
+            }
+            <hr>
+            <button class="btn btn-primary" @onclick="RetryInitialization">Retry</button>
+            <button class="btn btn-secondary" @onclick="NavigateToPersonSelection">Back to Person Selection</button>
+        </div>
+    </div>
+    return;
+}
+
 @if (PersonName == null)
 {
     <!-- Person Selection Page -->
@@ -95,7 +114,7 @@ else
                             <div class="d-flex gap-2 mt-2 mt-md-0 align-items-center flex-wrap">
                                 <div class="d-flex align-items-center gap-2">
                                     <small class="text-muted">Volume:</small>
-                                    <input type="range" @bind="globalVolume" @oninput="OnVolumeChange" 
+                                    <input type="range" @bind="globalVolume" @oninput="OnVolumeChange"
                                            min="0" max="100" step="5" 
                                            class="form-range" style="width: 80px;" 
                                            title="Global volume control" />
@@ -239,14 +258,36 @@ else
     private string errorMessage = string.Empty;
     private ElementReference fileInput;
     private int globalVolume = 30; // Default to 30% for safety
+    
+    // Error handling
+    private bool hasError = false;
+    private string errorDetails = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadInitialData();
-        
-        if (!string.IsNullOrEmpty(PersonName))
+        try
         {
-            await SelectPersonByName(PersonName);
+            Logger.LogInformation("Soundboard initializing for PersonName: {PersonName}", PersonName ?? "null");
+            await LoadInitialData();
+            
+            if (!string.IsNullOrEmpty(PersonName))
+            {
+                await SelectPersonByName(PersonName);
+            }
+            
+            Logger.LogInformation("Soundboard initialization completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error during Soundboard initialization for PersonName: {PersonName}", PersonName ?? "null");
+            hasError = true;
+            errorMessage = "Failed to initialize soundboard";
+            errorDetails = $"{ex.GetType().Name}: {ex.Message}";
+            
+            if (ex.InnerException != null)
+            {
+                errorDetails += $" | Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}";
+            }
         }
     }
 
@@ -291,9 +332,24 @@ else
 
     private async Task LoadInitialData()
     {
-        people = await PersonService.GetAllAsync();
-        discussionQuestions = await DiscussionQuestionService.GetActiveQuestionsAsync();
-        soundCounts = await SoundClipService.GetSoundClipCountsByPersonAsync();
+        try
+        {
+            Logger.LogInformation("Loading initial data - people, questions, sound counts");
+            
+            people = await PersonService.GetAllAsync();
+            Logger.LogInformation("Loaded {PeopleCount} people", people?.Count ?? 0);
+            
+            discussionQuestions = await DiscussionQuestionService.GetActiveQuestionsAsync();
+            Logger.LogInformation("Loaded {QuestionsCount} discussion questions", discussionQuestions?.Count ?? 0);
+            
+            soundCounts = await SoundClipService.GetCountsByPersonAsync();
+            Logger.LogInformation("Loaded sound counts for {PersonCount} people", soundCounts?.Count ?? 0);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in LoadInitialData");
+            throw new Exception($"Failed to load initial data: {ex.Message}", ex);
+        }
     }
 
     private async Task SelectPersonByName(string personName)
@@ -325,7 +381,9 @@ else
 
         try
         {
-            currentSounds = await SoundClipService.GetSoundClipsForPersonAsync(selectedPersonId);
+            Logger.LogInformation("Loading sounds for person {PersonId}", selectedPersonId);
+            currentSounds = await SoundClipService.GetByPersonIdAsync(selectedPersonId);
+            Logger.LogInformation("Loaded {SoundCount} sounds for person {PersonId}", currentSounds?.Count ?? 0, selectedPersonId);
             
             // Update JavaScript with current person ID for paste functionality
             try
@@ -342,12 +400,18 @@ else
                     }).ToArray();
                     
                     await JSRuntime.InvokeVoidAsync("preloadPersonSounds", soundsForCaching);
+                    Logger.LogInformation("Pre-cached {CacheCount} sounds for instant playback", soundsForCaching.Length);
                 }
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
-                // JavaScript not available during prerendering
+                Logger.LogWarning("JavaScript not available during prerendering: {Message}", ex.Message);
             }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading sounds for person {PersonId}", selectedPersonId);
+            throw new Exception($"Failed to load sounds for person: {ex.Message}", ex);
         }
         finally
         {
@@ -487,7 +551,7 @@ else
             catch (InvalidOperationException)
             {
                 // JavaScript not available during prerendering, fallback to server-side upload
-                await SoundClipService.SaveSoundClipFromUrlAsync(selectedPersonId, urlInput);
+                await SoundClipService.SaveFromUrlAsync(selectedPersonId, urlInput);
             }
             
             // Success
@@ -565,13 +629,13 @@ else
     {
         if (selectedPersonId != null)
         {
-            currentSounds = await SoundClipService.GetSoundClipsForPersonAsync(selectedPersonId);
+            currentSounds = await SoundClipService.GetByPersonIdAsync(selectedPersonId);
         }
     }
 
     private async Task RefreshSoundCounts()
     {
-        soundCounts = await SoundClipService.GetSoundClipCountsByPersonAsync();
+        soundCounts = await SoundClipService.GetCountsByPersonAsync();
     }
 
 
@@ -607,6 +671,34 @@ else
         {
             Logger.LogError(ex, "Error in HandleDeleteClick for {SoundId}", soundId);
         }
+    }
+
+    private async Task RetryInitialization()
+    {
+        hasError = false;
+        errorMessage = string.Empty;
+        errorDetails = string.Empty;
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            await OnInitializedAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Retry initialization failed");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void NavigateToPersonSelection()
+    {
+        Navigation.NavigateTo("/soundboard");
     }
 
 }

@@ -5,7 +5,6 @@ window.playAudioClip = function(audioUrl) {
         // Get the audio player element
         const audioPlayer = document.getElementById('audioPlayer');
         if (!audioPlayer) {
-            console.error('Audio player element not found');
             return;
         }
 
@@ -20,7 +19,6 @@ window.playAudioClip = function(audioUrl) {
         audioPlayer.addEventListener('loadeddata', function() {
             if (audioPlayer.readyState >= 3) {
                 audioPlayer.play().catch(e => {
-                    console.log('Auto-play prevented by browser:', e);
                 });
             }
         }, { once: true });
@@ -32,7 +30,6 @@ window.playAudioClip = function(audioUrl) {
         }, { once: true });
         
     } catch (error) {
-        console.error('Error playing audio clip:', error);
         alert('Unable to play audio clip. Please try again.');
     }
 };

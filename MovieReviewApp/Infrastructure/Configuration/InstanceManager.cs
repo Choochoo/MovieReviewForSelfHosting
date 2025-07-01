@@ -169,6 +169,13 @@ namespace MovieReviewApp.Infrastructure.Configuration
         private static bool IsRunningInWSL()
         {
             // Check if we're running in WSL by looking for WSL-specific environment variables
+            // Also check that we're not on native Windows (Environment.OSVersion check)
+            if (OperatingSystem.IsWindows() && Environment.OSVersion.Platform == PlatformID.Win32NT)
+            {
+                // We're on native Windows, not WSL
+                return false;
+            }
+            
             return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
                    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_INTEROP")) ||
                    File.Exists("/proc/sys/fs/binfmt_misc/WSLInterop");
