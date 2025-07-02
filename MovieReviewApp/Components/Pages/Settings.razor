@@ -132,13 +132,13 @@
                                         <td class="col-actions">
                                             @if (person.IsEditing)
                                             {
-                                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await Save(person)">Save</button>
-                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Cancel(person)">Cancel</button>
+                                                <i class="bi bi-check text-success" @onclick="async () => await Save(person)" title="Save" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-x text-secondary" @onclick="() => Cancel(person)" title="Cancel" style="cursor: pointer; font-size: 1.2rem;"></i>
                                             }
                                             else
                                             {
-                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => Edit(person)">Edit</button>
-                                                <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await Delete(person)">Delete</button>
+                                                <i class="bi bi-pencil text-secondary" @onclick="() => Edit(person)" title="Edit" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-trash text-danger" @onclick="async () => await Delete(person)" title="Delete" style="cursor: pointer; font-size: 1.2rem;"></i>
                                             }
                                         </td>
                                     </tr>
@@ -157,7 +157,7 @@
                                 <input type="text" @bind="@NewPerson" class="form-control form-control-sm" placeholder="Enter new person's name" />
                             </td>
                             <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddPerson()">Add</button>
+                                <i class="bi bi-plus text-primary" @onclick="async () => await AddPerson()" title="Add Person" style="cursor: pointer; font-size: 1.2rem;"></i>
                             </td>
                         </tr>
                     </tbody>
@@ -248,13 +248,13 @@
                                         <td class="col-actions">
                                             @if (question.IsEditing)
                                             {
-                                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await SaveQuestion(question)">Save</button>
-                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="async () => await CancelQuestionEdit(question)">Cancel</button>
+                                                <i class="bi bi-check text-success" @onclick="async () => await SaveQuestion(question)" title="Save" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-x text-secondary" @onclick="async () => await CancelQuestionEdit(question)" title="Cancel" style="cursor: pointer; font-size: 1.2rem;"></i>
                                             }
                                             else
                                             {
-                                                <button type="button" class="btn btn-sm btn-secondary" @onclick="() => EditQuestion(question)">Edit</button>
-                                                <button type="button" class="btn btn-sm btn-danger" @onclick="async () => await DeleteQuestion(question)">Delete</button>
+                                                <i class="bi bi-pencil text-secondary" @onclick="() => EditQuestion(question)" title="Edit" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-trash text-danger" @onclick="async () => await DeleteQuestion(question)" title="Delete" style="cursor: pointer; font-size: 1.2rem;"></i>
                                             }
                                         </td>
                                     </tr>
@@ -276,7 +276,7 @@
                                 <input class="form-check-input" type="checkbox" @bind="NewQuestionIsActive" />
                             </td>
                             <td class="col-actions">
-                                <button type="button" class="btn btn-sm btn-primary" @onclick="async () => await AddQuestion()">Add</button>
+                                <i class="bi bi-plus text-primary" @onclick="async () => await AddQuestion()" title="Add Question" style="cursor: pointer; font-size: 1.2rem;"></i>
                             </td>
                         </tr>
                     </tbody>

@@ -87,19 +87,22 @@ namespace MovieReviewApp.Components.Partials
             allVoters = await PersonService.GetAllOrderedAsync(true);
             votes = await AwardVoteService.GetVotesAsync(awardEvent.Id);
 
+            // Always load questions first
+            questions = await AwardQuestionService.GetActiveAwardQuestionsAsync();
+
             // Group votes by voter and count them
             voterVoteCounts = votes
                 .GroupBy(v => v.VoterName)
                 .ToDictionary(g => g.Key, g => g.Count());
 
+            // Calculate expected total votes per voter dynamically
+            int expectedTotalVotesPerVoter = questions.Sum(q => q.MaxVotes);
+            
             // Calculate incomplete voters
             incompleteVoters = allVoters
-                .Where(voter => !voterVoteCounts.ContainsKey(voter.Name) || voterVoteCounts[voter.Name] < 18)
+                .Where(voter => !voterVoteCounts.ContainsKey(voter.Name) || voterVoteCounts[voter.Name] < expectedTotalVotesPerVoter)
                 .OrderBy(voter => voter.Name)
                 .ToList();
-
-            // Always load questions
-            questions = await AwardQuestionService.GetActiveAwardQuestionsAsync();
 
             // Get all eligible movies for the award event
             int currentPhaseNumber = GetCurrentPhaseNumber();
@@ -209,7 +212,13 @@ namespace MovieReviewApp.Components.Partials
             _ = GetUserVotesForQuestion(questionId);
             int remainingVotesCount = GetRemainingVotesForQuestion(questionId);
 
-            int points = remainingVotesCount == 3 ? 3 : remainingVotesCount == 2 ? 2 : 1;
+            // Find the question to get its MaxVotes
+            AwardQuestion? question = questions.FirstOrDefault(q => q.Id == questionId);
+            int maxVotesForQuestion = question?.MaxVotes ?? 3; // Default to 3 if question not found
+            
+            // Calculate points dynamically based on remaining votes and max votes for this question
+            // Points decrease as remaining votes decrease: maxVotes, maxVotes-1, maxVotes-2, etc.
+            int points = remainingVotesCount;
 
             AwardVote vote = new AwardVote
             {

@@ -26,6 +26,25 @@ public class AwardQuestionService(MongoDbService databaseService, ILogger<AwardQ
         }
     }
 
+    public async Task DeleteDuplicateAwardQuestionsAsync()
+    {
+        // Delete the duplicate string ID entries for "Best Movie" and "Worst Movie"
+        // Keep the newer binary ID entries with CreatedAt dates
+        string[] duplicateStringIds = 
+        {
+            "6f0284a2-5ca4-46ec-8bce-213ee4a8fb50", // Duplicate "Best Movie"
+            "63e5d54c-355b-42cb-bc0e-f420cf962540"  // Duplicate "Worst Movie"
+        };
+
+        foreach (string stringId in duplicateStringIds)
+        {
+            if (Guid.TryParse(stringId, out Guid guidId))
+            {
+                await DeleteAsync(guidId);
+            }
+        }
+    }
+
     public async Task<List<QuestionResult>> GetQuestionResultsAsync(Guid awardEventId, Guid questionId)
     {
         List<AwardVote> votes = await _db.GetAllAsync<AwardVote>();

@@ -9,16 +9,19 @@ namespace MovieReviewApp.Controllers
     public class SoundController : ControllerBase
     {
         private readonly SoundClipService _soundClipService;
+        private readonly AwardQuestionService _awardQuestionService;
         private readonly ILogger<SoundController> _logger;
 
         /// <summary>
         /// Initializes a new instance of the SoundController class.
         /// </summary>
         /// <param name="soundClipService">The sound clip service.</param>
+        /// <param name="awardQuestionService">The award question service.</param>
         /// <param name="logger">The logger for the controller.</param>
-        public SoundController(SoundClipService soundClipService, ILogger<SoundController> logger)
+        public SoundController(SoundClipService soundClipService, AwardQuestionService awardQuestionService, ILogger<SoundController> logger)
         {
             _soundClipService = soundClipService;
+            _awardQuestionService = awardQuestionService;
             _logger = logger;
         }
 
@@ -208,6 +211,29 @@ namespace MovieReviewApp.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Debug endpoint failed");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Cleanup endpoint to remove duplicate award questions.
+        /// </summary>
+        /// <returns>Status of the cleanup operation.</returns>
+        [HttpPost("/api/sound/cleanup-awards")]
+        public async Task<IActionResult> CleanupDuplicateAwards()
+        {
+            try
+            {
+                await _awardQuestionService.DeleteDuplicateAwardQuestionsAsync();
+                return Ok(new
+                {
+                    message = "Duplicate award questions cleaned up successfully",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to cleanup duplicate awards");
                 return StatusCode(500, new { error = ex.Message });
             }
         }

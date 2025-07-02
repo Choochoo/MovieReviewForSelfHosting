@@ -1,5 +1,4 @@
 @page "/"
-@rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using MovieReviewApp.Components.Partials
 @using MovieReviewApp.Extensions
 @using MovieReviewApp.Models
@@ -8,97 +7,145 @@
 <PageTitle>Movie Review</PageTitle>
 
 <div class="container">
-    @if (IsCurrentPhaseAwardPhase)
+
+    <!-- Loading State -->
+    @if (!_isInitialized)
     {
-        <div class="row">
-            <div class="col-12">
-                <div class="alert alert-warning">
-                    <h4>🏆 Awards Month!</h4>
-                    <p>Vote for your favorites</p>
+        <div class="loading-indicator">
+            <h5 class="loading-text">Loading Movie Night</h5>
+            <div class="spinner-wrapper">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
                 </div>
-                <AwardVoting CurrentDate="DateProvider.Now" />
+            </div>
+            <div class="loading-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+            </div>
+        </div>
+        <div class="loading-container">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="placeholder-card">
+                        <div class="placeholder-header"></div>
+                        <div class="placeholder-body">
+                            <div class="placeholder-line"></div>
+                            <div class="placeholder-line"></div>
+                            <div class="placeholder-line short"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="placeholder-card">
+                        <div class="placeholder-header"></div>
+                        <div class="placeholder-body">
+                            <div class="placeholder-line"></div>
+                            <div class="placeholder-line"></div>
+                            <div class="placeholder-line"></div>
+                            <div class="placeholder-line short"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     }
-    else if (CurrentEvent != null)
-    {
-        @if (IsShowingPastEvent)
+
+    <!-- Main Content with Fade-in -->
+    <div class="content-wrapper @(_isInitialized ? "fade-in" : "")">
+        @if (IsCurrentPhaseAwardPhase)
         {
-            <div class="alert alert-info mb-3">
-                <i class="bi bi-info-circle"></i> No current movie event scheduled. Showing the most recent past event.
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        <h4>🏆 Awards Month!</h4>
+                        <p>Vote for your favorites</p>
+                    </div>
+                    <AwardVoting CurrentDate="DateProvider.Now" />
+                </div>
             </div>
         }
-        <div class="row">
-            <div class="col-md-6">
-                <Phase MovieEvent="CurrentEvent" />
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Review Questions</h5>
+        else if (CurrentEvent != null)
+        {
+            @if (IsShowingPastEvent)
+            {
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> No current movie event scheduled. Showing the most recent past event.
+                </div>
+            }
+            <div class="row">
+                <div class="col-md-6">
+                    <Phase MovieEvent="CurrentEvent" />
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Review Questions</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (DiscussionQuestions?.Any() == true)
+                            {
+                                <ol>
+                                    @foreach (var question in DiscussionQuestions)
+                                    {
+                                        <li>@question.Question</li>
+                                    }
+                                </ol>
+                            }
+                            else
+                            {
+                                <ol>
+                                    <li>Did I like the movie?</li>
+                                    <li>Am I glad I watched the movie?</li>
+                                    <li>Do I think I'd ever watch it again?</li>
+                                    <li>Would you ever recommend this movie?</li>
+                                    <li>What was my favorite part of the movie?</li>
+                                    <li>What was my least favorite part of the movie?</li>
+                                    <li>What was my favorite line of the movie?</li>
+                                </ol>
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i>
+                                        These are the default questions. You can customize them in <a href="/settings">Settings</a>.
+                                    </small>
+                                </div>
+                            }
+                        </div>
                     </div>
-                    <div class="card-body">
-                        @if (DiscussionQuestions?.Any() == true)
+                </div>
+            </div>
+        }
+
+        @if (NextEvent != null)
+        {
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <Phase MovieEvent="NextEvent" />
+                </div>
+            </div>
+        }
+
+        @if (Phases?.Any() == true && AwardSettings != null)
+        {
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <div class="chronological-timeline">
+                        @foreach (ITimelineItem timelineItem in GetChronologicalTimeline())
                         {
-                            <ol>
-                                @foreach (var question in DiscussionQuestions)
-                                {
-                                    <li>@question.Question</li>
-                                }
-                            </ol>
-                        }
-                        else
-                        {
-                            <ol>
-                                <li>Did I like the movie?</li>
-                                <li>Am I glad I watched the movie?</li>
-                                <li>Do I think I'd ever watch it again?</li>
-                                <li>Would you ever recommend this movie?</li>
-                                <li>What was my favorite part of the movie?</li>
-                                <li>What was my least favorite part of the movie?</li>
-                                <li>What was my favorite line of the movie?</li>
-                            </ol>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="bi bi-info-circle"></i>
-                                    These are the default questions. You can customize them in <a href="/settings">Settings</a>.
-                                </small>
-                            </div>
+                            <TimelineItemRenderer Item="timelineItem"
+                                                CurrentEvent="CurrentEvent"
+                                                NextEvent="NextEvent"
+                                                AllAwardQuestions="AllAwardQuestions"
+                                                AllPeople="AllPeople"
+                                                CachedResults="CachedResults"
+                                                IsShowingResults="IsShowingResults"
+                                                OnToggleResults="ToggleResults"
+                                                GetEligibleMoviesForPhase="GetEligibleMoviesForPhase" />
                         }
                     </div>
                 </div>
             </div>
-        </div>
-    }
-
-    @if (NextEvent != null)
-    {
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <Phase MovieEvent="NextEvent" />
-            </div>
-        </div>
-    }
-
-    @if (Phases?.Any() == true && AwardSettings != null)
-    {
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="chronological-timeline">
-                    @foreach (ITimelineItem timelineItem in GetChronologicalTimeline())
-                    {
-                        <TimelineItemRenderer Item="timelineItem"
-                                            CurrentEvent="CurrentEvent"
-                                            NextEvent="NextEvent"
-                                            AllAwardQuestions="AllAwardQuestions"
-                                            AllPeople="AllPeople"
-                                            CachedResults="CachedResults"
-                                            IsShowingResults="IsShowingResults"
-                                            OnToggleResults="ToggleResults"
-                                            GetEligibleMoviesForPhase="GetEligibleMoviesForPhase" />
-                    }
-                </div>
-            </div>
-        </div>
-    }
+        }
+    </div>
 </div>
+

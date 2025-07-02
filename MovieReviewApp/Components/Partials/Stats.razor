@@ -12,7 +12,7 @@
         <!-- Movie Sessions Grid View -->
         <div class="row">
             <div class="col-12">
-                <h3 class="mb-4">🎬 Movie Session Analytics</h3>
+                <h3 class="mb-4">🎬 Movie Analytics</h3>
             </div>
         </div>
 
@@ -190,21 +190,6 @@
     }
 </div>
 
-<style>
-    .movie-session-card {
-        cursor: pointer;
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    
-    .movie-session-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    }
-    
-    .session-stats {
-        font-size: 0.9rem;
-    }
-</style>
 
 @code {
     [Parameter] public string? SessionIdString { get; set; }

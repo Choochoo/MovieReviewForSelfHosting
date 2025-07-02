@@ -176,7 +176,7 @@ public class MonthlyDataGenerationService : BackgroundService
             AwardQuestion question = new AwardQuestion
             {
                 Question = category,
-                MaxVotes = 1,
+                MaxVotes = 3,
                 IsActive = true
             };
             await database.UpsertAsync(question);

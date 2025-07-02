@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using MongoDB.Driver;
+using MovieReviewApp.Application.Services;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
 using MovieReviewApp.Models.ViewModels;
-using MovieReviewApp.Application.Services;
 using MovieReviewApp.Utilities;
 
 namespace MovieReviewApp.Components.Pages
@@ -44,8 +44,11 @@ namespace MovieReviewApp.Components.Pages
         /// </summary>
         protected override async Task OnInitializedAsync()
         {
+            Console.WriteLine("Home.razor.cs: OnInitializedAsync started");
+
             // Load all data in a single operation
             _viewModel = await HomePageDataService.GetHomePageDataAsync();
+            Console.WriteLine("Home.razor.cs: Data loaded");
 
             // Advance random number generator based on existing event count
             for (int i = 0; i < _viewModel.ExistingEventCount; i++)
@@ -57,9 +60,20 @@ namespace MovieReviewApp.Components.Pages
             if (_viewModel.AllNames.Length > 0 && _viewModel.StartDate.HasValue && _viewModel.StartDate.Value != DateTime.MinValue)
             {
                 await GenerateScheduleAsync(_viewModel.StartDate.Value, _viewModel.AllNames);
+                Console.WriteLine("Home.razor.cs: Schedule generated");
             }
 
-            _isInitialized = true;
+            // Add a delay to make the fade effect visible (adjust as needed)
+            await Task.Delay(500); // 0.5 second delay
+            Console.WriteLine("Home.razor.cs: Delay completed");
+
+            // Ensure we're on the UI thread and trigger a single state change
+            await InvokeAsync(() =>
+            {
+                _isInitialized = true;
+                Console.WriteLine("Home.razor.cs: _isInitialized set to true");
+                StateHasChanged();
+            });
         }
 
 
@@ -70,7 +84,7 @@ namespace MovieReviewApp.Components.Pages
         {
             if (_viewModel?.DbPhases == null || AwardSettings == null) return;
 
-            foreach (var phase in _viewModel.DbPhases)
+            foreach (Phase phase in _viewModel.DbPhases)
             {
                 // Generate events for this phase
                 Phase generatedPhase = await GeneratePhaseAsync(phase.Number, phase.StartDate, allNames.ToList());
@@ -160,7 +174,7 @@ namespace MovieReviewApp.Components.Pages
         private void AddExistingEventsToPhase(Phase phase, int phaseNumber)
         {
             IEnumerable<MovieEvent> existingEvents = _viewModel?.ExistingEvents?.Where(e => e.PhaseNumber == phaseNumber) ?? Enumerable.Empty<MovieEvent>();
-            foreach (var existingEvent in existingEvents)
+            foreach (MovieEvent existingEvent in existingEvents)
             {
                 PhaseEventGenerator.SetDefaultMeetupTime(existingEvent);
                 phase.Events.Add(existingEvent);
@@ -180,7 +194,7 @@ namespace MovieReviewApp.Components.Pages
 
                 MovieEvent newEvent = PhaseEventGenerator.CreateMovieEvent(person, currentMonth, phase.Number);
                 phase.Events.Add(newEvent);
-                
+
                 availablePeople.Remove(person);
                 currentMonth = currentMonth.AddMonths(1);
             }
@@ -188,15 +202,15 @@ namespace MovieReviewApp.Components.Pages
 
         private DateTime CalculateNextAvailableMonth(Phase phase)
         {
-            return phase.Events.Any() 
-                ? phase.Events.Max(e => e.EndDate).AddDays(1).Date 
+            return phase.Events.Any()
+                ? phase.Events.Max(e => e.EndDate).AddDays(1).Date
                 : phase.StartDate;
         }
 
         private void UpdateCurrentAndNextEvents(Phase phase)
         {
             if (_viewModel == null) return;
-            
+
             _viewModel.CurrentEvent = phase.Events
                 .FirstOrDefault(e => DateProvider.Now.IsWithinRange(e.StartDate, e.EndDate));
 
@@ -226,7 +240,7 @@ namespace MovieReviewApp.Components.Pages
                             StateHasChanged();
                         }
                     }
-                    
+
                     await JS.InvokeVoidAsync("localStorage.setItem", "lastVisit", DateTime.UtcNow.ToString("o"));
                 }
                 catch (Exception ex)
@@ -251,60 +265,85 @@ namespace MovieReviewApp.Components.Pages
                 .ToList();
         }
 
-        // Removed GetPreviousAwardEvent() to prevent async deadlocks
-        // Award events are now displayed in the chronological timeline
-
 
         // Method to create chronological timeline with phases and award events
         /// <summary>
         /// Creates a chronological timeline combining phases and award events.
+        /// Only shows current and future events (from current month onwards).
         /// </summary>
         public List<ITimelineItem> GetChronologicalTimeline()
         {
             List<ITimelineItem> timeline = new List<ITimelineItem>();
-            
+
             if (Phases == null || AwardSettings == null) return timeline;
 
-            // Add all phases to timeline (including past ones)
+            // Get the start of the current month to filter out past events
+            DateTime currentMonthStart = new DateTime(DateProvider.Now.Year, DateProvider.Now.Month, 1);
+
+            // Only add phases that have events in current month or later
             foreach (Phase phase in Phases)
             {
-                timeline.Add(new PhaseTimelineItem(phase));
-                
+                // Filter phase events to only include current month and future events
+                List<MovieEvent> currentAndFutureEvents = phase.Events?
+                    .Where(e => e.StartDate >= currentMonthStart)
+                    .ToList() ?? new List<MovieEvent>();
+
+                // Only add phase to timeline if it has current or future events
+                if (currentAndFutureEvents.Any())
+                {
+                    // Create a filtered phase for display
+                    Phase filteredPhase = new Phase
+                    {
+                        Number = phase.Number,
+                        StartDate = phase.StartDate,
+                        EndDate = phase.EndDate,
+                        People = phase.People,
+                        Events = currentAndFutureEvents
+                    };
+
+                    timeline.Add(new PhaseTimelineItem(filteredPhase));
+                }
+
                 // Check if this phase should have an award event after it
                 if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
                 {
                     DateTime awardDate = phase.EndDate.AddDays(1);
-                    
-                    // Look for an existing award event for this time period
-                    AwardEvent? awardEvent = AllAwardEvents.FirstOrDefault(ae => 
-                        ae.StartDate >= awardDate && ae.StartDate <= awardDate.AddMonths(1));
-                    
-                    if (awardEvent != null)
+
+                    // Only show award events for current or future phases
+                    if (awardDate >= currentMonthStart)
                     {
-                        timeline.Add(new AwardTimelineItem(awardEvent));
-                    }
-                    else if (awardDate > DateProvider.Now)
-                    {
-                        // Only create placeholder for future award events
-                        FutureAwardItem futureAward = new FutureAwardItem 
-                        { 
-                            PhaseNumber = phase.Number, 
-                            AwardDate = awardDate 
-                        };
-                        timeline.Add(new FutureAwardTimelineItem(futureAward));
+                        // Look for an existing award event for this time period
+                        AwardEvent? awardEvent = AllAwardEvents.FirstOrDefault(ae =>
+                            ae.StartDate >= awardDate && ae.StartDate <= awardDate.AddMonths(1));
+
+                        if (awardEvent != null)
+                        {
+                            timeline.Add(new AwardTimelineItem(awardEvent));
+                        }
+                        else if (awardDate > DateProvider.Now)
+                        {
+                            // Only create placeholder for future award events
+                            FutureAwardItem futureAward = new FutureAwardItem
+                            {
+                                PhaseNumber = phase.Number,
+                                AwardDate = awardDate
+                            };
+                            timeline.Add(new FutureAwardTimelineItem(futureAward));
+                        }
                     }
                 }
             }
-            
+
             // Also add any standalone award events that might not have been matched to phases
-            foreach (AwardEvent awardEvent in AllAwardEvents)
+            // but only if they're in the current month or future
+            foreach (AwardEvent awardEvent in AllAwardEvents.Where(ae => ae.StartDate >= currentMonthStart))
             {
                 if (!timeline.OfType<AwardTimelineItem>().Any(t => t.AwardEvent.Id == awardEvent.Id))
                 {
                     timeline.Add(new AwardTimelineItem(awardEvent));
                 }
             }
-            
+
             // Sort by date (oldest first for chronological display)
             return timeline.OrderBy(t => t.Date).ToList();
         }
@@ -312,7 +351,7 @@ namespace MovieReviewApp.Components.Pages
         // Dictionary to track which award results are being shown
         private Dictionary<string, bool> showResultsDict = new Dictionary<string, bool>();
 
-        public bool IsShowingResults(Guid awardEventId, Guid questionId) => 
+        public bool IsShowingResults(Guid awardEventId, Guid questionId) =>
             showResultsDict.ContainsKey($"show_{awardEventId}_{questionId}") && showResultsDict[$"show_{awardEventId}_{questionId}"];
 
         public void ToggleResults(Guid awardEventId, Guid questionId)
@@ -320,7 +359,7 @@ namespace MovieReviewApp.Components.Pages
             string key = $"show_{awardEventId}_{questionId}";
             if (!showResultsDict.ContainsKey(key))
                 showResultsDict[key] = false;
-            
+
             showResultsDict[key] = !showResultsDict[key];
             StateHasChanged();
         }

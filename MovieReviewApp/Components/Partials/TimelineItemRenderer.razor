@@ -4,9 +4,7 @@
 @if (Item is PhaseTimelineItem phaseItem)
 {
     MovieReviewApp.Models.Phase phase = phaseItem.Phase;
-    List<MovieEvent> timelineEvents = phase.Events?.Where(x =>
-        x != CurrentEvent &&
-        x != NextEvent).ToList() ?? new List<MovieEvent>();
+    List<MovieEvent> timelineEvents = phase.Events ?? new List<MovieEvent>();
 
     @if (timelineEvents.Any())
     {

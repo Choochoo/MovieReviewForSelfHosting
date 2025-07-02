@@ -22,7 +22,7 @@
             {
                 List<QuestionResult> results = CachedResults.GetValueOrDefault((AwardEvent.Id, question.Id), new List<QuestionResult>());
                 int totalVoters = AllPeople.Count;
-                int totalPossiblePoints = totalVoters * 3;
+                int totalPossiblePoints = totalVoters * question.MaxVotes;
                 @foreach (QuestionResult result in results.OrderByDescending(r => r.TotalPoints))
                 {
                     float percentage = totalPossiblePoints > 0 ? (result.TotalPoints / (float)totalPossiblePoints) * 100 : 0;

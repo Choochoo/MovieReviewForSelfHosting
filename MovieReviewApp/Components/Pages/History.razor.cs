@@ -18,6 +18,7 @@ public partial class History : ComponentBase
     // New properties for theater view
     private bool isGridView = true; // Default to theater view as requested
     private MovieEvent? selectedMovie = null;
+    private bool _isInitialized = false;
 
     // Computed property for sorted movie events (newest first)
     private List<MovieEvent> SortedMovieEvents =>
@@ -27,7 +28,28 @@ public partial class History : ComponentBase
 
     protected override async Task OnInitializedAsync()
     {
+        // Load data first
         Pastevents = await MovieEventService.GetAllAsync();
+        
+        // Add a delay to make the loading state visible and smooth transition
+        await Task.Delay(1000); // 1 second delay like home page
+        
+        // Ensure we're on the UI thread and trigger state change
+        await InvokeAsync(() =>
+        {
+            _isInitialized = true;
+            StateHasChanged();
+        });
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Force theater view on mobile - this is a simple approach
+            // In production, you might want to use JavaScript interop to check viewport
+            isGridView = true;
+        }
     }
 
     private void ToggleView(bool showGrid)

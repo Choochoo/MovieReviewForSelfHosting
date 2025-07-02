@@ -22,7 +22,7 @@
                         @{
                             var results = AwardQuestionService.GetQuestionResultsAsync(awardEvent.Id, question.Id).Result;
                             var totalVoters = PersonService.GetAllOrderedAsync(true).Result.Count;
-                            var totalPossiblePoints = totalVoters * 3;
+                            var totalPossiblePoints = totalVoters * question.MaxVotes;
                         }
                         @foreach (var result in results.OrderByDescending(r => r.TotalPoints))
                         {
