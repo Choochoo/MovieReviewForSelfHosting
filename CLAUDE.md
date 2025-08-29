@@ -9,8 +9,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build and run
 dotnet restore
 dotnet build
-dotnet run --instance "dev"        # Run development instance
-dotnet run --instance "dev" --port 5000  # Specify port
+dotnet run --instance "dev"        # Run development instance (auto-assigns port)
+dotnet run --instance "dev" --port 5000  # Run with specific port
+
+# Working directory context (run from solution root)
+cd MovieReviewApp  # Navigate to main project directory before running
 
 # Instance management
 dotnet run --list                  # List all instances
@@ -20,15 +23,45 @@ dotnet run --help                  # Show help options
 dotnet publish -c Release -o ./publish
 ```
 
-### Linting and Code Quality
-The project uses .NET's built-in code analysis. To check for issues:
+### Testing
+The project uses xUnit for testing. Run tests with:
 ```bash
-dotnet build -warnaserror
+# Run all tests
+dotnet test
+
+# Run tests with verbosity
+dotnet test --verbosity normal
+
+# Run specific test class
+dotnet test --filter "FullyQualifiedName~HomePageDataServiceTests"
+
+# Run tests in specific project only
+dotnet test MovieReviewApp.Tests/
 ```
+
+### Linting and Code Quality
+The project enforces strict code quality rules through .editorconfig:
+```bash
+# Build with warnings as errors (enforces code quality)
+dotnet build -warnaserror
+
+# Check for format issues
+dotnet format --verify-no-changes
+```
+
+**Important Code Standards:**
+- **No `var` keyword** - All types must be explicitly declared (enforced as error)
+- **Explicit typing everywhere** - `string name = "value"` not `var name = "value"`
+- **File-scoped namespaces** - Use `namespace MovieReviewApp;` not `namespace MovieReviewApp { }`
 
 ## Architecture Overview
 
 This is a **Blazor Server** application (.NET 9.0) designed for movie discussion groups with audio recording, transcription, and AI analysis capabilities.
+
+**Solution Structure:**
+- `MovieReviewApp/` - Main Blazor Server application
+- `MovieReviewApp.Tests/` - xUnit test project
+- `Application/` - Business logic layer (outside main project)
 
 ### Core Architecture Patterns
 
@@ -72,11 +105,16 @@ This is a **Blazor Server** application (.NET 9.0) designed for movie discussion
 
 ### Important Patterns
 
-1. **Dependency Injection**: All services registered in `Program.cs`
+1. **Dependency Injection**: All services registered in `Program.cs` with proper lifetime management
 2. **Async/Await**: Used consistently throughout the codebase
-3. **Explicit Typing**: No `var` keyword - all types explicitly declared
-4. **SignalR Integration**: Real-time updates for audio processing status
-5. **CSS Variables**: Theme system uses CSS custom properties
+3. **Explicit Typing**: No `var` keyword allowed - enforced at build time as error
+4. **Command-Line Arguments**: Instance and port management via `CommandLineParser`
+5. **Multi-Instance Isolation**: Each instance gets separate database and configuration
+6. **SignalR Integration**: Real-time updates for audio processing status
+7. **State Machine Pattern**: Audio processing workflow in `AudioProcessingStateMachine`
+8. **Repository Pattern**: Database access abstracted through `MongoDbService`
+9. **Secure Configuration**: API keys encrypted per instance via `SecretsManager`
+10. **CSS Variables**: Theme system uses CSS custom properties
 
 ### Common Development Tasks
 
@@ -91,6 +129,19 @@ When adding new AI analysis features:
 - Update `PromptGenerationService` for new prompt types
 
 When working with the database:
-- Use existing repository pattern in `Infrastructure/Database`
-- Ensure instance isolation through `IInstanceService`
-- GridFS for files > 16MB
+- Use `MongoDbService` for data access - it provides generic CRUD operations
+- Database naming: `MovieReviewApp_{instanceName}` (automatic isolation)
+- Collections use type-based naming with `[CollectionName]` attributes
+- GridFS for audio files and large assets
+- Instance isolation is automatic through `InstanceManager`
+
+When working with audio processing:
+- Check `AudioProcessingStateMachine` for workflow state management
+- All processing is asynchronous with progress tracking
+- Files automatically converted from WAV to MP3 if >100MB
+- FFmpeg dependency required for audio conversion
+
+When adding new themes:
+- Update `ThemeService` with new theme definitions
+- CSS variables defined in theme-specific stylesheets
+- Each theme supports both dark and light variants
