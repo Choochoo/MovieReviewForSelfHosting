@@ -233,30 +233,7 @@ jobs:
         $webConfigPath = "$deployPath\web.config"
         
         # Create web.config with instance-specific configuration
-        $webConfig = @"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <location path="." inheritInChildApplications="false">
-    <system.webServer>
-      <handlers>
-        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
-      </handlers>
-      <aspNetCore processPath="dotnet" 
-                  arguments=".\MovieReviewApp.dll --instance ${{ matrix.instance.name }} --port ${{ matrix.instance.port }}" 
-                  stdoutLogEnabled="true" 
-                  stdoutLogFile=".\logs\stdout" 
-                  hostingModel="InProcess">
-        <environmentVariables>
-          <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
-          <environmentVariable name="MOVIEREVIEW_INSTANCE_NAME" value="${{ matrix.instance.name }}" />
-          <environmentVariable name="MOVIEREVIEW_DISPLAY_NAME" value="${{ matrix.instance.display_name }}" />
-          <environmentVariable name="MOVIEREVIEW_ENVIRONMENT" value="${{ matrix.instance.environment }}" />
-        </environmentVariables>
-      </aspNetCore>
-    </system.webServer>
-  </location>
-</configuration>
-"@
+        $webConfig = '<?xml version="1.0" encoding="utf-8"?><configuration><location path="." inheritInChildApplications="false"><system.webServer><handlers><add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" /></handlers><aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll --instance ${{ matrix.instance.name }} --port ${{ matrix.instance.port }}" stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" hostingModel="InProcess"><environmentVariables><environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" /><environmentVariable name="MOVIEREVIEW_INSTANCE_NAME" value="${{ matrix.instance.name }}" /><environmentVariable name="MOVIEREVIEW_DISPLAY_NAME" value="${{ matrix.instance.display_name }}" /><environmentVariable name="MOVIEREVIEW_ENVIRONMENT" value="${{ matrix.instance.environment }}" /></environmentVariables></aspNetCore></system.webServer></location></configuration>'
         
         Write-Host "Creating web.config for instance: $instanceName"
         $webConfig | Out-File -FilePath $webConfigPath -Encoding UTF8
