@@ -413,6 +413,27 @@ namespace MovieReviewApp.Infrastructure.Database
             return (items, totalCount);
         }
 
+        /// <summary>
+        /// Tests database connection by attempting to ping the server
+        /// </summary>
+        public async Task<bool> TestConnectionAsync()
+        {
+            try
+            {
+                if (_database == null) return false;
+                
+                // Use ping command to test connection
+                BsonDocument command = new BsonDocument("ping", 1);
+                await _database.RunCommandAsync<BsonDocument>(command);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database connection test failed");
+                return false;
+            }
+        }
+
         #endregion
 
         #region Helper Methods
