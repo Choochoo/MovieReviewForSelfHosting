@@ -18,7 +18,7 @@ public class PhaseEventGenerator
             PhaseNumber = phaseNumber,
             FromDatabase = false,
             IsEditing = false,
-            MeetupTime = month.StartOfMonth().LastFridayOfMonth().AddHours(18)
+            MeetupTime = DateTime.SpecifyKind(month.StartOfMonth().LastFridayOfMonth().AddHours(18), DateTimeKind.Local)
         };
     }
 
@@ -42,7 +42,7 @@ public class PhaseEventGenerator
     {
         if (!movieEvent.MeetupTime.HasValue)
         {
-            movieEvent.MeetupTime = movieEvent.StartDate.StartOfMonth().LastFridayOfMonth().AddHours(18);
+            movieEvent.MeetupTime = DateTime.SpecifyKind(movieEvent.StartDate.StartOfMonth().LastFridayOfMonth().AddHours(18), DateTimeKind.Local);
         }
     }
 }

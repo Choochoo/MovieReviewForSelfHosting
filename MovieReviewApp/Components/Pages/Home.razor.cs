@@ -127,26 +127,37 @@ namespace MovieReviewApp.Components.Pages
             // Generate additional future phases for display purposes
             if (Phases.Any() && AwardSettings != null)
             {
-                Phase lastPhase = Phases.OrderByDescending(p => p.Number).First();
+                Phase currentLastPhase = Phases.OrderByDescending(p => p.Number).First();
                 int additionalPhasesToGenerate = 2;
 
                 for (int i = 1; i <= additionalPhasesToGenerate; i++)
                 {
-                    int newPhaseNumber = lastPhase.Number + i;
+                    int newPhaseNumber = currentLastPhase.Number + i;
+                    
+                    // Skip if this phase already exists
+                    if (Phases.Any(p => p.Number == newPhaseNumber))
+                        continue;
+                        
                     DateTime newPhaseStart;
 
-                    if (lastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
+                    // Check if the previous phase completed a cycle and should have an award month after it
+                    if (currentLastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
                     {
-                        DateTime awardMonthEnd = lastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
+                        // The previous phase completed a cycle, so there should be an award month after it
+                        DateTime awardMonthEnd = currentLastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
                         newPhaseStart = awardMonthEnd.AddDays(1);
                     }
                     else
                     {
-                        newPhaseStart = lastPhase.EndDate.AddDays(1);
+                        // The previous phase didn't complete a cycle, so next phase starts immediately
+                        newPhaseStart = currentLastPhase.EndDate.AddDays(1);
                     }
 
                     Phase futurePhase = await GeneratePhaseAsync(newPhaseNumber, newPhaseStart, allNames.ToList());
                     Phases.Add(futurePhase);
+                    
+                    // Update currentLastPhase to the newly created phase for the next iteration
+                    currentLastPhase = futurePhase;
                 }
             }
         }
@@ -156,6 +167,13 @@ namespace MovieReviewApp.Components.Pages
             Phase phase = CreatePhaseStructure(phaseNumber, startDate, peopleNames);
             AddExistingEventsToPhase(phase, phaseNumber);
             AddMissingEventsToPhase(phase, peopleNames);
+            
+            // Update phase end date to match the last event's end date
+            if (phase.Events.Any())
+            {
+                phase.EndDate = phase.Events.Max(e => e.EndDate);
+            }
+            
             return phase;
         }
 
@@ -165,7 +183,7 @@ namespace MovieReviewApp.Components.Pages
             {
                 Number = phaseNumber,
                 StartDate = startDate,
-                EndDate = startDate.AddMonths(peopleNames.Count).EndOfDay(),
+                EndDate = startDate.AddMonths(peopleNames.Count - 1).EndOfMonth(),
                 Events = new List<MovieEvent>(),
                 People = string.Join(',', peopleNames)
             };
@@ -203,8 +221,8 @@ namespace MovieReviewApp.Components.Pages
         private DateTime CalculateNextAvailableMonth(Phase phase)
         {
             return phase.Events.Any()
-                ? phase.Events.Max(e => e.EndDate).AddDays(1).Date
-                : phase.StartDate;
+                ? phase.Events.Max(e => e.EndDate).AddMonths(1).StartOfMonth()
+                : phase.StartDate.StartOfMonth();
         }
 
         private void UpdateCurrentAndNextEvents(Phase phase)
@@ -279,6 +297,7 @@ namespace MovieReviewApp.Components.Pages
 
             // Get the start of the current month to filter out past events
             DateTime currentMonthStart = new DateTime(DateProvider.Now.Year, DateProvider.Now.Month, 1);
+            bool nextAwardAdded = false; // ensure only the next awards month shows once
 
             // Only add phases that have events in current month or later
             foreach (Phase phase in Phases)
@@ -296,7 +315,7 @@ namespace MovieReviewApp.Components.Pages
                     {
                         Number = phase.Number,
                         StartDate = phase.StartDate,
-                        EndDate = phase.EndDate,
+                        EndDate = currentAndFutureEvents.Any() ? currentAndFutureEvents.Max(e => e.EndDate) : phase.EndDate,
                         People = phase.People,
                         Events = currentAndFutureEvents
                     };
@@ -310,7 +329,7 @@ namespace MovieReviewApp.Components.Pages
                     DateTime awardDate = phase.EndDate.AddDays(1);
 
                     // Only show award events for current or future phases
-                    if (awardDate >= currentMonthStart)
+                    if (!nextAwardAdded && awardDate >= currentMonthStart)
                     {
                         // Look for an existing award event for this time period
                         AwardEvent? awardEvent = AllAwardEvents.FirstOrDefault(ae =>
@@ -319,6 +338,7 @@ namespace MovieReviewApp.Components.Pages
                         if (awardEvent != null)
                         {
                             timeline.Add(new AwardTimelineItem(awardEvent));
+                            nextAwardAdded = true;
                         }
                         else if (awardDate > DateProvider.Now)
                         {
@@ -329,6 +349,7 @@ namespace MovieReviewApp.Components.Pages
                                 AwardDate = awardDate
                             };
                             timeline.Add(new FutureAwardTimelineItem(futureAward));
+                            nextAwardAdded = true;
                         }
                     }
                 }
@@ -336,12 +357,16 @@ namespace MovieReviewApp.Components.Pages
 
             // Also add any standalone award events that might not have been matched to phases
             // but only if they're in the current month or future
-            foreach (AwardEvent awardEvent in AllAwardEvents.Where(ae => ae.StartDate >= currentMonthStart))
+            if (!nextAwardAdded)
             {
-                if (!timeline.OfType<AwardTimelineItem>().Any(t => t.AwardEvent.Id == awardEvent.Id))
-                {
-                    timeline.Add(new AwardTimelineItem(awardEvent));
-                }
+                AwardEvent? firstUpcomingAward = AllAwardEvents
+                    .Where(ae => ae.StartDate >= currentMonthStart)
+                    .OrderBy(ae => ae.StartDate)
+                    .FirstOrDefault();
+
+                if (firstUpcomingAward != null &&
+                    !timeline.OfType<AwardTimelineItem>().Any(t => t.AwardEvent.Id == firstUpcomingAward.Id))
+                    timeline.Add(new AwardTimelineItem(firstUpcomingAward));
             }
 
             // Sort by date (oldest first for chronological display)

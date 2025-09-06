@@ -248,14 +248,31 @@ jobs:
         
         Write-Host "Setting permissions for: $deployPath"
         
-        # Grant IIS_IUSRS full control
+        # Create required directories that the application expects
+        $requiredDirs = @(
+          "$deployPath\logs",
+          "$deployPath\wwwroot\uploads\pending",
+          "$deployPath\wwwroot\clips",
+          "$deployPath\wwwroot\sounds",
+          "$deployPath\wwwroot\temp",
+          "$deployPath\wwwroot\uploads"
+        )
+        
+        foreach ($dir in $requiredDirs) {
+          if (-not (Test-Path $dir)) {
+            New-Item -Path $dir -ItemType Directory -Force
+            Write-Host "Created directory: $dir"
+          }
+        }
+        
+        # Grant IIS_IUSRS full control to the main deployment directory
         icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
         
-        # Create logs directory if it doesn't exist
-        $logsPath = "$deployPath\logs"
-        if (-not (Test-Path $logsPath)) {
-          New-Item -Path $logsPath -ItemType Directory -Force
-          Write-Host "Created logs directory: $logsPath"
+        # Grant IIS_IUSRS full control to wwwroot subdirectories specifically
+        $wwwrootPath = "$deployPath\wwwroot"
+        if (Test-Path $wwwrootPath) {
+          icacls $wwwrootPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
+          Write-Host "Set permissions on wwwroot directory: $wwwrootPath"
         }
         
         Write-Host "Permissions set successfully"

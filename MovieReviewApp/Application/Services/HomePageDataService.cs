@@ -1,5 +1,7 @@
 using MongoDB.Driver;
+using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using MovieReviewApp.Models.ViewModels;
 using MovieReviewApp.Utilities;
@@ -82,7 +84,8 @@ namespace MovieReviewApp.Application.Services
         private async Task<List<DiscussionQuestion>> GetActiveDiscussionQuestionsAsync()
         {
             FilterDefinition<DiscussionQuestion> filter = Builders<DiscussionQuestion>.Filter.Eq(q => q.IsActive, true);
-            return await _db.FindAsync(filter);
+            SortDefinition<DiscussionQuestion> sort = Builders<DiscussionQuestion>.Sort.Ascending(q => q.Order);
+            return await _db.FindAsync(filter, sort);
         }
 
         private async Task<List<AwardQuestion>> GetActiveAwardQuestionsAsync()
@@ -145,7 +148,12 @@ namespace MovieReviewApp.Application.Services
             }
 
             // Return default if not found
-            return new AwardSetting { PhasesBeforeAward = 3 };
+            ILogger<SettingService> settingLogger = new LoggerFactory().CreateLogger<SettingService>();
+            InstanceManager instanceManager = new InstanceManager();
+            DemoProtectionService demoProtectionService = new DemoProtectionService(instanceManager);
+            SettingService settingService = new SettingService(_db, settingLogger, demoProtectionService);
+            ApplicationSettings appSettings = await settingService.GetApplicationSettingsAsync();
+            return AwardSetting.CreateFromApplicationSettings(appSettings);
         }
 
         private async Task DetermineCurrentAndNextEventsAsync(HomePageViewModel viewModel)

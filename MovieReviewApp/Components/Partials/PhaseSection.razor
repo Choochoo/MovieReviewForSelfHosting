@@ -4,7 +4,7 @@
 <div class="timeline-item phase-item" style="background-color: var(--surface-color); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
     <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
         <i class="bi bi-calendar-event me-2"></i>
-        Phase @PhaseData.Number (@PhaseData.StartDate.ToString("MMMM yyyy") - @PhaseData.EndDate.ToString("MMMM yyyy"))
+        Phase @PhaseData.Number (@PhaseData.StartDate.ToString("MMMM yyyy") - @TimelineEvents.Max(e => e.EndDate).ToString("MMMM yyyy"))
     </h5>
     @foreach (MovieEvent movieEvent in TimelineEvents)
     {

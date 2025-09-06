@@ -173,7 +173,7 @@ else
                         @if (selectedMovie.MeetupTime.HasValue)
                         {
                             <div class="detail-row">
-                                <strong>Meetup:</strong> @selectedMovie.MeetupTime?.ToString("M/d/yyyy h:mm tt")
+                                <strong>Meetup:</strong> @(selectedMovie.MeetupTime?.Kind == DateTimeKind.Utc ? selectedMovie.MeetupTime.Value.ToLocalTime().ToString("M/d/yyyy h:mm tt") : selectedMovie.MeetupTime?.ToString("M/d/yyyy h:mm tt"))
                             </div>
                         }
                         @if (selectedMovie.AlreadySeen && selectedMovie.SeenDate.HasValue)

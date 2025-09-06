@@ -201,7 +201,7 @@
                     <tbody>
                         @if (DiscussionQuestions != null && DiscussionQuestions.Any())
                         {
-                            @foreach (var question in DiscussionQuestions.OrderBy(q => q?.Order))
+                            @foreach (var question in DiscussionQuestions)
                             {
                                 @if (question != null)
                                 {

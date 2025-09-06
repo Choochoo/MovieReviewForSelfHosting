@@ -72,10 +72,6 @@ instanceManager.SaveInstanceConfig(instanceConfig);
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
 
-// Force content root to current directory to avoid WSL path issues
-builder.Environment.ContentRootPath = Directory.GetCurrentDirectory();
-builder.Environment.WebRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-
 // Set the port from instance configuration
 builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
 

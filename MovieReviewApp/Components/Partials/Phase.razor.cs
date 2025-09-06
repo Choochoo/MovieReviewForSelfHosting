@@ -48,6 +48,29 @@ namespace MovieReviewApp.Components.Partials
         private bool spiceItUp = false;
         private string selectedStyle = "";
         private int selectedYear = DateTime.Now.Year;
+
+        // Property to handle datetime-local input binding properly
+        private DateTime? MeetupTimeForInput
+        {
+            get
+            {
+                if (MovieEvent?.MeetupTime == null) return null;
+                // Convert to local time if it's UTC, otherwise return as-is
+                return MovieEvent.MeetupTime.Value.Kind == DateTimeKind.Utc 
+                    ? MovieEvent.MeetupTime.Value.ToLocalTime() 
+                    : MovieEvent.MeetupTime.Value;
+            }
+            set
+            {
+                if (MovieEvent != null)
+                {
+                    // Ensure the DateTime is stored as local time
+                    MovieEvent.MeetupTime = value.HasValue 
+                        ? DateTime.SpecifyKind(value.Value, DateTimeKind.Local) 
+                        : null;
+                }
+            }
+        }
         private string? Synopsis { get; set; }
         private string _apiKey = string.Empty;
         
@@ -243,7 +266,7 @@ namespace MovieReviewApp.Components.Partials
 
                     if (!MovieEvent.MeetupTime.HasValue)
                     {
-                        MovieEvent.MeetupTime = MovieEvent.EndDate.Date.AddHours(18);
+                        MovieEvent.MeetupTime = DateTime.SpecifyKind(MovieEvent.EndDate.Date.AddHours(18), DateTimeKind.Local);
                     }
                 }
             }

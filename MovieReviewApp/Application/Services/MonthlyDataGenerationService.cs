@@ -1,4 +1,5 @@
 using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using MongoDB.Driver;
 
@@ -120,10 +121,22 @@ public class MonthlyDataGenerationService : BackgroundService
 
     private async Task<bool> IsAwardMonth(MongoDbService database, DateTime month, List<Phase> phases)
     {
-        // Award months happen after every 2 phases
+        // Get award settings to determine when award months should occur
+        using IServiceScope scope = _scopeFactory.CreateScope();
+        DemoProtectionService demoProtectionService = scope.ServiceProvider.GetRequiredService<DemoProtectionService>();
+        ILogger<SettingService> logger = scope.ServiceProvider.GetRequiredService<ILogger<SettingService>>();
+        SettingService settingService = new SettingService(database, logger, demoProtectionService);
+        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        
+        if (!awardSettings.AwardsEnabled)
+        {
+            return false;
+        }
+        
+        // Award months happen after every N phases (based on settings)
         // Check if this month falls in an award period
         
-        foreach (Phase phase in phases.Where(p => p.Number % 2 == 0)) // Even-numbered phases
+        foreach (Phase phase in phases.Where(p => p.Number % awardSettings.PhasesBeforeAward == 0))
         {
             DateTime awardMonthStart = phase.EndDate.AddDays(1);
             DateTime awardMonthEnd = awardMonthStart.AddMonths(1);
@@ -139,9 +152,16 @@ public class MonthlyDataGenerationService : BackgroundService
 
     private async Task GenerateAwardEventForMonth(MongoDbService database, DateTime awardMonth, List<Phase> phases)
     {
+        // Get award settings to determine which phase this award follows
+        using IServiceScope scope = _scopeFactory.CreateScope();
+        DemoProtectionService demoProtectionService = scope.ServiceProvider.GetRequiredService<DemoProtectionService>();
+        ILogger<SettingService> logger = scope.ServiceProvider.GetRequiredService<ILogger<SettingService>>();
+        SettingService settingService = new SettingService(database, logger, demoProtectionService);
+        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        
         // Find the phase that this award month follows
         Phase? lastPhase = phases
-            .Where(p => p.Number % 2 == 0 && p.EndDate < awardMonth)
+            .Where(p => p.Number % awardSettings.PhasesBeforeAward == 0 && p.EndDate < awardMonth)
             .OrderByDescending(p => p.Number)
             .FirstOrDefault();
 
@@ -218,7 +238,7 @@ public class MonthlyDataGenerationService : BackgroundService
             Reasoning = GenerateReasonForMember(selector),
             StartDate = month,
             EndDate = month.AddMonths(1).AddDays(-1),
-            MeetupTime = GetLastFridayOfMonth(month).AddHours(19),
+            MeetupTime = DateTime.SpecifyKind(GetLastFridayOfMonth(month).AddHours(19), DateTimeKind.Local),
             AlreadySeen = false
         };
 

@@ -3,6 +3,7 @@ using MovieReviewApp.Application.Models.Transcription;
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Infrastructure.Configuration;
+using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using System.Net.Http;
 
@@ -14,6 +15,7 @@ public class DemoDataService
     private readonly Random _random;
     private readonly TmdbService _tmdbService;
     private readonly ImageService _imageService;
+    private readonly DemoProtectionService _demoProtectionService;
     private readonly Dictionary<string, TmdbService.TmdbMovieInfo> _movieCache = new();
     private readonly HashSet<string> _usedMovies = new();
     
@@ -99,11 +101,12 @@ public class DemoDataService
         }
     };
 
-    public DemoDataService(MongoDbService database, TmdbService tmdbService, ImageService imageService)
+    public DemoDataService(MongoDbService database, TmdbService tmdbService, ImageService imageService, DemoProtectionService demoProtectionService)
     {
         _database = database;
         _tmdbService = tmdbService;
         _imageService = imageService;
+        _demoProtectionService = demoProtectionService;
         _random = new Random(42); // Fixed seed for consistent data
     }
 
@@ -193,23 +196,28 @@ public class DemoDataService
 
     private async Task GeneratePhasesAndMovieEventsAsync(DateTime startDate, DateTime endDate)
     {
+        // Get award settings to determine phase length
+        ILogger<SettingService> logger = new LoggerFactory().CreateLogger<SettingService>();
+        SettingService settingService = new SettingService(_database, logger, _demoProtectionService);
+        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        
         int phaseNumber = 1;
         DateTime currentDate = startDate;
 
         while (currentDate <= endDate)
         {
-            // Create Phase 1 (7 months)
+            // Create Phase with correct length based on number of people (7 months for 7 people)
             Phase phase1 = new Phase
             {
                 Number = phaseNumber,
                 People = string.Join(", ", _members.Select(m => m.Name)),
                 StartDate = currentDate,
-                EndDate = currentDate.AddMonths(7).AddDays(-1)
+                EndDate = currentDate.AddMonths(_members.Count).AddDays(-1)
             };
             await _database.UpsertAsync(phase1);
 
             // Generate movie events for Phase 1
-            for (int i = 0; i < 7 && currentDate <= endDate; i++)
+            for (int i = 0; i < _members.Count && currentDate <= endDate; i++)
             {
                 DemoMember selector = _members[i];
                 
@@ -264,12 +272,12 @@ public class DemoDataService
                     Number = phaseNumber,
                     People = string.Join(", ", _members.Select(m => m.Name)),
                     StartDate = currentDate,
-                    EndDate = currentDate.AddMonths(7).AddDays(-1)
+                    EndDate = currentDate.AddMonths(_members.Count).AddDays(-1)
                 };
                 await _database.UpsertAsync(phase2);
 
                 // Generate movie events for Phase 2
-                for (int i = 0; i < 7 && currentDate <= endDate; i++)
+                for (int i = 0; i < _members.Count && currentDate <= endDate; i++)
                 {
                     DemoMember selector = _members[i];
                     
@@ -343,14 +351,14 @@ public class DemoDataService
             // Weekend: noon to 7pm (12:00 - 19:00)
             int[] weekendHours = { 12, 13, 14, 15, 16, 17, 18, 19 };
             int hour = weekendHours[_random.Next(weekendHours.Length)];
-            return lastDayOfMonth.Date.AddHours(hour);
+            return DateTime.SpecifyKind(lastDayOfMonth.Date.AddHours(hour), DateTimeKind.Local);
         }
         else
         {
             // Weekday: 5pm to 10pm (17:00 - 22:00)
             int[] weekdayHours = { 17, 18, 19, 20, 21, 22 };
             int hour = weekdayHours[_random.Next(weekdayHours.Length)];
-            return lastDayOfMonth.Date.AddHours(hour);
+            return DateTime.SpecifyKind(lastDayOfMonth.Date.AddHours(hour), DateTimeKind.Local);
         }
     }
 
@@ -841,14 +849,20 @@ public class DemoDataService
             .OrderBy(p => p.Number)
             .ToList();
 
-        // Awards happen after every 2 phases (PhasesBeforeAward = 2)
-        for (int i = 1; i < completedPhases.Count; i += 2)
+        // Get award settings to determine when awards should occur
+        ILogger<SettingService> logger = new LoggerFactory().CreateLogger<SettingService>();
+        SettingService settingService = new SettingService(_database, logger, _demoProtectionService);
+        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        
+        if (!awardSettings.AwardsEnabled)
         {
-            if (i + 1 < completedPhases.Count) // Make sure we have both phases
-            {
-                Phase phase2 = completedPhases[i]; // The second phase in the pair
-                await GeneratePhaseAwardsAsync(phase2);
-            }
+            return;
+        }
+
+        // Awards happen after every N phases (based on settings)
+        foreach (Phase phase in completedPhases.Where(p => p.Number % awardSettings.PhasesBeforeAward == 0))
+        {
+            await GeneratePhaseAwardsAsync(phase);
         }
     }
 
