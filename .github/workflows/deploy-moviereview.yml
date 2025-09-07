@@ -28,7 +28,7 @@ env:
   PUBLISH_OUTPUT: './publish'
 
 jobs:
- parse-instances:
+  parse-instances:
     runs-on: windows-latest
     outputs:
       instances: ${{ steps.parse.outputs.instances }}
@@ -152,14 +152,14 @@ jobs:
         Write-Host "Deploying to: $deployPath"
         Write-Host "From: $sourcePath"
         
-        # Create directory if it doesn't exist
+        # Create directory if it doesn''t exist
         if (-not (Test-Path $deployPath)) {
           New-Item -Path $deployPath -ItemType Directory -Force
           Write-Host "Created deployment directory"
         }
         
         # Create backup
-        $backupPath = "${deployPath}.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        $backupPath = "${deployPath}.backup.$(Get-Date -Format ''yyyyMMdd-HHmmss'')"
         if (Test-Path "$deployPath\MovieReviewApp.dll") {
           Write-Host "Creating backup: $backupPath"
           Copy-Item -Path $deployPath -Destination $backupPath -Recurse -Force
@@ -184,7 +184,7 @@ jobs:
         $instanceName = '${{ matrix.instance.name }}'
         $instancePort = '${{ matrix.instance.port }}'
         $deployPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
-        $webConfigPath = Join-Path $deployPath 'web.config'
+        $webConfigPath = Join-Path $deployPath ''web.config''
         
         $webConfig = @"
         <?xml version="1.0" encoding="utf-8"?>
@@ -223,7 +223,7 @@ jobs:
         $appPoolName = "MovieReview_$instanceName"
         $physicalPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
         
-        # Create App Pool if it doesn't exist
+        # Create App Pool if it doesn''t exist
         if (-not (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue)) {
           New-WebAppPool -Name $appPoolName
           Write-Host "Created app pool: $appPoolName"
@@ -233,7 +233,7 @@ jobs:
         Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processIdentity.identityType -Value ApplicationPoolIdentity
         Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
         
-        # Create Website if it doesn't exist
+        # Create Website if it doesn''t exist
         if (-not (Get-Website -Name $siteName -ErrorAction SilentlyContinue)) {
           New-Website -Name $siteName -Port $instancePort -PhysicalPath $physicalPath -ApplicationPool $appPoolName
           Write-Host "Created website: $siteName on port $instancePort"
@@ -260,7 +260,7 @@ jobs:
         Write-Host "Setting permissions for: $deployPath"
         
         # Create required directories
-        $requiredDirs = @('logs', 'wwwroot\uploads\pending', 'wwwroot\clips', 'wwwroot\sounds', 'wwwroot\temp', 'wwwroot\uploads')
+        $requiredDirs = @(''logs'', ''wwwroot\uploads\pending'', ''wwwroot\clips'', ''wwwroot\sounds'', ''wwwroot\temp'', ''wwwroot\uploads'')
         foreach ($dir in $requiredDirs) {
           $fullDir = Join-Path $deployPath $dir
           if (-not (Test-Path $fullDir)) {
@@ -329,7 +329,7 @@ jobs:
             $instanceResponse = Invoke-RestMethod -Uri $instanceHealthUrl -Method Get -TimeoutSec 30
             Write-Host "Instance health check response: $($instanceResponse | ConvertTo-Json -Compress)"
             
-            if ($response.isHealthy -and $instanceResponse.status -eq 'healthy') {
+            if ($response.isHealthy -and $instanceResponse.status -eq ''healthy'') {
               $healthy = $true
               Write-Host "Health checks passed for instance: $instanceName"
               break
