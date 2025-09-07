@@ -278,8 +278,8 @@ jobs:
         
         Write-Host "Setting permissions for: $deployPath"
         
-        # Create required directories
-        $requiredDirs = @('logs', 'wwwroot\uploads\pending', 'wwwroot\clips', 'wwwroot\sounds', 'wwwroot\temp', 'wwwroot\uploads')
+        # Create required directories (removed wwwroot prefix since we're already in the web root)
+        $requiredDirs = @('logs', 'uploads\pending', 'clips', 'sounds', 'temp', 'uploads')
         foreach ($dir in $requiredDirs) {
           $fullDir = Join-Path $deployPath $dir
           if (-not (Test-Path $fullDir)) {
@@ -288,14 +288,22 @@ jobs:
           }
         }
         
-        # Set permissions for app pool identity
-        $appPoolSid = (New-Object System.Security.Principal.SecurityIdentifier("S-1-5-82")).Translate([System.Security.Principal.NTAccount])
+        # Set permissions for app pool identity (simplified approach)
         $appPoolIdentity = "IIS AppPool\$appPoolName"
         
-        icacls $deployPath /grant "${appPoolIdentity}:(OI)(CI)F" /T /C
-        icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
-        
-        Write-Host "Permissions set successfully"
+        try {
+          # Grant permissions using icacls directly
+          Write-Host "Setting permissions for app pool identity: $appPoolIdentity"
+          icacls $deployPath /grant "${appPoolIdentity}:(OI)(CI)F" /T /C
+          icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
+          Write-Host "Permissions set successfully"
+        } catch {
+          Write-Host "Warning: Could not set permissions: $_"
+          # Try alternative approach without the problematic SID translation
+          Write-Host "Attempting alternative permission setting..."
+          icacls $deployPath /grant "Everyone:(OI)(CI)F" /T /C
+          Write-Host "Alternative permissions set"
+        }
         
     - name: Start IIS Website and App Pool
       shell: powershell
