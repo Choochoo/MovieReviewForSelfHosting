@@ -98,7 +98,7 @@ jobs:
         $ErrorActionPreference = "Stop"
         Import-Module WebAdministration
         
-        # Get instances configuration - EXACTLY as shown in IIS
+        # Get instances configuration
         $instancesInput = '${{ github.event.inputs.instances }}'
         if ([string]::IsNullOrWhiteSpace($instancesInput)) {
           # Default instances - lowercase as shown in IIS
@@ -110,11 +110,11 @@ jobs:
         Write-Host "================================================"
         Write-Host "Instances to deploy: $instancesInput"
         
-        # Parse instances - maintain exact case
+        # Parse instances
         $instances = $instancesInput -split ',' | ForEach-Object {
           $parts = $_ -split ':'
           @{
-            Name = $parts[0].Trim()  # Keep exact case as provided
+            Name = $parts[0].Trim()
             Port = [int]$parts[1].Trim()
           }
         }
@@ -164,15 +164,15 @@ jobs:
           $robocopyArgs = @(
             "${{ env.PUBLISH_OUTPUT }}",
             $deployPath,
-            "/E",           # Copy subdirectories including empty ones
-            "/PURGE",       # Delete files in destination that don't exist in source
-            "/R:2",         # Retry 2 times
-            "/W:2",         # Wait 2 seconds between retries
-            "/NFL",         # No file list
-            "/NDL",         # No directory list
-            "/NJH",         # No job header
-            "/NJS",         # No job summary
-            "/XD", "logs", "data"  # Exclude logs and data directories
+            "/E",
+            "/PURGE",
+            "/R:2",
+            "/W:2",
+            "/NFL",
+            "/NDL",
+            "/NJH",
+            "/NJS",
+            "/XD", "logs", "data"
           )
           
           & robocopy @robocopyArgs
@@ -187,36 +187,31 @@ jobs:
           
           # Create web.config
           Write-Host "Creating web.config..."
-          $webConfigContent = @"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <location path="." inheritInChildApplications="false">
-    <system.webServer>
-      <handlers>
-        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
-      </handlers>
-      <aspNetCore processPath="dotnet" 
-                  arguments=".\MovieReviewApp.dll" 
-                  stdoutLogEnabled="true" 
-                  stdoutLogFile=".\logs\stdout" 
-                  hostingModel="InProcess">
-        <environmentVariables>
-          <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
-          <environmentVariable name="ASPNETCORE_IIS_HTTPAUTH" value="windows" />
-          <environmentVariable name="MOVIEREVIEW_INSTANCE" value="$instanceName" />
-          <environmentVariable name="MOVIEREVIEW_PORT" value="$instancePort" />
-          <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="$dataPath" />
-        </environmentVariables>
-      </aspNetCore>
-      <security>
-        <requestFiltering>
-          <requestLimits maxAllowedContentLength="10737418240" />
-        </requestFiltering>
-      </security>
-    </system.webServer>
-  </location>
-</configuration>
-"@
+          $webConfigContent = "<?xml version=`"1.0`" encoding=`"utf-8`"?>`n"
+          $webConfigContent += "<configuration>`n"
+          $webConfigContent += "  <location path=`".`" inheritInChildApplications=`"false`">`n"
+          $webConfigContent += "    <system.webServer>`n"
+          $webConfigContent += "      <handlers>`n"
+          $webConfigContent += "        <add name=`"aspNetCore`" path=`"*`" verb=`"*`" modules=`"AspNetCoreModuleV2`" resourceType=`"Unspecified`" />`n"
+          $webConfigContent += "      </handlers>`n"
+          $webConfigContent += "      <aspNetCore processPath=`"dotnet`" arguments=`".\MovieReviewApp.dll`" stdoutLogEnabled=`"true`" stdoutLogFile=`".\logs\stdout`" hostingModel=`"InProcess`">`n"
+          $webConfigContent += "        <environmentVariables>`n"
+          $webConfigContent += "          <environmentVariable name=`"ASPNETCORE_ENVIRONMENT`" value=`"Production`" />`n"
+          $webConfigContent += "          <environmentVariable name=`"ASPNETCORE_IIS_HTTPAUTH`" value=`"windows`" />`n"
+          $webConfigContent += "          <environmentVariable name=`"MOVIEREVIEW_INSTANCE`" value=`"$instanceName`" />`n"
+          $webConfigContent += "          <environmentVariable name=`"MOVIEREVIEW_PORT`" value=`"$instancePort`" />`n"
+          $webConfigContent += "          <environmentVariable name=`"MOVIEREVIEW_DATA_PATH`" value=`"$dataPath`" />`n"
+          $webConfigContent += "        </environmentVariables>`n"
+          $webConfigContent += "      </aspNetCore>`n"
+          $webConfigContent += "      <security>`n"
+          $webConfigContent += "        <requestFiltering>`n"
+          $webConfigContent += "          <requestLimits maxAllowedContentLength=`"10737418240`" />`n"
+          $webConfigContent += "        </requestFiltering>`n"
+          $webConfigContent += "      </security>`n"
+          $webConfigContent += "    </system.webServer>`n"
+          $webConfigContent += "  </location>`n"
+          $webConfigContent += "</configuration>"
+          
           Set-Content -Path "$deployPath\web.config" -Value $webConfigContent -Encoding UTF8
           Write-Host "  web.config created"
           
@@ -237,10 +232,10 @@ jobs:
           
           # Configure app pool for .NET Core
           $appPool = Get-Item "IIS:\AppPools\$appPoolName"
-          $appPool.managedRuntimeVersion = ""  # No managed code for .NET Core
+          $appPool.managedRuntimeVersion = ""
           $appPool.enable32BitAppOnWin64 = $false
           $appPool.processIdentity.identityType = "ApplicationPoolIdentity"
-          $appPool.recycling.periodicRestart.time = [TimeSpan]::Zero  # Disable periodic restart
+          $appPool.recycling.periodicRestart.time = [TimeSpan]::Zero
           $appPool.startMode = "AlwaysRunning"
           $appPool | Set-Item
           Write-Host "  App pool configured"
