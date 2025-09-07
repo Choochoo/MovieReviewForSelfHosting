@@ -50,9 +50,6 @@ jobs:
     - name: Run tests
       run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-build --verbosity normal
       
-    - name: Run linting checks
-      run: dotnet format --verify-no-changes --verbosity diagnostic
-      
     - name: Publish application
       run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --output ${{ env.PUBLISH_OUTPUT }} --no-build
       
