@@ -77,174 +77,208 @@ jobs:
       with:
         name: moviereview-build
         path: ${{ env.PUBLISH_OUTPUT }}
-        
-    - name: Deploy instances
+    
+    - name: Verify ASP.NET Core Hosting Bundle
       shell: powershell
       run: |
+        # Check if ASP.NET Core Hosting Bundle is installed
+        $modules = Get-WebGlobalModule | Where-Object { $_.Name -like "AspNetCore*" }
+        if ($modules) {
+          Write-Host "✓ ASP.NET Core Hosting Bundle is installed"
+          $modules | ForEach-Object { Write-Host "  - $($_.Name)" }
+        } else {
+          Write-Error "ASP.NET Core Hosting Bundle is NOT installed! Please install it first."
+          Write-Host "Download from: https://dotnet.microsoft.com/en-us/download/dotnet/9.0"
+          exit 1
+        }
+        
+    - name: Clean and Deploy Instances
+      shell: powershell
+      run: |
+        $ErrorActionPreference = "Stop"
+        Import-Module WebAdministration
+        
+        # Get instances configuration - EXACTLY as shown in IIS
         $instancesInput = '${{ github.event.inputs.instances }}'
         if ([string]::IsNullOrWhiteSpace($instancesInput)) {
+          # Default instances - lowercase as shown in IIS
           $instancesInput = 'friends:5010,kids:5012,demo:5015'
         }
         
-        Write-Host "Deploying instances: $instancesInput"
+        Write-Host "================================================"
+        Write-Host "Deploying MovieReview Instances"
+        Write-Host "================================================"
+        Write-Host "Instances to deploy: $instancesInput"
         
-        # Parse instances
+        # Parse instances - maintain exact case
         $instances = $instancesInput -split ',' | ForEach-Object {
           $parts = $_ -split ':'
           @{
-            Name = $parts[0].Trim()
+            Name = $parts[0].Trim()  # Keep exact case as provided
             Port = [int]$parts[1].Trim()
           }
         }
         
+        # First, stop ALL MovieReview app pools and sites
+        Write-Host "`n=== Stopping all MovieReview instances ==="
+        Get-Website | Where-Object { $_.Name -like "MovieReview-*" } | ForEach-Object {
+          Write-Host "Stopping website: $($_.Name)"
+          Stop-Website -Name $_.Name -ErrorAction SilentlyContinue
+        }
+        
+        Get-IISAppPool | Where-Object { $_.Name -like "MovieReview-*" } | ForEach-Object {
+          Write-Host "Stopping app pool: $($_.Name)"
+          Stop-WebAppPool -Name $_.Name -ErrorAction SilentlyContinue
+        }
+        
+        # Wait for everything to stop
+        Start-Sleep -Seconds 5
+        
+        # Deploy each instance
         foreach ($instance in $instances) {
           $instanceName = $instance.Name
           $instancePort = $instance.Port
-          $deployPath = "$env:DEPLOY_BASE_PATH\$instanceName"
+          $deployPath = "${{ env.DEPLOY_BASE_PATH }}\$instanceName"
           $dataPath = "$deployPath\data"
+          $logsPath = "$deployPath\logs"
           $siteName = "MovieReview-$instanceName"
           $appPoolName = "MovieReview-$instanceName"
           
-          Write-Host "=== Deploying Instance: $instanceName on port $instancePort ==="
+          Write-Host "`n================================================"
+          Write-Host "Deploying Instance: $instanceName"
+          Write-Host "================================================"
+          Write-Host "Port: $instancePort"
+          Write-Host "Path: $deployPath"
           
-          # Stop IIS resources first
-          Write-Host "Stopping IIS resources..."
-          try {
-            Import-Module WebAdministration
-            if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
-              Stop-Website -Name $siteName
-              Write-Host "Stopped website: $siteName"
+          # Create directory structure
+          Write-Host "Creating directories..."
+          @($deployPath, $dataPath, $logsPath) | ForEach-Object {
+            if (!(Test-Path $_)) {
+              New-Item -Path $_ -ItemType Directory -Force | Out-Null
+              Write-Host "  Created: $_"
             }
-            if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-              Stop-WebAppPool -Name $appPoolName
-              Write-Host "Stopped app pool: $appPoolName"
-            }
-            Start-Sleep -Seconds 5
-          } catch {
-            Write-Host "IIS resources may not exist yet: $_"
           }
           
-          # Create directories
-          Write-Host "Creating directories..."
-          New-Item -Path $deployPath -ItemType Directory -Force | Out-Null
-          New-Item -Path $dataPath -ItemType Directory -Force | Out-Null
-          New-Item -Path "$deployPath\logs" -ItemType Directory -Force | Out-Null
+          # Deploy files with robocopy
+          Write-Host "Copying application files..."
+          $robocopyArgs = @(
+            "${{ env.PUBLISH_OUTPUT }}",
+            $deployPath,
+            "/E",           # Copy subdirectories including empty ones
+            "/PURGE",       # Delete files in destination that don't exist in source
+            "/R:2",         # Retry 2 times
+            "/W:2",         # Wait 2 seconds between retries
+            "/NFL",         # No file list
+            "/NDL",         # No directory list
+            "/NJH",         # No job header
+            "/NJS",         # No job summary
+            "/XD", "logs", "data"  # Exclude logs and data directories
+          )
           
-          # Deploy files
-          Write-Host "Deploying files to: $deployPath"
-          $robocopyResult = robocopy "$env:PUBLISH_OUTPUT" $deployPath /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS
+          & robocopy @robocopyArgs
           $robocopyExitCode = $LASTEXITCODE
           
-          # Robocopy exit codes: 0=no change, 1=files copied, 2=extra files/dirs found, 4=mismatched files/dirs
-          # Exit codes 0-7 are success, 8+ are errors
+          # Robocopy exit codes 0-7 are success
           if ($robocopyExitCode -ge 8) {
-            Write-Error "File deployment failed for $instanceName with exit code: $robocopyExitCode"
-            exit 1
-          } else {
-            Write-Host "Files deployed successfully for $instanceName"
-          }
-          
-          # Reset PowerShell's last exit code
-          $global:LASTEXITCODE = 0
-          
-          # Create web.config with CORRECT environment variables
-          $webConfig = @"
-        <?xml version="1.0" encoding="utf-8"?>
-        <configuration>
-          <location path="." inheritInChildApplications="false">
-            <system.webServer>
-              <handlers>
-                <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
-              </handlers>
-              <aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll" stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" hostingModel="InProcess">
-                <environmentVariables>
-                  <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
-                  <environmentVariable name="MOVIEREVIEW_INSTANCE" value="$instanceName" />
-                  <environmentVariable name="MOVIEREVIEW_PORT" value="$instancePort" />
-                  <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="$dataPath" />
-                </environmentVariables>
-              </aspNetCore>
-            </system.webServer>
-          </location>
-        </configuration>
-        "@
-          
-          $webConfig | Out-File -FilePath "$deployPath\web.config" -Encoding UTF8
-          Write-Host "Created web.config for instance: $instanceName"
-          
-          # Setup IIS App Pool
-          try {
-            if (-not (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue)) {
-              New-WebAppPool -Name $appPoolName
-              Write-Host "Created app pool: $appPoolName"
-            } else {
-              Write-Host "App pool already exists: $appPoolName"
-            }
-            
-            # Configure app pool settings
-            Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
-            Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "managedRuntimeVersion" -Value ""
-            Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00" # Disable periodic restart
-            Write-Host "Configured app pool settings"
-          } catch {
-            Write-Error "Failed to setup app pool for ${instanceName}: $_"
+            Write-Error "Robocopy failed with exit code: $robocopyExitCode"
             exit 1
           }
+          Write-Host "  Files deployed successfully"
           
-          # Setup IIS Website
-          try {
-            # Remove existing website if it exists
-            if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
-              Remove-Website -Name $siteName
-              Write-Host "Removed existing website: $siteName"
-            }
-            
-            # Create new website
-            New-Website -Name $siteName -Port $instancePort -PhysicalPath $deployPath -ApplicationPool $appPoolName
-            Write-Host "Created website: $siteName on port $instancePort"
-          } catch {
-            Write-Error "Failed to setup website for ${instanceName}: $_"
-            exit 1
+          # Create web.config
+          Write-Host "Creating web.config..."
+          $webConfigContent = @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <location path="." inheritInChildApplications="false">
+    <system.webServer>
+      <handlers>
+        <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
+      </handlers>
+      <aspNetCore processPath="dotnet" 
+                  arguments=".\MovieReviewApp.dll" 
+                  stdoutLogEnabled="true" 
+                  stdoutLogFile=".\logs\stdout" 
+                  hostingModel="InProcess">
+        <environmentVariables>
+          <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+          <environmentVariable name="ASPNETCORE_IIS_HTTPAUTH" value="windows" />
+          <environmentVariable name="MOVIEREVIEW_INSTANCE" value="$instanceName" />
+          <environmentVariable name="MOVIEREVIEW_PORT" value="$instancePort" />
+          <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="$dataPath" />
+        </environmentVariables>
+      </aspNetCore>
+      <security>
+        <requestFiltering>
+          <requestLimits maxAllowedContentLength="10737418240" />
+        </requestFiltering>
+      </security>
+    </system.webServer>
+  </location>
+</configuration>
+"@
+          Set-Content -Path "$deployPath\web.config" -Value $webConfigContent -Encoding UTF8
+          Write-Host "  web.config created"
+          
+          # Remove existing app pool and website if they exist
+          if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
+            Remove-WebAppPool -Name $appPoolName -Force
+            Write-Host "  Removed existing app pool"
           }
+          
+          if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
+            Remove-Website -Name $siteName
+            Write-Host "  Removed existing website"
+          }
+          
+          # Create app pool
+          Write-Host "Creating IIS Application Pool..."
+          New-WebAppPool -Name $appPoolName -Force
+          
+          # Configure app pool for .NET Core
+          $appPool = Get-Item "IIS:\AppPools\$appPoolName"
+          $appPool.managedRuntimeVersion = ""  # No managed code for .NET Core
+          $appPool.enable32BitAppOnWin64 = $false
+          $appPool.processIdentity.identityType = "ApplicationPoolIdentity"
+          $appPool.recycling.periodicRestart.time = [TimeSpan]::Zero  # Disable periodic restart
+          $appPool.startMode = "AlwaysRunning"
+          $appPool | Set-Item
+          Write-Host "  App pool configured"
+          
+          # Create website
+          Write-Host "Creating IIS Website..."
+          New-Website -Name $siteName `
+                      -Port $instancePort `
+                      -PhysicalPath $deployPath `
+                      -ApplicationPool $appPoolName
+          Write-Host "  Website created on port $instancePort"
           
           # Set permissions
           Write-Host "Setting permissions..."
           $appPoolIdentity = "IIS AppPool\$appPoolName"
-          try {
-            icacls $deployPath /grant "${appPoolIdentity}:(OI)(CI)F" /T /Q
-            icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /Q
-            Write-Host "Permissions set successfully"
-          } catch {
-            Write-Host "Warning: Could not set specific permissions, trying fallback..."
-            icacls $deployPath /grant "Everyone:(OI)(CI)F" /T /Q
-          }
           
-          # Start IIS resources
+          # Grant full control to app pool identity
+          & icacls $deployPath /grant "${appPoolIdentity}:(OI)(CI)F" /T /Q
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to set permissions for app pool identity, trying IIS_IUSRS"
+            & icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /Q
+          }
+          Write-Host "  Permissions configured"
+          
+          # Start the app pool and website
           Write-Host "Starting IIS resources..."
-          try {
-            Start-WebAppPool -Name $appPoolName
-            Write-Host "Started app pool: $appPoolName"
-            
-            Start-Website -Name $siteName
-            Write-Host "Started website: $siteName"
-          } catch {
-            Write-Error "Failed to start IIS resources for ${instanceName}: $_"
-            exit 1
-          }
+          Start-WebAppPool -Name $appPoolName
+          Start-Website -Name $siteName
+          Write-Host "  Started app pool and website"
           
-          Write-Host "Instance $instanceName deployed successfully!"
-          Write-Host "  URL: http://localhost:$instancePort"
-          Write-Host "  Deploy Path: $deployPath"
-          Write-Host "  Data Path: $dataPath"
-          Write-Host ""
-          
-          # Give the instance a moment to start
-          Start-Sleep -Seconds 3
+          Write-Host "✓ Instance $instanceName deployed successfully!"
         }
         
-        Write-Host "All instances deployed successfully!"
+        Write-Host "`n================================================"
+        Write-Host "All instances deployed!"
+        Write-Host "================================================"
         
-    - name: Health check all instances
+    - name: Verify Deployments
       shell: powershell
       run: |
         $instancesInput = '${{ github.event.inputs.instances }}'
@@ -252,7 +286,6 @@ jobs:
           $instancesInput = 'friends:5010,kids:5012,demo:5015'
         }
         
-        # Parse instances
         $instances = $instancesInput -split ',' | ForEach-Object {
           $parts = $_ -split ':'
           @{
@@ -261,77 +294,58 @@ jobs:
           }
         }
         
-        Write-Host "Starting health checks..."
-        $allHealthy = $true
+        Write-Host "`nVerifying deployments..."
+        Write-Host "========================"
         
+        # Give IIS time to fully start
+        Start-Sleep -Seconds 10
+        
+        $failed = $false
         foreach ($instance in $instances) {
-          $instanceName = $instance.Name
-          $instancePort = $instance.Port
-          $healthUrl = "http://localhost:$instancePort"
+          $url = "http://localhost:$($instance.Port)"
+          Write-Host "`nTesting $($instance.Name) at $url"
           
-          Write-Host "Health checking $instanceName at $healthUrl..."
+          $maxAttempts = 5
+          $attempt = 0
+          $success = $false
           
-          $attempts = 0
-          $maxAttempts = 10
-          $healthy = $false
-          
-          do {
-            $attempts++
+          while ($attempt -lt $maxAttempts -and -not $success) {
+            $attempt++
             try {
-              $response = Invoke-WebRequest -Uri $healthUrl -TimeoutSec 30 -UseBasicParsing
+              $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30
               if ($response.StatusCode -eq 200) {
-                Write-Host "✓ $instanceName is healthy (attempt $attempts)"
-                $healthy = $true
-                break
+                Write-Host "✓ $($instance.Name) is responding (HTTP $($response.StatusCode))"
+                $success = $true
               }
             } catch {
-              Write-Host "Attempt $attempts/$maxAttempts failed for ${instanceName}: $($_.Exception.Message)"
-              if ($attempts -lt $maxAttempts) {
-                Write-Host "Waiting 10 seconds before retry..."
-                Start-Sleep -Seconds 10
+              Write-Host "  Attempt $attempt/$maxAttempts failed: $($_.Exception.Message)"
+              if ($attempt -lt $maxAttempts) {
+                Start-Sleep -Seconds 5
               }
             }
-          } while ($attempts -lt $maxAttempts)
+          }
           
-          if (-not $healthy) {
-            Write-Host "✗ $instanceName failed health check after $maxAttempts attempts"
+          if (-not $success) {
+            Write-Host "✗ $($instance.Name) failed to respond"
             
-            # Show some diagnostic info
-            $siteName = "MovieReview-$instanceName"
-            $appPoolName = "MovieReview-$instanceName"
-            
-            try {
-              $site = Get-Website -Name $siteName -ErrorAction SilentlyContinue
-              $appPool = Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue
-              
-              Write-Host "Diagnostic info for ${instanceName}:"
-              Write-Host "  Website state: $($site.State)"
-              Write-Host "  App pool state: $($appPool.State)"
-              
-              # Check logs
-              $logPath = "$env:DEPLOY_BASE_PATH\$instanceName\logs\stdout*.log"
-              if (Test-Path $logPath) {
-                Write-Host "  Recent log entries:"
-                Get-Content $logPath -Tail 5 | ForEach-Object { Write-Host "    $_" }
-              } else {
-                Write-Host "  No log files found at: $logPath"
-              }
-            } catch {
-              Write-Host "  Could not get diagnostic info: $_"
+            # Check logs for debugging
+            $logPath = "${{ env.DEPLOY_BASE_PATH }}\$($instance.Name)\logs\stdout*.log"
+            if (Test-Path $logPath) {
+              Write-Host "  Recent logs:"
+              Get-Content $logPath -Tail 10 | ForEach-Object { Write-Host "    $_" }
             }
             
-            $allHealthy = $false
+            $failed = $true
           }
         }
         
-        if (-not $allHealthy) {
-          Write-Error "One or more instances failed health checks"
+        if ($failed) {
+          Write-Error "Some instances failed verification"
           exit 1
         }
         
-        Write-Host ""
-        Write-Host "🎬 All instances are healthy and ready!"
-        Write-Host "Deployed instances:"
+        Write-Host "`n✓ All instances are running!"
+        Write-Host "`nAccess your instances at:"
         foreach ($instance in $instances) {
-          Write-Host "  - $($instance.Name): http://localhost:$($instance.Port)"
+          Write-Host "  $($instance.Name): http://localhost:$($instance.Port)"
         }
