@@ -224,15 +224,35 @@ jobs:
         $appPoolName = "MovieReview_$instanceName"
         $physicalPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
         
-        # Create App Pool if it doesn't exist
-        if (-not (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue)) {
+        Write-Host "Configuring IIS for instance: $instanceName"
+        Write-Host "Site name: $siteName"
+        Write-Host "App pool name: $appPoolName"
+        Write-Host "Port: $instancePort"
+        Write-Host "Physical path: $physicalPath"
+        
+        # Check if app pool exists, if not create it
+        $existingAppPool = Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+        if (-not $existingAppPool) {
           New-WebAppPool -Name $appPoolName
           Write-Host "Created app pool: $appPoolName"
+        } else {
+          Write-Host "App pool already exists: $appPoolName"
         }
         
-        # Configure App Pool
-        Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processIdentity.identityType -Value ApplicationPoolIdentity
-        Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
+        # Configure App Pool using correct property paths
+        try {
+          Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "processModel.identityType" -Value "ApplicationPoolIdentity"
+          Write-Host "Set app pool identity to ApplicationPoolIdentity"
+        } catch {
+          Write-Host "Warning: Could not set app pool identity: $_"
+        }
+        
+        try {
+          Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "managedRuntimeVersion" -Value ""
+          Write-Host "Set app pool to no managed code"
+        } catch {
+          Write-Host "Warning: Could not set managed runtime version: $_"
+        }
         
         # Create Website if it doesn't exist
         if (-not (Get-Website -Name $siteName -ErrorAction SilentlyContinue)) {
