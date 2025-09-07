@@ -240,10 +240,12 @@ app.UseFirstRunSetup();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// IMPORTANT: Map controllers FIRST (before Razor components)
+app.MapControllers();
+
+// Then map Razor components
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
-app.MapControllers();
 
 // Display instance information
 Console.WriteLine();
@@ -259,4 +261,3 @@ Console.WriteLine();
 
 
 app.Run();
-
