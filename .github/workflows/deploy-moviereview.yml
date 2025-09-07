@@ -28,7 +28,7 @@ env:
   PUBLISH_OUTPUT: './publish'
 
 jobs:
-  parse-instances:
+ parse-instances:
     runs-on: windows-latest
     outputs:
       instances: ${{ steps.parse.outputs.instances }}
@@ -37,15 +37,20 @@ jobs:
       id: parse
       shell: powershell
       run: |
-        $instancesJson = '${{ github.event.inputs.instances_to_deploy || ''[{"name":"friends","port":5010},{"name":"kids","port":5012},{"name":"demo","port":5015}]'' }}'
+        $instancesInput = '${{ github.event.inputs.instances_to_deploy }}'
+        
+        # Default instances if not provided
+        if ([string]::IsNullOrWhiteSpace($instancesInput)) {
+          $instancesInput = '[{"name":"friends","port":5010},{"name":"kids","port":5012},{"name":"demo","port":5015}]'
+        }
         
         # Validate JSON
         try {
-          $instances = $instancesJson | ConvertFrom-Json
+          $instances = $instancesInput | ConvertFrom-Json
           Write-Host "Parsed instances: $($instances | ConvertTo-Json -Compress)"
           
           # Output for matrix
-          "instances=$instancesJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "instances=$instancesInput" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
         } catch {
           Write-Error "Invalid JSON format for instances"
           exit 1
