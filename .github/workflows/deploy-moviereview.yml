@@ -165,11 +165,19 @@ jobs:
         # Copy files
         Write-Host "Copying application files..."
         robocopy $sourcePath $deployPath /MIR /R:3 /W:5 /MT:4 /XD logs instances secrets temp uploads
+        $robocopyExitCode = $LASTEXITCODE
         
-        if ($LASTEXITCODE -ge 8) {
-          Write-Error "File copy failed"
+        if ($robocopyExitCode -ge 8) {
+          Write-Error "File copy failed with exit code: $robocopyExitCode"
           exit 1
+        } elseif ($robocopyExitCode -eq 0) {
+          Write-Host "No files needed to be copied"
+        } else {
+          Write-Host "Files copied successfully (exit code: $robocopyExitCode)"
         }
+        
+        # Reset exit code to 0 for PowerShell
+        $global:LASTEXITCODE = 0
         
         Write-Host "Application files deployed successfully"
         
