@@ -111,9 +111,8 @@ jobs:
         path: ${{ env.PUBLISH_OUTPUT }}
         
     - name: Stop IIS Website and App Pool
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $siteName = "MovieReview_$instanceName"
         $appPoolName = "MovieReview_$instanceName"
@@ -139,12 +138,10 @@ jobs:
         
         # Ensure processes are stopped
         Start-Sleep -Seconds 10
-        '@
         
     - name: Deploy to IIS Directory
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $deployPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
         $sourcePath = '${{ env.PUBLISH_OUTPUT }}'
@@ -152,14 +149,14 @@ jobs:
         Write-Host "Deploying to: $deployPath"
         Write-Host "From: $sourcePath"
         
-        # Create directory if it doesn''t exist
+        # Create directory if it doesn't exist
         if (-not (Test-Path $deployPath)) {
           New-Item -Path $deployPath -ItemType Directory -Force
           Write-Host "Created deployment directory"
         }
         
         # Create backup
-        $backupPath = "${deployPath}.backup.$(Get-Date -Format ''yyyyMMdd-HHmmss'')"
+        $backupPath = "${deployPath}.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         if (Test-Path "$deployPath\MovieReviewApp.dll") {
           Write-Host "Creating backup: $backupPath"
           Copy-Item -Path $deployPath -Destination $backupPath -Recurse -Force
@@ -175,16 +172,14 @@ jobs:
         }
         
         Write-Host "Application files deployed successfully"
-        '@
         
     - name: Configure web.config for instance
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $instancePort = '${{ matrix.instance.port }}'
         $deployPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
-        $webConfigPath = Join-Path $deployPath ''web.config''
+        $webConfigPath = Join-Path $deployPath 'web.config'
         
         $webConfig = @"
         <?xml version="1.0" encoding="utf-8"?>
@@ -209,12 +204,10 @@ jobs:
         Write-Host "Creating web.config for instance: $instanceName"
         $webConfig | Out-File -FilePath $webConfigPath -Encoding UTF8
         Write-Host "web.config created successfully"
-        '@
         
     - name: Create/Update IIS Site
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         Import-Module WebAdministration
         
         $instanceName = '${{ matrix.instance.name }}'
@@ -223,7 +216,7 @@ jobs:
         $appPoolName = "MovieReview_$instanceName"
         $physicalPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
         
-        # Create App Pool if it doesn''t exist
+        # Create App Pool if it doesn't exist
         if (-not (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue)) {
           New-WebAppPool -Name $appPoolName
           Write-Host "Created app pool: $appPoolName"
@@ -233,7 +226,7 @@ jobs:
         Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name processIdentity.identityType -Value ApplicationPoolIdentity
         Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
         
-        # Create Website if it doesn''t exist
+        # Create Website if it doesn't exist
         if (-not (Get-Website -Name $siteName -ErrorAction SilentlyContinue)) {
           New-Website -Name $siteName -Port $instancePort -PhysicalPath $physicalPath -ApplicationPool $appPoolName
           Write-Host "Created website: $siteName on port $instancePort"
@@ -247,12 +240,10 @@ jobs:
           New-WebBinding -Name $siteName -Protocol "http" -Port $instancePort -IPAddress "*"
           Write-Host "Updated website: $siteName"
         }
-        '@
         
     - name: Set directory permissions
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $deployPath = "C:\inetpub\wwwroot\MovieReview_$instanceName"
         $appPoolName = "MovieReview_$instanceName"
@@ -260,7 +251,7 @@ jobs:
         Write-Host "Setting permissions for: $deployPath"
         
         # Create required directories
-        $requiredDirs = @(''logs'', ''wwwroot\uploads\pending'', ''wwwroot\clips'', ''wwwroot\sounds'', ''wwwroot\temp'', ''wwwroot\uploads'')
+        $requiredDirs = @('logs', 'wwwroot\uploads\pending', 'wwwroot\clips', 'wwwroot\sounds', 'wwwroot\temp', 'wwwroot\uploads')
         foreach ($dir in $requiredDirs) {
           $fullDir = Join-Path $deployPath $dir
           if (-not (Test-Path $fullDir)) {
@@ -277,12 +268,10 @@ jobs:
         icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
         
         Write-Host "Permissions set successfully"
-        '@
         
     - name: Start IIS Website and App Pool
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $siteName = "MovieReview_$instanceName"
         $appPoolName = "MovieReview_$instanceName"
@@ -300,12 +289,10 @@ jobs:
         }
         
         Start-Sleep -Seconds 20
-        '@
         
     - name: Health Check
-      shell: cmd
+      shell: powershell
       run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -Command @'
         $instanceName = '${{ matrix.instance.name }}'
         $instancePort = '${{ matrix.instance.port }}'
         $healthUrl = "http://localhost:$instancePort/api/health"
@@ -329,7 +316,7 @@ jobs:
             $instanceResponse = Invoke-RestMethod -Uri $instanceHealthUrl -Method Get -TimeoutSec 30
             Write-Host "Instance health check response: $($instanceResponse | ConvertTo-Json -Compress)"
             
-            if ($response.isHealthy -and $instanceResponse.status -eq ''healthy'') {
+            if ($response.isHealthy -and $instanceResponse.status -eq 'healthy') {
               $healthy = $true
               Write-Host "Health checks passed for instance: $instanceName"
               break
@@ -359,4 +346,3 @@ jobs:
           Write-Error "Health checks failed for instance: $instanceName after $maxAttempts attempts"
           exit 1
         }
-        '@
