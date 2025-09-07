@@ -315,11 +315,33 @@ jobs:
         Write-Host "Starting IIS resources for: $siteName"
         
         try {
+          # Stop first to ensure clean restart
+          Write-Host "Stopping app pool to ensure clean restart..."
+          Stop-WebAppPool -Name $appPoolName -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          
+          # Start app pool
           Start-WebAppPool -Name $appPoolName
           Write-Host "App pool started"
           
+          # Start website
           Start-Website -Name $siteName
           Write-Host "Website started"
+          
+          # Verify the web.config exists and show its content
+          $webConfigPath = "C:\inetpub\wwwroot\MovieReview_$instanceName\web.config"
+          if (Test-Path $webConfigPath) {
+            Write-Host "Web.config exists at: $webConfigPath"
+            $webConfigContent = Get-Content $webConfigPath -Raw
+            if ($webConfigContent -like "*MOVIEREVIEW_INSTANCE_NAME*") {
+              Write-Host "Environment variable MOVIEREVIEW_INSTANCE_NAME found in web.config"
+            } else {
+              Write-Host "WARNING: MOVIEREVIEW_INSTANCE_NAME not found in web.config"
+            }
+          } else {
+            Write-Host "WARNING: web.config not found at $webConfigPath"
+          }
+          
         } catch {
           Write-Host "Warning: Could not start IIS resources: $_"
         }
