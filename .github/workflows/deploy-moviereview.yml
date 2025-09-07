@@ -76,7 +76,6 @@ jobs:
         path: ${{ env.PUBLISH_OUTPUT }}
         
     - name: Scan for secrets
-      shell: pwsh
       run: |
         Write-Host "Scanning for potential secrets..."
         $secretPatterns = @("api[_-]key", "secret", "password", "token")
@@ -91,9 +90,9 @@ jobs:
         if (-not $foundSecrets) {
           Write-Host "No potential secrets found in build output"
         }
+      shell: powershell
         
     - name: Check for forbidden folders
-      shell: pwsh
       run: |
         Write-Host "Checking for forbidden folders..."
         $forbiddenDirs = @("instances", "secrets", "temp", "uploads")
@@ -105,6 +104,7 @@ jobs:
           }
         }
         Write-Host "No forbidden directories found"
+      shell: powershell
 
   deploy-to-self-hosted:
     runs-on: self-hosted
@@ -133,18 +133,9 @@ jobs:
     steps:
     - name: Check if instance should be deployed
       id: should_deploy
-      shell: pwsh
+      shell: cmd
       run: |
-        $instancesInput = "${{ github.event.inputs.instances_to_deploy || 'all' }}"
-        $instanceName = "${{ matrix.instance.name }}"
-        
-        if ($instancesInput -eq "all" -or $instancesInput.Split(',').Trim() -contains $instanceName) {
-          Write-Output "deploy=true" >> $env:GITHUB_OUTPUT
-          Write-Host "Deploying instance: $instanceName"
-        } else {
-          Write-Output "deploy=false" >> $env:GITHUB_OUTPUT  
-          Write-Host "Skipping instance: $instanceName"
-        }
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$instancesInput = '${{ github.event.inputs.instances_to_deploy || 'all' }}'; $instanceName = '${{ matrix.instance.name }}'; if ($instancesInput -eq 'all' -or @($instancesInput -split ',' | ForEach-Object { $_.Trim() }) -contains $instanceName) { 'deploy=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8; Write-Host 'Deploying instance: ' $instanceName } else { 'deploy=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8; Write-Host 'Skipping instance: ' $instanceName }"
         
     - name: Checkout code
       if: steps.should_deploy.outputs.deploy == 'true'
@@ -159,203 +150,39 @@ jobs:
         
     - name: Stop IIS Website and App Pool
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $siteName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
-        $appPoolName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
-        
-        Write-Host "Stopping IIS site: $siteName"
-        try {
-          if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
-            Stop-Website -Name $siteName
-            Write-Host "Website $siteName stopped"
-          } else {
-            Write-Host "Website $siteName does not exist"
-          }
-          
-          if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-            Stop-WebAppPool -Name $appPoolName
-            Write-Host "App pool $appPoolName stopped"
-          } else {
-            Write-Host "App pool $appPoolName does not exist"
-          }
-        } catch {
-          Write-Host "Warning: Could not stop IIS resources: $($_.Exception.Message)"
-        }
-        
-        # Wait for processes to stop
-        Start-Sleep -Seconds 10
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$siteName = 'MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}'; $appPoolName = 'MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}'; Write-Host 'Stopping IIS site: ' $siteName; try { if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) { Stop-Website -Name $siteName; Write-Host 'Website stopped' } else { Write-Host 'Website does not exist' }; if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) { Stop-WebAppPool -Name $appPoolName; Write-Host 'App pool stopped' } else { Write-Host 'App pool does not exist' } } catch { Write-Host 'Warning: Could not stop IIS resources: ' $_.Exception.Message }; Start-Sleep -Seconds 10"
         
     - name: Deploy to IIS Directory
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $instanceName = "${{ matrix.instance.name }}"
-        $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
-        $sourcePath = "${{ env.PUBLISH_OUTPUT }}"
-        
-        Write-Host "Deploying to: $deployPath"
-        Write-Host "From: $sourcePath"
-        
-        # Create deployment directory if it doesn't exist
-        if (-not (Test-Path $deployPath)) {
-          New-Item -Path $deployPath -ItemType Directory -Force
-          Write-Host "Created deployment directory: $deployPath"
-        }
-        
-        # Backup existing deployment
-        $backupPath = "$deployPath.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-        if (Test-Path "$deployPath\MovieReviewApp.dll") {
-          Write-Host "Creating backup: $backupPath"
-          Copy-Item -Path $deployPath -Destination $backupPath -Recurse -Force
-        }
-        
-        # Copy new files
-        Write-Host "Copying application files..."
-        robocopy $sourcePath $deployPath /MIR /R:3 /W:5 /MT:4 /XD logs instances secrets temp uploads
-        
-        if ($LASTEXITCODE -ge 8) {
-          Write-Error "File copy failed with exit code: $LASTEXITCODE"
-          exit 1
-        }
-        
-        Write-Host "Application files deployed successfully"
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$instanceName = '${{ matrix.instance.name }}'; $deployPath = 'C:\inetpub\wwwroot\MovieReview' + $(if ($instanceName -ne 'adult') { $instanceName } else { '' }); $sourcePath = '${{ env.PUBLISH_OUTPUT }}'; Write-Host 'Deploying to: ' $deployPath; Write-Host 'From: ' $sourcePath; if (-not (Test-Path $deployPath)) { New-Item -Path $deployPath -ItemType Directory -Force; Write-Host 'Created deployment directory' }; $backupPath = $deployPath + '.backup.' + (Get-Date -Format 'yyyyMMdd-HHmmss'); if (Test-Path ($deployPath + '\MovieReviewApp.dll')) { Write-Host 'Creating backup: ' $backupPath; Copy-Item -Path $deployPath -Destination $backupPath -Recurse -Force }; Write-Host 'Copying application files...'; robocopy $sourcePath $deployPath /MIR /R:3 /W:5 /MT:4 /XD logs instances secrets temp uploads; if ($LASTEXITCODE -ge 8) { Write-Error 'File copy failed'; exit 1 }; Write-Host 'Application files deployed successfully'"
         
     - name: Configure web.config for instance
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $instanceName = "${{ matrix.instance.name }}"
-        $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
-        $webConfigPath = "$deployPath\web.config"
-        
-        # Create web.config with instance-specific configuration
-        $webConfig = '<?xml version="1.0" encoding="utf-8"?><configuration><location path="." inheritInChildApplications="false"><system.webServer><handlers><add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" /></handlers><aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll --instance ${{ matrix.instance.name }} --port ${{ matrix.instance.port }}" stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" hostingModel="InProcess"><environmentVariables><environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" /><environmentVariable name="MOVIEREVIEW_INSTANCE_NAME" value="${{ matrix.instance.name }}" /><environmentVariable name="MOVIEREVIEW_DISPLAY_NAME" value="${{ matrix.instance.display_name }}" /><environmentVariable name="MOVIEREVIEW_ENVIRONMENT" value="${{ matrix.instance.environment }}" /></environmentVariables></aspNetCore></system.webServer></location></configuration>'
-        
-        Write-Host "Creating web.config for instance: $instanceName"
-        $webConfig | Out-File -FilePath $webConfigPath -Encoding UTF8
-        Write-Host "web.config created successfully"
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$instanceName = '${{ matrix.instance.name }}'; $deployPath = 'C:\inetpub\wwwroot\MovieReview' + $(if ($instanceName -ne 'adult') { $instanceName } else { '' }); $webConfigPath = Join-Path $deployPath 'web.config'; $webConfig = '<?xml version=\"1.0\" encoding=\"utf-8\"?><configuration><location path=\".\" inheritInChildApplications=\"false\"><system.webServer><handlers><add name=\"aspNetCore\" path=\"*\" verb=\"*\" modules=\"AspNetCoreModuleV2\" resourceType=\"Unspecified\" /></handlers><aspNetCore processPath=\"dotnet\" arguments=\".\MovieReviewApp.dll --instance ${{ matrix.instance.name }} --port ${{ matrix.instance.port }}\" stdoutLogEnabled=\"true\" stdoutLogFile=\".\logs\stdout\" hostingModel=\"InProcess\"><environmentVariables><environmentVariable name=\"ASPNETCORE_ENVIRONMENT\" value=\"Production\" /><environmentVariable name=\"MOVIEREVIEW_INSTANCE_NAME\" value=\"${{ matrix.instance.name }}\" /><environmentVariable name=\"MOVIEREVIEW_DISPLAY_NAME\" value=\"${{ matrix.instance.display_name }}\" /><environmentVariable name=\"MOVIEREVIEW_ENVIRONMENT\" value=\"${{ matrix.instance.environment }}\" /></environmentVariables></aspNetCore></system.webServer></location></configuration>'; Write-Host 'Creating web.config for instance: ' $instanceName; $webConfig | Out-File -FilePath $webConfigPath -Encoding UTF8; Write-Host 'web.config created successfully'"
         
     - name: Set directory permissions
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $instanceName = "${{ matrix.instance.name }}"
-        $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
-        
-        Write-Host "Setting permissions for: $deployPath"
-        
-        # Create required directories that the application expects
-        $requiredDirs = @(
-          "$deployPath\logs",
-          "$deployPath\wwwroot\uploads\pending",
-          "$deployPath\wwwroot\clips",
-          "$deployPath\wwwroot\sounds",
-          "$deployPath\wwwroot\temp",
-          "$deployPath\wwwroot\uploads"
-        )
-        
-        foreach ($dir in $requiredDirs) {
-          if (-not (Test-Path $dir)) {
-            New-Item -Path $dir -ItemType Directory -Force
-            Write-Host "Created directory: $dir"
-          }
-        }
-        
-        # Grant IIS_IUSRS full control to the main deployment directory
-        icacls $deployPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
-        
-        # Grant IIS_IUSRS full control to wwwroot subdirectories specifically
-        $wwwrootPath = "$deployPath\wwwroot"
-        if (Test-Path $wwwrootPath) {
-          icacls $wwwrootPath /grant "IIS_IUSRS:(OI)(CI)F" /T /C
-          Write-Host "Set permissions on wwwroot directory: $wwwrootPath"
-        }
-        
-        Write-Host "Permissions set successfully"
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$instanceName = '${{ matrix.instance.name }}'; $deployPath = 'C:\inetpub\wwwroot\MovieReview' + $(if ($instanceName -ne 'adult') { $instanceName } else { '' }); Write-Host 'Setting permissions for: ' $deployPath; $requiredDirs = @('logs', 'wwwroot\uploads\pending', 'wwwroot\clips', 'wwwroot\sounds', 'wwwroot\temp', 'wwwroot\uploads'); foreach ($dir in $requiredDirs) { $fullDir = Join-Path $deployPath $dir; if (-not (Test-Path $fullDir)) { New-Item -Path $fullDir -ItemType Directory -Force; Write-Host 'Created directory: ' $fullDir } }; icacls $deployPath /grant 'IIS_IUSRS:(OI)(CI)F' /T /C; $wwwrootPath = Join-Path $deployPath 'wwwroot'; if (Test-Path $wwwrootPath) { icacls $wwwrootPath /grant 'IIS_IUSRS:(OI)(CI)F' /T /C; Write-Host 'Set permissions on wwwroot directory' }; Write-Host 'Permissions set successfully'"
         
     - name: Start IIS Website and App Pool
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $siteName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
-        $appPoolName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
-        
-        Write-Host "Starting IIS resources for: $siteName"
-        
-        try {
-          if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-            Start-WebAppPool -Name $appPoolName
-            Write-Host "App pool $appPoolName started"
-          } else {
-            Write-Host "Warning: App pool $appPoolName does not exist"
-          }
-          
-          if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
-            Start-Website -Name $siteName
-            Write-Host "Website $siteName started"
-          } else {
-            Write-Host "Warning: Website $siteName does not exist"
-          }
-        } catch {
-          Write-Host "Warning: Could not start IIS resources: $($_.Exception.Message)"
-        }
-        
-        # Wait for application to start
-        Start-Sleep -Seconds 15
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$siteName = 'MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}'; $appPoolName = 'MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}'; Write-Host 'Starting IIS resources for: ' $siteName; try { if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) { Start-WebAppPool -Name $appPoolName; Write-Host 'App pool started' } else { Write-Host 'Warning: App pool does not exist' }; if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) { Start-Website -Name $siteName; Write-Host 'Website started' } else { Write-Host 'Warning: Website does not exist' } } catch { Write-Host 'Warning: Could not start IIS resources: ' $_.Exception.Message }; Start-Sleep -Seconds 15"
         
     - name: Health Check
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: pwsh
+      shell: cmd
       run: |
-        $port = ${{ matrix.instance.port }}
-        $instanceName = "${{ matrix.instance.name }}"
-        $healthUrl = "http://localhost:$port/api/health"
-        $instanceHealthUrl = "http://localhost:$port/api/health/instance/$instanceName"
-        
-        Write-Host "Performing health checks for instance: $instanceName"
-        Write-Host "Health URL: $healthUrl"
-        Write-Host "Instance Health URL: $instanceHealthUrl"
-        
-        # Wait for application to be fully ready
-        $maxAttempts = 12
-        $attempt = 1
-        $healthy = $false
-        
-        do {
-          try {
-            Write-Host "Health check attempt $attempt of $maxAttempts"
-            
-            # Basic health check
-            $response = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 30
-            Write-Host "Basic health check response: $($response | ConvertTo-Json -Compress)"
-            
-            # Instance-specific health check
-            $instanceResponse = Invoke-RestMethod -Uri $instanceHealthUrl -Method Get -TimeoutSec 30
-            Write-Host "Instance health check response: $($instanceResponse | ConvertTo-Json -Compress)"
-            
-            if ($response.isHealthy -and $instanceResponse.status -eq "healthy") {
-              $healthy = $true
-              Write-Host "✅ Health checks passed for instance: $instanceName"
-              break
-            } else {
-              Write-Host "❌ Health checks failed - Application not healthy"
-            }
-          } catch {
-            Write-Host "Health check failed: $($_.Exception.Message)"
-          }
-          
-          if ($attempt -lt $maxAttempts) {
-            Write-Host "Waiting 10 seconds before retry..."
-            Start-Sleep -Seconds 10
-          }
-          $attempt++
-        } while ($attempt -le $maxAttempts)
-        
-        if (-not $healthy) {
-          Write-Error "❌ Health checks failed for instance: $instanceName after $maxAttempts attempts"
-          exit 1
-        }
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$port = ${{ matrix.instance.port }}; $instanceName = '${{ matrix.instance.name }}'; $healthUrl = 'http://localhost:' + $port + '/api/health'; $instanceHealthUrl = 'http://localhost:' + $port + '/api/health/instance/' + $instanceName; Write-Host 'Performing health checks for instance: ' $instanceName; Write-Host 'Health URL: ' $healthUrl; Write-Host 'Instance Health URL: ' $instanceHealthUrl; $maxAttempts = 12; $attempt = 1; $healthy = $false; do { try { Write-Host 'Health check attempt ' $attempt ' of ' $maxAttempts; $response = Invoke-RestMethod -Uri $healthUrl -Method Get -TimeoutSec 30; Write-Host 'Basic health check response: ' ($response | ConvertTo-Json -Compress); $instanceResponse = Invoke-RestMethod -Uri $instanceHealthUrl -Method Get -TimeoutSec 30; Write-Host 'Instance health check response: ' ($instanceResponse | ConvertTo-Json -Compress); if ($response.isHealthy -and $instanceResponse.status -eq 'healthy') { $healthy = $true; Write-Host 'Health checks passed for instance: ' $instanceName; break } else { Write-Host 'Health checks failed - Application not healthy' } } catch { Write-Host 'Health check failed: ' $_.Exception.Message }; if ($attempt -lt $maxAttempts) { Write-Host 'Waiting 10 seconds before retry...'; Start-Sleep -Seconds 10 }; $attempt++ } while ($attempt -le $maxAttempts); if (-not $healthy) { Write-Error ('Health checks failed for instance: ' + $instanceName + ' after ' + $maxAttempts + ' attempts'); exit 1 }"
 
   deployment-summary:
     runs-on: windows-latest
@@ -365,7 +192,6 @@ jobs:
     
     steps:
     - name: Generate deployment summary
-      shell: pwsh
       run: |
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "# 🎬 MovieReview Deployment Summary"
         Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
@@ -388,3 +214,4 @@ jobs:
         } else {
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "❌ **Deployment failed - check logs above**"
         }
+      shell: powershell
