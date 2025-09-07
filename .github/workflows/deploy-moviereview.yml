@@ -90,7 +90,7 @@ jobs:
         if (-not $foundSecrets) {
           Write-Host "No potential secrets found in build output"
         }
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
         
     - name: Check for forbidden folders
       run: |
@@ -104,7 +104,7 @@ jobs:
           }
         }
         Write-Host "No forbidden directories found"
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
 
   deploy-to-self-hosted:
     runs-on: self-hosted
@@ -144,7 +144,7 @@ jobs:
           Write-Output "deploy=false" >> $env:GITHUB_OUTPUT  
           Write-Host "Skipping instance: $instanceName"
         }
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
         
     - name: Checkout code
       if: steps.should_deploy.outputs.deploy == 'true'
@@ -159,7 +159,7 @@ jobs:
         
     - name: Stop IIS Website and App Pool
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $siteName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
         $appPoolName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
@@ -188,7 +188,7 @@ jobs:
         
     - name: Deploy to IIS Directory
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $instanceName = "${{ matrix.instance.name }}"
         $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
@@ -223,7 +223,7 @@ jobs:
         
     - name: Configure web.config for instance
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $instanceName = "${{ matrix.instance.name }}"
         $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
@@ -238,7 +238,7 @@ jobs:
         
     - name: Set directory permissions
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $instanceName = "${{ matrix.instance.name }}"
         $deployPath = "C:\inetpub\wwwroot\MovieReview$(if ($instanceName -ne 'adult') { $instanceName })"
@@ -276,7 +276,7 @@ jobs:
         
     - name: Start IIS Website and App Pool
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $siteName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
         $appPoolName = "MovieReview${{ matrix.instance.name == 'adult' && '' || matrix.instance.name }}"
@@ -306,7 +306,7 @@ jobs:
         
     - name: Health Check
       if: steps.should_deploy.outputs.deploy == 'true'
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
       run: |
         $port = ${{ matrix.instance.port }}
         $instanceName = "${{ matrix.instance.name }}"
@@ -387,4 +387,4 @@ jobs:
         } else {
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "❌ **Deployment failed - check logs above**"
         }
-      shell: powershell
+      shell: powershell -ExecutionPolicy Bypass
