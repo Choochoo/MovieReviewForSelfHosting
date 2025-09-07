@@ -187,7 +187,7 @@ jobs:
             Set-ItemProperty -Path "IIS:\AppPools\$appPoolName" -Name "recycling.periodicRestart.time" -Value "00:00:00" # Disable periodic restart
             Write-Host "Configured app pool settings"
           } catch {
-            Write-Error "Failed to setup app pool for $instanceName: $_"
+            Write-Error "Failed to setup app pool for ${instanceName}: $_"
             exit 1
           }
           
@@ -203,7 +203,7 @@ jobs:
             New-Website -Name $siteName -Port $instancePort -PhysicalPath $deployPath -ApplicationPool $appPoolName
             Write-Host "Created website: $siteName on port $instancePort"
           } catch {
-            Write-Error "Failed to setup website for $instanceName: $_"
+            Write-Error "Failed to setup website for ${instanceName}: $_"
             exit 1
           }
           
@@ -228,7 +228,7 @@ jobs:
             Start-Website -Name $siteName
             Write-Host "Started website: $siteName"
           } catch {
-            Write-Error "Failed to start IIS resources for $instanceName: $_"
+            Write-Error "Failed to start IIS resources for ${instanceName}: $_"
             exit 1
           }
           
@@ -285,7 +285,7 @@ jobs:
                 break
               }
             } catch {
-              Write-Host "Attempt $attempts/$maxAttempts failed for $instanceName`: $($_.Exception.Message)"
+              Write-Host "Attempt $attempts/$maxAttempts failed for ${instanceName}: $($_.Exception.Message)"
               if ($attempts -lt $maxAttempts) {
                 Write-Host "Waiting 10 seconds before retry..."
                 Start-Sleep -Seconds 10
@@ -304,7 +304,7 @@ jobs:
               $site = Get-Website -Name $siteName -ErrorAction SilentlyContinue
               $appPool = Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue
               
-              Write-Host "Diagnostic info for $instanceName`:"
+              Write-Host "Diagnostic info for ${instanceName}:"
               Write-Host "  Website state: $($site.State)"
               Write-Host "  App pool state: $($appPool.State)"
               
