@@ -94,7 +94,6 @@ jobs:
     - name: Deploy Instances
       shell: powershell
       run: |
-        $ErrorActionPreference = "Stop"
         Import-Module WebAdministration
         
         $instancesInput = "${{ github.event.inputs.instances }}"
@@ -118,12 +117,24 @@ jobs:
         Write-Host "Stopping all MovieReview instances..."
         Get-Website | Where-Object { $_.Name -like "MovieReview-*" } | ForEach-Object {
           Write-Host "Stopping website: $($_.Name)"
-          Stop-Website -Name $_.Name -ErrorAction SilentlyContinue
+          try {
+            Stop-Website -Name $_.Name -ErrorAction Stop
+          } catch {
+            Write-Host "  Website already stopped or error: $_"
+          }
         }
         
         Get-IISAppPool | Where-Object { $_.Name -like "MovieReview-*" } | ForEach-Object {
           Write-Host "Stopping app pool: $($_.Name)"
-          Stop-WebAppPool -Name $_.Name -ErrorAction SilentlyContinue
+          try {
+            if ((Get-WebAppPoolState -Name $_.Name).Value -ne "Stopped") {
+              Stop-WebAppPool -Name $_.Name -ErrorAction Stop
+            } else {
+              Write-Host "  App pool already stopped"
+            }
+          } catch {
+            Write-Host "  App pool already stopped or error: $_"
+          }
         }
         
         Start-Sleep -Seconds 5
@@ -190,16 +201,24 @@ jobs:
           $webConfig | Out-File -FilePath "$deployPath\web.config" -Encoding UTF8
           Write-Host "web.config created"
           
-          # Remove existing app pool if it exists (no -Force parameter)
+          # Remove existing app pool if it exists
           if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
-            Remove-WebAppPool -Name $appPoolName
-            Write-Host "Removed existing app pool"
+            try {
+              Remove-WebAppPool -Name $appPoolName
+              Write-Host "Removed existing app pool"
+            } catch {
+              Write-Host "Could not remove app pool: $_"
+            }
           }
           
-          # Remove existing website if it exists
+          # Remove existing website if it exists  
           if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
-            Remove-Website -Name $siteName
-            Write-Host "Removed existing website"
+            try {
+              Remove-Website -Name $siteName
+              Write-Host "Removed existing website"
+            } catch {
+              Write-Host "Could not remove website: $_"
+            }
           }
           
           Write-Host "Creating IIS Application Pool..."
