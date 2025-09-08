@@ -26,7 +26,7 @@ env:
   SOLUTION_PATH: './MovieReviewApp.sln'
   PROJECT_PATH: './MovieReviewApp/MovieReviewApp.csproj'
   PUBLISH_OUTPUT: './publish'
-  DEPLOY_BASE_PATH: 'C:\inetpub\wwwroot\MovieReview'
+  DEPLOY_BASE_PATH: 'C:\inetpub\wwwroot'
 
 jobs:
   build-and-test:
@@ -78,6 +78,18 @@ jobs:
         name: moviereview-build
         path: ${{ env.PUBLISH_OUTPUT }}
     
+    - name: Clean up old backups
+      shell: powershell
+      run: |
+        Write-Host "Cleaning up old backup folders..."
+        Get-ChildItem -Path "${{ env.DEPLOY_BASE_PATH }}" -Directory | Where-Object { 
+          $_.Name -like "MovieReview_*.backup.*" 
+        } | ForEach-Object {
+          Write-Host "Removing backup folder: $($_.Name)"
+          Remove-Item $_.FullName -Recurse -Force
+        }
+        Write-Host "Cleanup complete"
+    
     - name: Verify ASP.NET Core Hosting Bundle
       shell: powershell
       run: |
@@ -87,7 +99,7 @@ jobs:
           Write-Host "ASP.NET Core Hosting Bundle is installed"
           $modules | ForEach-Object { Write-Host "  - $($_.Name)" }
         } else {
-          Write-Error "ASP.NET Core Hosting Bundle is NOT installed! Please install it first."
+          Write-Error "ASP.NET Core Hosting Bundle is NOT installed!"
           exit 1
         }
         
@@ -142,7 +154,8 @@ jobs:
         foreach ($instance in $instances) {
           $instanceName = $instance.Name
           $instancePort = $instance.Port
-          $deployPath = "${{ env.DEPLOY_BASE_PATH }}\$instanceName"
+          # IMPORTANT: Using underscore naming convention to match your structure
+          $deployPath = "${{ env.DEPLOY_BASE_PATH }}\MovieReview_$instanceName"
           $dataPath = "$deployPath\data"
           $logsPath = "$deployPath\logs"
           $siteName = "MovieReview-$instanceName"
@@ -155,13 +168,20 @@ jobs:
           Write-Host "Port: $instancePort"
           Write-Host "Path: $deployPath"
           
+          # Backup existing folder if it exists
+          if (Test-Path $deployPath) {
+            $backupName = "${deployPath}.backup.$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+            Write-Host "Backing up existing folder to: $backupName"
+            Move-Item -Path $deployPath -Destination $backupName -Force
+          }
+          
           Write-Host "Creating directories..."
           New-Item -Path $deployPath -ItemType Directory -Force | Out-Null
           New-Item -Path $dataPath -ItemType Directory -Force | Out-Null
           New-Item -Path $logsPath -ItemType Directory -Force | Out-Null
           
           Write-Host "Copying application files..."
-          robocopy "${{ env.PUBLISH_OUTPUT }}" $deployPath /E /PURGE /R:2 /W:2 /NFL /NDL /NJH /NJS /XD logs data
+          robocopy "${{ env.PUBLISH_OUTPUT }}" $deployPath /E /R:2 /W:2 /NFL /NDL /NJH /NJS
           $robocopyExitCode = $LASTEXITCODE
           
           if ($robocopyExitCode -ge 8) {
@@ -182,7 +202,6 @@ jobs:
               <aspNetCore processPath="dotnet" arguments=".\MovieReviewApp.dll" stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" hostingModel="InProcess">
                 <environmentVariables>
                   <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
-                  <environmentVariable name="ASPNETCORE_IIS_HTTPAUTH" value="windows" />
                   <environmentVariable name="MOVIEREVIEW_INSTANCE" value="$instanceName" />
                   <environmentVariable name="MOVIEREVIEW_PORT" value="$instancePort" />
                   <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="$dataPath" />
@@ -190,7 +209,7 @@ jobs:
               </aspNetCore>
               <security>
                 <requestFiltering>
-                  <requestLimits maxAllowedContentLength="10737418240" />
+                  <requestLimits maxAllowedContentLength="4294967295" />
                 </requestFiltering>
               </security>
             </system.webServer>
@@ -201,7 +220,6 @@ jobs:
           $webConfig | Out-File -FilePath "$deployPath\web.config" -Encoding UTF8
           Write-Host "web.config created"
           
-          # Remove existing app pool if it exists
           if (Get-IISAppPool -Name $appPoolName -ErrorAction SilentlyContinue) {
             try {
               Remove-WebAppPool -Name $appPoolName
@@ -211,7 +229,6 @@ jobs:
             }
           }
           
-          # Remove existing website if it exists  
           if (Get-Website -Name $siteName -ErrorAction SilentlyContinue) {
             try {
               Remove-Website -Name $siteName
@@ -304,7 +321,8 @@ jobs:
           if (-not $success) {
             Write-Host "FAILED: $($instance.Name) failed to respond"
             
-            $logPath = "${{ env.DEPLOY_BASE_PATH }}\$($instance.Name)\logs"
+            $deployPath = "${{ env.DEPLOY_BASE_PATH }}\MovieReview_$($instance.Name)"
+            $logPath = "$deployPath\logs"
             if (Test-Path $logPath) {
               $logFiles = Get-ChildItem -Path $logPath -Filter "stdout*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
               if ($logFiles) {
