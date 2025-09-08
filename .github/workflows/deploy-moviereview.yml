@@ -204,7 +204,7 @@ jobs:
                   <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
                   <environmentVariable name="MOVIEREVIEW_INSTANCE" value="$instanceName" />
                   <environmentVariable name="MOVIEREVIEW_PORT" value="$instancePort" />
-                  <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="$dataPath" />
+                  <environmentVariable name="MOVIEREVIEW_DATA_PATH" value="C:\ProgramData" />
                 </environmentVariables>
               </aspNetCore>
               <security>
