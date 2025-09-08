@@ -190,6 +190,7 @@ namespace MovieReviewApp.Infrastructure.Database
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
+            NormalizeDateTimesToUtc(entity);
             await collection.InsertOneAsync(entity);
         }
 
@@ -204,6 +205,7 @@ namespace MovieReviewApp.Infrastructure.Database
             if (collection == null)
                 throw new InvalidOperationException("Database not connected");
 
+            foreach (T doc in documents) NormalizeDateTimesToUtc(doc);
             await collection.InsertManyAsync(documents);
         }
 
@@ -243,8 +245,64 @@ namespace MovieReviewApp.Infrastructure.Database
                 filter = Builders<T>.Filter.Eq("_id", idValue);
             }
 
+            NormalizeDateTimesToUtc(entity);
             ReplaceOptions options = new ReplaceOptions { IsUpsert = true };
             _ = await collection.ReplaceOneAsync(filter, entity, options);
+        }
+
+        private static void NormalizeDateTimesToUtc<T>(T entity)
+        {
+            if (entity == null) return;
+            Type t = entity.GetType();
+            foreach (PropertyInfo prop in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!prop.CanRead || !prop.CanWrite) continue;
+
+                if (prop.PropertyType == typeof(DateTime))
+                {
+                    object? value = prop.GetValue(entity);
+                    if (value is DateTime dt)
+                    {
+                        DateTime normalized = dt.Kind == DateTimeKind.Utc
+                            ? dt
+                            : (dt.Kind == DateTimeKind.Unspecified
+                                ? DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime()
+                                : dt.ToUniversalTime());
+                        prop.SetValue(entity, normalized);
+                    }
+                }
+                else if (prop.PropertyType == typeof(DateTime?))
+                {
+                    object? value = prop.GetValue(entity);
+                    if (value is DateTime ndt)
+                    {
+                        DateTime normalized = ndt.Kind == DateTimeKind.Utc
+                            ? ndt
+                            : (ndt.Kind == DateTimeKind.Unspecified
+                                ? DateTime.SpecifyKind(ndt, DateTimeKind.Local).ToUniversalTime()
+                                : ndt.ToUniversalTime());
+                        prop.SetValue(entity, (DateTime?)normalized);
+                    }
+                }
+                else if (prop.PropertyType == typeof(DateTimeOffset))
+                {
+                    object? value = prop.GetValue(entity);
+                    if (value is DateTimeOffset dto)
+                    {
+                        DateTimeOffset normalized = dto.ToUniversalTime();
+                        prop.SetValue(entity, normalized);
+                    }
+                }
+                else if (prop.PropertyType == typeof(DateTimeOffset?))
+                {
+                    object? value = prop.GetValue(entity);
+                    if (value is DateTimeOffset ndto)
+                    {
+                        DateTimeOffset normalized = ndto.ToUniversalTime();
+                        prop.SetValue(entity, (DateTimeOffset?)normalized);
+                    }
+                }
+            }
         }
 
         /// <summary>

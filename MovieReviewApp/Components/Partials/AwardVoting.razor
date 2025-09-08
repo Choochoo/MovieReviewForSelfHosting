@@ -129,7 +129,7 @@
                         @foreach (var currentEvent in GetAllAwardEvents())
                         {
                             <div class="mb-4">
-                                <h5 class="mb-3">@currentEvent.StartDate.ToString("MMMM yyyy")</h5>
+                                <h5 class="mb-3">@currentEvent.StartDate.ToLocalDisplay().ToString("MMMM yyyy")</h5>
                                 @foreach (var question in questions)
                                 {
                                     <div class="card mb-3" style="background-color: var(--surface-hover); border: 1px solid var(--border-color);">

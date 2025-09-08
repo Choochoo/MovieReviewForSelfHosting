@@ -4,7 +4,7 @@
 <div class="timeline-item award-item" style="background-color: var(--surface-color); border: 2px solid var(--accent-orange); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 4px 15px rgba(255, 107, 0, 0.2);">
     <h5 style="color: var(--accent-orange); margin-bottom: 1rem;">
         <i class="bi bi-trophy-fill me-2"></i>
-        Awards - @AwardEvent.StartDate.ToString("MMMM yyyy")
+        Awards - @AwardEvent.StartDate.ToLocalDisplay().ToString("MMMM yyyy")
     </h5>
     
     @foreach (AwardQuestion question in AllAwardQuestions.Where(q => AwardEvent.Questions.Contains(q.Id)))

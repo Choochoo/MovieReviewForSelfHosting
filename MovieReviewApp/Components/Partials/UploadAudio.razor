@@ -36,7 +36,7 @@
                                 @foreach (var movie in availableMovies)
                                 {
                                     <option value="@movie.Id">
-                                        @movie.Movie - (@movie.StartDate.ToString("MMMM yyyy"))
+                                        @movie.Movie - (@movie.StartDate.ToLocalDisplay().ToString("MMMM yyyy"))
                                     </option>
                                 }
                             }
@@ -44,7 +44,7 @@
                         @if (!string.IsNullOrEmpty(movieTitle))
                         {
                             <div class="mt-2 text-success">
-                                <small>✅ Selected: <strong>@movieTitle</strong> - @sessionDate.ToString("MMM dd, yyyy")</small>
+                                <small>✅ Selected: <strong>@movieTitle</strong> - @sessionDate.ToLocalDisplay().ToString("MMM dd, yyyy")</small>
                             </div>
                         }
                     </div>

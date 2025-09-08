@@ -95,7 +95,7 @@
                         <div class="card h-100 @(session.Status == ProcessingStatus.Failed ? "border-danger" : session.Status == ProcessingStatus.Complete ? "border-success" : "border-warning") movie-session-card" @onclick="() => ViewSession(session.Id)">
                             <div class="card-header">
                                 <h5 class="mb-1">@session.MovieTitle</h5>
-                                <small class="text-muted">@session.Date.ToString("MMMM dd, yyyy")</small>
+                                <small class="text-muted">@session.Date.ToLocalDisplay().ToString("MMMM dd, yyyy")</small>
                             </div>
                             <div class="card-body">
                                 <!-- Participant Avatars -->

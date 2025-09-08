@@ -5,6 +5,7 @@ using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
+using MovieReviewApp.Extensions;
 using System.Net.Http;
 
 namespace MovieReviewApp.Application.Services;
@@ -211,8 +212,8 @@ public class DemoDataService
             {
                 Number = phaseNumber,
                 People = string.Join(", ", _members.Select(m => m.Name)),
-                StartDate = currentDate,
-                EndDate = currentDate.AddMonths(_members.Count).AddDays(-1)
+                StartDate = currentDate.StartOfMonth(),
+                EndDate = currentDate.StartOfMonth().AddMonths(_members.Count - 1).EndOfMonth()
             };
             await _database.UpsertAsync(phase1);
 

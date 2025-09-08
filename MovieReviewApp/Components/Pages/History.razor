@@ -68,7 +68,7 @@ else if (isGridView)
                         <div class="movie-overlay">
                             <div class="movie-info">
                                 <h6>@movieEvent.Movie</h6>
-                                <p class="movie-date">@movieEvent.StartDate.ToString("MMMM yyyy")</p>
+                                <p class="movie-date">@movieEvent.StartDate.ToLocalDisplay().ToString("MMMM yyyy")</p>
                                 <p class="movie-person">@movieEvent.Person</p>
                             </div>
                         </div>
@@ -100,7 +100,7 @@ else
                     {
                         <tr>
                             <td style="text-align:center">@pastevent.PhaseNumber</td>
-                            <td>@pastevent.StartDate.ToString("MMMM yyyy")</td>
+                            <td>@pastevent.StartDate.ToLocalDisplay().ToString("MMMM yyyy")</td>
                             <td>@pastevent.Person</td>
                             <td>@pastevent.Movie</td>
                             <td>
@@ -159,7 +159,7 @@ else
                     </div>
                     <div class="modal-details">
                         <div class="detail-row">
-                            <strong>Date:</strong> @selectedMovie.StartDate.ToString("MMMM yyyy")
+                            <strong>Date:</strong> @selectedMovie.StartDate.ToLocalDisplay().ToString("MMMM yyyy")
                         </div>
                         <div class="detail-row">
                             <strong>Chosen by:</strong> @selectedMovie.Person
@@ -173,7 +173,7 @@ else
                         @if (selectedMovie.MeetupTime.HasValue)
                         {
                             <div class="detail-row">
-                                <strong>Meetup:</strong> @(selectedMovie.MeetupTime?.Kind == DateTimeKind.Utc ? selectedMovie.MeetupTime.Value.ToLocalTime().ToString("M/d/yyyy h:mm tt") : selectedMovie.MeetupTime?.ToString("M/d/yyyy h:mm tt"))
+                                <strong>Meetup:</strong> @selectedMovie.MeetupTime.ToLocalDisplay()?.ToString("M/d/yyyy h:mm tt")
                             </div>
                         }
                         @if (selectedMovie.AlreadySeen && selectedMovie.SeenDate.HasValue)

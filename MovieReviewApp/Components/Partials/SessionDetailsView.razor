@@ -26,7 +26,7 @@
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h2 class="mb-2">@Session.MovieTitle</h2>
-                            <p class="text-muted mb-2">@Session.Date.ToString("MMMM yyyy")</p>
+                            <p class="text-muted mb-2">@Session.Date.ToLocalDisplay().ToString("MMMM yyyy")</p>
                             <div class="d-flex gap-1 flex-wrap">
                                 @if (Session.MicAssignments != null)
                                 {

@@ -1,6 +1,7 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
+using MovieReviewApp.Extensions;
 using MongoDB.Driver;
 
 namespace MovieReviewApp.Application.Services;
@@ -53,13 +54,15 @@ public class MonthlyDataGenerationService : BackgroundService
         DateTime now = DateTime.Now;
         DateTime firstOfThisMonth = new DateTime(now.Year, now.Month, 1);
         DateTime firstOfNextMonth = firstOfThisMonth.AddMonths(1);
+        DateTime utcFirstOfNextMonth = DateTime.SpecifyKind(firstOfNextMonth, DateTimeKind.Local).ToUniversalTime();
+        DateTime utcEndOfNextMonth = DateTime.SpecifyKind(firstOfNextMonth.AddMonths(1), DateTimeKind.Local).ToUniversalTime();
         
         // Check if we already have data for next month using efficient query
         IMongoCollection<MovieEvent>? collection = database.GetCollection<MovieEvent>();
         if (collection == null) return;
         
         long nextMonthEventCount = await collection.CountDocumentsAsync(
-            me => me.StartDate >= firstOfNextMonth && me.StartDate < firstOfNextMonth.AddMonths(1)
+            me => me.StartDate >= utcFirstOfNextMonth && me.StartDate < utcEndOfNextMonth
         );
 
         if (nextMonthEventCount > 0)
@@ -94,8 +97,9 @@ public class MonthlyDataGenerationService : BackgroundService
             IMongoCollection<MovieEvent>? eventCollection = database.GetCollection<MovieEvent>();
             if (eventCollection == null) return;
             
+            DateTime utcThreeMonthsAgo = DateTime.SpecifyKind(nextMonth.AddMonths(-3), DateTimeKind.Local).ToUniversalTime();
             List<MovieEvent> recentEvents = await eventCollection
-                .Find(me => me.StartDate >= nextMonth.AddMonths(-3)) // Only events from last 3 months
+                .Find(me => me.StartDate >= utcThreeMonthsAgo) // Only events from last 3 months
                 .SortBy(me => me.StartDate)
                 .ToListAsync();
 
@@ -253,8 +257,8 @@ public class MonthlyDataGenerationService : BackgroundService
         {
             Number = newPhaseNumber,
             People = "Marcus Chen, Sofia Rodriguez, Amit Patel, Rebecca Thompson, Jamal Williams, Elena Volkov, David Park",
-            StartDate = month,
-            EndDate = month.AddMonths(7).AddDays(-1)
+            StartDate = month.StartOfMonth(),
+            EndDate = month.StartOfMonth().AddMonths(6).EndOfMonth()
         };
 
         await database.UpsertAsync(newPhase);

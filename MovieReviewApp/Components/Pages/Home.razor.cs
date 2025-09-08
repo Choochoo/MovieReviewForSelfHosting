@@ -182,8 +182,8 @@ namespace MovieReviewApp.Components.Pages
             return new Phase
             {
                 Number = phaseNumber,
-                StartDate = startDate,
-                EndDate = startDate.AddMonths(peopleNames.Count - 1).EndOfMonth(),
+                StartDate = startDate.StartOfMonth(),
+                EndDate = startDate.StartOfMonth().AddMonths(peopleNames.Count - 1).EndOfMonth(),
                 Events = new List<MovieEvent>(),
                 People = string.Join(',', peopleNames)
             };

@@ -9,7 +9,7 @@
                 <p style="text-align:center;font-size:1.2em">
                     @try
                     {
-                        @MovieEvent.StartDate.ToString("MMMM yyyy")
+                        @MovieEvent.StartDate.ToLocalDisplay().ToString("MMMM yyyy")
                     }
                     catch
                     {
@@ -186,7 +186,7 @@
                                     {
                                         <br />
                                         <br />
-                                        <span>We will discuss at <b>@MovieEvent.Person's</b> on <b>@(MovieEvent.MeetupTime?.Kind == DateTimeKind.Utc ? MovieEvent.MeetupTime.Value.ToLocalTime().ToString("dddd M/d/yyyy h:mm tt") : MovieEvent.MeetupTime?.ToString("dddd M/d/yyyy h:mm tt")).</b></span>
+                                        <span>We will discuss at <b>@MovieEvent.Person's</b> on <b>@MovieEvent.MeetupTime.ToLocalDisplay()?.ToString("dddd M/d/yyyy h:mm tt").</b></span>
                                     }
                                     catch
                                     {

@@ -6,7 +6,7 @@
         Future Awards Month
     </h5>
     <div class="timeline-content">
-        <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@AwardDate.ToString("MMMM yyyy")</span>
+        <span class="date" style="color: var(--accent-secondary); font-weight: 600;">@AwardDate.ToLocalDisplay().ToString("MMMM yyyy")</span>
         @if (EligibleMovies.Any())
         {
             <div class="mt-2">

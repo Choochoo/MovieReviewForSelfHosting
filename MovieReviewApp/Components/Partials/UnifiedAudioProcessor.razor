@@ -38,7 +38,7 @@
                                             @foreach (var movie in availableMovies)
                                             {
                                                 <option value="@movie.Id">
-                                                    @movie.Movie - (@movie.StartDate.ToString("MMMM yyyy"))
+                                                    @movie.Movie - (@movie.StartDate.ToLocalDisplay().ToString("MMMM yyyy"))
                                                 </option>
                                             }
                                         }
@@ -175,7 +175,7 @@
                                                 <div>
                                                     <h6 class="mb-1">@session.MovieTitle</h6>
                                                     <small class="text-muted">
-                                                        @session.Date.ToString("MMM dd, yyyy") • @session.AudioFiles.Count files
+                                                        @session.Date.ToLocalDisplay().ToString("MMM dd, yyyy") • @session.AudioFiles.Count files
                                                         <span class="badge @GetSessionStatusBadgeClass(session.Status) ms-2">@session.Status</span>
                                                     </small>
                                                 </div>
@@ -212,7 +212,7 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">🎬 @selectedSession.MovieTitle - @selectedSession.Date.ToString("MMM dd, yyyy")</h5>
+                        <h5 class="mb-0">🎬 @selectedSession.MovieTitle - @selectedSession.Date.ToLocalDisplay().ToString("MMM dd, yyyy")</h5>
                         <div>
                             <button class="btn btn-sm btn-light me-2" @onclick="SaveSession" disabled="@isSaving">
                                 @if (isSaving)
