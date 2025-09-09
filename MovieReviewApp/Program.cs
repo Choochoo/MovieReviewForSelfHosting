@@ -25,22 +25,46 @@ BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLe
 ConventionPack conventionPack = new ConventionPack { new IgnoreExtraElementsConvention(true) };
 ConventionRegistry.Register("IgnoreExtraElements", conventionPack, type => true);
 
+// Determine if running under IIS or command line
+bool isIISHosted = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_HTTPAUTH"));
+string? instanceName = null;
+int? overridePort = null;
 
-// Parse command line arguments
-CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
-
-// Handle special commands
-if (cmdArgs.ShowHelp)
+if (isIISHosted)
 {
-    CommandLineParser.ShowHelp();
-    return;
-}
+    // Running under IIS - get instance info from environment variables
+    // FIXED: Use MOVIEREVIEW_INSTANCE to match your InstanceManager
+    instanceName = Environment.GetEnvironmentVariable("MOVIEREVIEW_INSTANCE");
+    if (string.IsNullOrEmpty(instanceName))
+    {
+        instanceName = "Default";
+    }
 
-if (cmdArgs.ListInstances)
-{
-    CommandLineParser.ListInstances();
-    return;
+    // For IIS, port is handled by IIS binding, but we might want it for display
+    if (int.TryParse(Environment.GetEnvironmentVariable("MOVIEREVIEW_PORT"), out int envPort))
+    {
+        overridePort = envPort;
+    }
+
+    Console.WriteLine($"Running under IIS - Instance: {instanceName}");
 }
+else
+{
+    // Running from command line - parse command line arguments
+    CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
+
+    // Handle special commands
+    if (cmdArgs.ShowHelp)
+    {
+        CommandLineParser.ShowHelp();
+        return;
+    }
+
+    if (cmdArgs.ListInstances)
+    {
+        CommandLineParser.ListInstances();
+        return;
+    }
 
 
 
@@ -52,16 +76,21 @@ if (string.IsNullOrEmpty(instanceName))
     instanceName = "Default";
 }
 
+    overridePort = cmdArgs.Port;
+    Console.WriteLine($"Running from command line - Instance: {instanceName}");
+}
+
+// Initialize instance manager with determined instance name
 InstanceManager instanceManager = new InstanceManager(instanceName);
 Console.WriteLine($"Starting Movie Review App instance: {instanceManager.InstanceName}");
 
 // Get instance configuration
 InstanceConfig instanceConfig = instanceManager.GetInstanceConfig();
 
-// Override port if specified in command line
-if (cmdArgs.Port.HasValue)
+// Override port if specified
+if (overridePort.HasValue)
 {
-    instanceConfig.Port = cmdArgs.Port.Value;
+    instanceConfig.Port = overridePort.Value;
     instanceManager.SaveInstanceConfig(instanceConfig);
 }
 
@@ -71,8 +100,11 @@ instanceManager.SaveInstanceConfig(instanceConfig);
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
 
-// Set the port from instance configuration
-builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
+// Set the port from instance configuration (only for command line hosting)
+if (!isIISHosted)
+{
+    builder.WebHost.UseUrls($"http://localhost:{instanceConfig.Port}");
+}
 
 // Initialize demo protection and secure configuration
 DemoProtectionService demoProtection = new DemoProtectionService(instanceManager);
@@ -118,7 +150,6 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.AddControllers();
 
-
 builder.Services.AddHttpClient(); // Register HttpClient
 
 builder.Services.AddHttpContextAccessor();
@@ -149,7 +180,6 @@ builder.Services.AddScoped<MovieReviewService>();
 // MongoDb service replaced with generic system
 builder.Services.AddScoped<ImageService>();
 builder.Services.AddScoped<MarkdownService>();
-
 
 // Register new audio processing services
 builder.Services.AddHttpClient<GladiaService>(client =>
@@ -193,7 +223,6 @@ builder.Services.AddScoped<TranscriptProcessingService>();
 // Background Services
 builder.Services.AddHostedService<MovieReviewApp.Application.Services.MonthlyDataGenerationService>();
 
-
 // Processing Services
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
 builder.Services.AddScoped<AudioProcessingStateMachine>();
@@ -230,7 +259,6 @@ if (!app.Environment.IsDevelopment())
     _ = app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 
-
 // Add first-run setup middleware (before static files for setup page styling)
 app.UseFirstRunSetup();
 
@@ -238,10 +266,12 @@ app.UseFirstRunSetup();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// IMPORTANT: Map controllers FIRST (before Razor components)
+app.MapControllers();
+
+// Then map Razor components
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
-app.MapControllers();
 
 // Display instance information
 Console.WriteLine();
@@ -250,10 +280,20 @@ Console.WriteLine($"   Instance: {instanceManager.InstanceName}");
 Console.WriteLine($"   Display Name: {instanceConfig.DisplayName}");
 Console.WriteLine($"   Content Type: {instanceConfig.Environment}");
 Console.WriteLine($"   Port: {instanceConfig.Port}");
-Console.WriteLine($"   URL: http://localhost:{instanceConfig.Port}");
+if (isIISHosted)
+{
+    Console.WriteLine($"   Hosting: IIS");
+}
+else
+{
+    Console.WriteLine($"   URL: http://localhost:{instanceConfig.Port}");
+    Console.WriteLine($"   Hosting: Kestrel (Command Line)");
+}
 Console.WriteLine();
-Console.WriteLine("Press Ctrl+C to stop the application");
-Console.WriteLine();
-
+if (!isIISHosted)
+{
+    Console.WriteLine("Press Ctrl+C to stop the application");
+    Console.WriteLine();
+}
 
 app.Run();
