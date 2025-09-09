@@ -45,7 +45,6 @@ if (cmdArgs.ListInstances)
 
 
 
-
 // Initialize instance manager with command line instance name or default to "Default"
 string? instanceName = cmdArgs.InstanceName;
 if (string.IsNullOrEmpty(instanceName))
@@ -148,7 +147,6 @@ builder.Services.AddScoped<SoundClipService>();
 builder.Services.AddScoped<MovieReviewService>();
 
 // MongoDb service replaced with generic system
-builder.Services.AddScoped<MessengerService>();
 builder.Services.AddScoped<ImageService>();
 builder.Services.AddScoped<MarkdownService>();
 
@@ -259,4 +257,3 @@ Console.WriteLine();
 
 
 app.Run();
-

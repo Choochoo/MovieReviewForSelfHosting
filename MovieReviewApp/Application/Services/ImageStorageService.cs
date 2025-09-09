@@ -1,7 +1,5 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
-using Microsoft.Extensions.Logging;
-
 
 namespace MovieReviewApp.Application.Services;
 

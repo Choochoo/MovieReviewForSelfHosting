@@ -25,9 +25,6 @@ namespace MovieReviewApp.Components.Partials
         private IConfiguration Configuration { get; set; } = default!;
 
         [Inject]
-        private MessengerService MessengerService { get; set; } = default!;
-
-        [Inject]
         private DemoProtectionService demoProtection { get; set; } = default!;
 
         [Inject]
@@ -351,11 +348,6 @@ namespace MovieReviewApp.Components.Partials
                         StateHasChanged();
                     }
 
-                    if (!string.IsNullOrEmpty(MovieEvent.Movie))
-                    {
-                        //await MessengerService.SendMovieUpdateMessage(MovieEvent.Person, MovieEvent.Movie);
-                    }
-
                     if (MovieEvent != null)
                     {
                         MovieEvent.IsEditing = false;
@@ -388,4 +380,4 @@ namespace MovieReviewApp.Components.Partials
             StateHasChanged();
         }
     }
-} 
+}

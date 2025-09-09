@@ -126,14 +126,71 @@ public class FileProcessingService
     {
         try
         {
-            // string transcript = await TranscribeAudioAsync(file);
-            file.TranscriptText = "TODO";// transcript;
+            _logger.LogInformation("Starting transcription for file {FileName}", file.FileName);
+
+            // Upload file to Gladia if not already uploaded
+            if (string.IsNullOrEmpty(file.AudioUrl))
+            {
+                file.AudioUrl = await _gladiaService.UploadFileAsync(file.FilePath, file);
+                file.UploadedAt = DateTime.UtcNow;
+                _logger.LogInformation("Uploaded {FileName} to Gladia with URL: {AudioUrl}", 
+                    file.FileName, file.AudioUrl);
+            }
+
+            // Start transcription with default speaker count of 2 (can be overridden for specific files)
+            int speakerCount = DetermineExpectedSpeakers(file.FileName);
+            string transcriptionId = await _gladiaService.StartTranscriptionAsync(
+                file.AudioUrl, 
+                speakerCount, 
+                enableSpeakerDiarization: true, 
+                file.FileName);
+            
+            file.TranscriptId = transcriptionId;
+            _logger.LogInformation("Started transcription {TranscriptionId} for {FileName}", 
+                transcriptionId, file.FileName);
+
+            // Wait for transcription completion
+            TranscriptionResult result = await _gladiaService.WaitForTranscriptionAsync(transcriptionId);
+            
+            // Extract the basic transcript text
+            file.TranscriptText = result.result?.transcription?.full_transcript ?? string.Empty;
+            file.ProcessedAt = DateTime.UtcNow;
+
+            _logger.LogInformation("Successfully transcribed {FileName}, transcript length: {Length} characters", 
+                file.FileName, file.TranscriptText.Length);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to transcribe file {FileName}", file.FileName);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Determines the expected number of speakers based on filename patterns.
+    /// Individual mic files have 1 speaker, master/mix files typically have multiple.
+    /// </summary>
+    private static int DetermineExpectedSpeakers(string fileName)
+    {
+        string upperFileName = fileName.ToUpperInvariant();
+        
+        // Individual mic files typically have 1 speaker
+        if (System.Text.RegularExpressions.Regex.IsMatch(upperFileName, @"^MIC\d+\.(WAV|MP3)$") ||
+            upperFileName.StartsWith("PHONE.") ||
+            upperFileName.StartsWith("SOUND_PAD.") ||
+            upperFileName.StartsWith("SOUNDPAD.") ||
+            upperFileName.StartsWith("USB."))
+        {
+            return 1;
+        }
+        
+        // Master/mix files typically have multiple speakers
+        if (upperFileName.Contains("MIX") || upperFileName.Contains("MASTER"))
+        {
+            return 4; // Default for group discussions
+        }
+        
+        return 2; // Default fallback
     }
 
     /// <summary>

@@ -1,9 +1,5 @@
 using MovieReviewApp.Models;
-using Microsoft.Extensions.Logging;
 using MovieReviewApp.Infrastructure.Database;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace MovieReviewApp.Application.Services;
 

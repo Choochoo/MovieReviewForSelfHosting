@@ -1,11 +1,9 @@
 using System.Security.Cryptography;
-
 using MovieReviewApp.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Processing;
 using MovieReviewApp.Infrastructure.Database;
-using Microsoft.Extensions.Logging;
 
 namespace MovieReviewApp.Infrastructure.FileSystem
 {

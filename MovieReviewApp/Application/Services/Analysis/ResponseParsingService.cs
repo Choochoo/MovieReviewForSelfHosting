@@ -1,6 +1,5 @@
 using MovieReviewApp.Models;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace MovieReviewApp.Application.Services.Analysis;
 
@@ -15,14 +14,6 @@ public class ResponseParsingService
     public ResponseParsingService(ILogger<ResponseParsingService> logger)
     {
         _logger = logger;
-    }
-
-    /// <summary>
-    /// Parses an OpenAI analysis response string into CategoryResults object.
-    /// </summary>
-    public CategoryResults ParseAnalysisResult(string analysisResult)
-    {
-        return ParseAnalysisResponse(analysisResult);
     }
 
     /// <summary>

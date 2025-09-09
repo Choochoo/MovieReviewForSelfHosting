@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using MongoDB.Driver;
 using MovieReviewApp.Application.Services;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;

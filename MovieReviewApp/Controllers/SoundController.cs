@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MovieReviewApp.Application.Services;
 using MovieReviewApp.Models;
+using MovieReviewApp.Utilities;
 
 namespace MovieReviewApp.Controllers
 {
@@ -40,7 +41,7 @@ namespace MovieReviewApp.Controllers
                 return BadRequest("PersonId and file are required");
             }
 
-            if (!IsAudioFile(file))
+            if (!FileValidationHelpers.IsAudioFile(file))
             {
                 return BadRequest("Only audio files are allowed");
             }
@@ -121,21 +122,6 @@ namespace MovieReviewApp.Controllers
             }
         }
 
-        private static bool IsAudioFile(IFormFile file)
-        {
-            string[] allowedTypes = new[]
-            {
-                "audio/mpeg",
-                "audio/wav",
-                "audio/ogg",
-                "audio/aac",
-                "audio/mp4",
-                "audio/x-wav",
-                "audio/wave"
-            };
-
-            return allowedTypes.Contains(file.ContentType?.ToLower());
-        }
 
         /// <summary>
         /// Serves a sound file by ID.

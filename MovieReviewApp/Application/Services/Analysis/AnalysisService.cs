@@ -71,7 +71,7 @@ public class AnalysisService
 
             // Step 4: Parse the response
             _logger.LogInformation("[ANALYSIS DEBUG] Step 4: Parsing response");
-            CategoryResults categoryResults = _responseParsingService.ParseAnalysisResult(analysisResult);
+            CategoryResults categoryResults = _responseParsingService.ParseAnalysisResponse(analysisResult);
 
             // Step 5: Update session with results
             session.CategoryResults = categoryResults;

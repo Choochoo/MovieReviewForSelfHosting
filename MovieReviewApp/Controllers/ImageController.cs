@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Models;
+using MovieReviewApp.Utilities;
 
 namespace MovieReviewApp.Controllers
 {
@@ -9,7 +10,6 @@ namespace MovieReviewApp.Controllers
     public class ImageController : ControllerBase
     {
         private readonly ImageService _imageService;
-        private const int MaxFileSize = 20 * 1024 * 1024; // 20MB
 
         /// <summary>
         /// Initializes a new instance of the ImageController class.
@@ -45,7 +45,7 @@ namespace MovieReviewApp.Controllers
         [HttpPost("upload")]
         public async Task<IActionResult> UploadImage([FromForm] IFormFile file)
         {
-            if (!IsValidImageFile(file))
+            if (!FileValidationHelpers.IsImageFile(file))
             {
                 return BadRequest("Invalid image file");
             }
@@ -81,25 +81,6 @@ namespace MovieReviewApp.Controllers
             return Ok(new { imageId });
         }
 
-        private bool IsValidImageFile(IFormFile file)
-        {
-            if (file == null || file.Length == 0)
-            {
-                return false;
-            }
-
-            if (!file.ContentType.StartsWith("image/"))
-            {
-                return false;
-            }
-
-            if (file.Length > MaxFileSize)
-            {
-                return false;
-            }
-
-            return true;
-        }
 
         private async Task<Guid?> SaveImageFromFile(IFormFile file)
         {

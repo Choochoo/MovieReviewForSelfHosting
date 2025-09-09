@@ -361,9 +361,19 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Project-specific exclusions
 /MovieReviewApp/wwwroot/uploads/August-2024
 /MovieReviewApp/wwwroot/uploads
 /MovieReviewApp/.claude/.commands/simple-init.parallel.md
 /TEST_SETUP.md
 /.claude/settings.local.json
 /PERFORMANCE_IMPROVEMENTS.md
+
+# Application logs
+app.log
+*.log
+
+# Temporary directories
+temp/
+tmp/
