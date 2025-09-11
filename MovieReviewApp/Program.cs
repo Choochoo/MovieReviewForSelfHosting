@@ -66,15 +66,12 @@ else
         return;
     }
 
-
-
-
-// Initialize instance manager with command line instance name or default to "Default"
-string? instanceName = cmdArgs.InstanceName;
-if (string.IsNullOrEmpty(instanceName))
-{
-    instanceName = "Default";
-}
+    // Initialize instance manager with command line instance name or default to "Default"
+    instanceName = cmdArgs.InstanceName;
+    if (string.IsNullOrEmpty(instanceName))
+    {
+        instanceName = "Default";
+    }
 
     overridePort = cmdArgs.Port;
     Console.WriteLine($"Running from command line - Instance: {instanceName}");
