@@ -231,9 +231,11 @@ namespace MovieReviewApp.Components.Pages
             _viewModel.CurrentEvent = phase.Events
                 .FirstOrDefault(e => DateProvider.Now.IsWithinRange(e.StartDate, e.EndDate));
 
-            DateTime nextMonthDate = DateProvider.Now.AddMonths(1);
+            // Get the actual next sequential event after current date
             _viewModel.NextEvent = phase.Events
-                .FirstOrDefault(e => nextMonthDate.IsWithinRange(e.StartDate, e.EndDate));
+                .Where(e => e.StartDate > DateProvider.Now)
+                .OrderBy(e => e.StartDate)
+                .FirstOrDefault();
         }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
