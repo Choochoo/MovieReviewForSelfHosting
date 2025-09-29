@@ -215,6 +215,29 @@ namespace MovieReviewApp.Components.Pages
                 availablePeople.Remove(person);
                 currentMonth = currentMonth.AddMonths(1);
             }
+
+            // Ensure at least 2 future events exist (current month + next month)
+            DateTime now = DateProvider.Now;
+            int futureEventCount = phase.Events.Count(e => e.StartDate >= now.StartOfMonth());
+
+            // If we have less than 2 future events, generate placeholder events
+            if (futureEventCount < 2 && peopleNames.Any())
+            {
+                DateTime nextAvailableMonth = phase.Events.Any()
+                    ? phase.Events.Max(e => e.EndDate).AddMonths(1).StartOfMonth()
+                    : now.StartOfMonth();
+
+                while (futureEventCount < 2)
+                {
+                    // Cycle through people for placeholder events
+                    string person = peopleNames[futureEventCount % peopleNames.Count];
+                    MovieEvent placeholderEvent = PhaseEventGenerator.CreateMovieEvent(person, nextAvailableMonth, phase.Number);
+                    phase.Events.Add(placeholderEvent);
+
+                    nextAvailableMonth = nextAvailableMonth.AddMonths(1);
+                    futureEventCount++;
+                }
+            }
         }
 
         private DateTime CalculateNextAvailableMonth(Phase phase)
