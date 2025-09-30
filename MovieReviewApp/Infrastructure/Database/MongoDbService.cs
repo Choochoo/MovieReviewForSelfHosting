@@ -414,6 +414,22 @@ namespace MovieReviewApp.Infrastructure.Database
         }
 
         /// <summary>
+        /// Gets documents within a date range using a specified date field
+        /// </summary>
+        public async Task<List<T>> GetByDateRangeAsync<T>(DateTime start, DateTime end, string dateFieldName = "StartDate") where T : class
+        {
+            IMongoCollection<T>? collection = GetCollection<T>();
+            if (collection == null) return new List<T>();
+
+            FilterDefinition<T> filter = Builders<T>.Filter.And(
+                Builders<T>.Filter.Gte(dateFieldName, start),
+                Builders<T>.Filter.Lte(dateFieldName, end)
+            );
+
+            return await collection.Find(filter).ToListAsync();
+        }
+
+        /// <summary>
         /// Performs a text search on specified fields
         /// </summary>
         public async Task<List<T>> SearchTextAsync<T>(string searchTerm, params Expression<Func<T, object>>[] searchFields) where T : class

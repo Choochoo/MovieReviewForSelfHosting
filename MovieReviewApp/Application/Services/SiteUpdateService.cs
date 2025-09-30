@@ -1,12 +1,12 @@
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
 public class SiteUpdateService : BaseService<SiteUpdate>
 {
-    public SiteUpdateService(MongoDbService databaseService, ILogger<SiteUpdateService> logger)
-        : base(databaseService, logger)
+    public SiteUpdateService(IRepository<SiteUpdate> repository, ILogger<SiteUpdateService> logger)
+        : base(repository, logger)
     {
     }
 

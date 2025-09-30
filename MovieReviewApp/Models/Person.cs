@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using MongoDB.Bson.Serialization.Attributes;
 using MovieReviewApp.Attributes;
 
 namespace MovieReviewApp.Models
@@ -8,7 +9,8 @@ namespace MovieReviewApp.Models
     {
         public int Order { get; set; }
         public string? Name { get; set; }
-        [NotMapped]
+        public int MicNumber { get; set; }
+        [BsonIgnore]
         public bool IsEditing { get; set; }
     }
 }

@@ -1,6 +1,5 @@
-using MongoDB.Driver;
+using MovieReviewApp.Extensions;
 using MovieReviewApp.Infrastructure.Configuration;
-using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using MovieReviewApp.Models.ViewModels;
@@ -11,16 +10,40 @@ namespace MovieReviewApp.Application.Services
 {
     /// <summary>
     /// Service to fetch all home page data in a single optimized operation
+    /// Uses proper domain services to maintain separation of concerns
     /// </summary>
     public class HomePageDataService
     {
-        private readonly MongoDbService _db;
         private readonly ILogger<HomePageDataService> _logger;
+        private readonly SettingService _settingService;
+        private readonly PersonService _personService;
+        private readonly MovieEventService _movieEventService;
+        private readonly AwardEventService _awardEventService;
+        private readonly AwardQuestionService _awardQuestionService;
+        private readonly DiscussionQuestionService _discussionQuestionService;
+        private readonly SiteUpdateService _siteUpdateService;
+        private readonly AwardVoteService _awardVoteService;
 
-        public HomePageDataService(MongoDbService databaseService, ILogger<HomePageDataService> logger)
+        public HomePageDataService(
+            ILogger<HomePageDataService> logger,
+            SettingService settingService,
+            PersonService personService,
+            MovieEventService movieEventService,
+            AwardEventService awardEventService,
+            AwardQuestionService awardQuestionService,
+            DiscussionQuestionService discussionQuestionService,
+            SiteUpdateService siteUpdateService,
+            AwardVoteService awardVoteService)
         {
-            _db = databaseService;
             _logger = logger;
+            _settingService = settingService;
+            _personService = personService;
+            _movieEventService = movieEventService;
+            _awardEventService = awardEventService;
+            _awardQuestionService = awardQuestionService;
+            _discussionQuestionService = discussionQuestionService;
+            _siteUpdateService = siteUpdateService;
+            _awardVoteService = awardVoteService;
         }
 
         /// <summary>
@@ -30,17 +53,22 @@ namespace MovieReviewApp.Application.Services
         {
             HomePageViewModel viewModel = new HomePageViewModel();
 
+            // Calculate date range once - 1 month back, 2 months forward
+            DateTime now = DateProvider.Now;
+            DateTime rangeStart = now.AddMonths(-1).StartOfMonth();
+            DateTime rangeEnd = now.AddMonths(2).EndOfMonth();
+
             // Create all tasks for parallel execution
             List<Task> tasks = new List<Task>();
 
-            // Basic data fetching tasks
+            // Basic data fetching tasks using domain services
             Task<List<DiscussionQuestion>> discussionQuestionsTask = GetActiveDiscussionQuestionsAsync();
-            Task<List<Person>> peopleTask = _db.GetAllAsync<Person>();
-            Task<List<Setting>> settingsTask = _db.GetAllAsync<Setting>();
-            Task<List<MovieEvent>> eventsTask = _db.GetAllAsync<MovieEvent>();
-            Task<long> eventCountTask = _db.CountAsync<MovieEvent>();
-            Task<List<Phase>> phasesTask = _db.GetAllAsync<Phase>();
-            Task<List<AwardEvent>> awardEventsTask = _db.GetAllAsync<AwardEvent>();
+            Task<List<Person>> peopleTask = _personService.GetAllAsync();
+            Task<List<Setting>> settingsTask = _settingService.GetAllAsync();
+            Task<List<MovieEvent>> eventsTask = _movieEventService.GetByDateRangeAsync(rangeStart, rangeEnd);
+            Task<long> eventCountTask = _movieEventService.GetCountAsync();
+            Task<AwardEvent?> lastCompletedAwardTask = _awardEventService.GetLastCompletedAsync();
+            Task<List<AwardEvent>> awardEventsTask = _awardEventService.GetAllAsync();
             Task<List<AwardQuestion>> awardQuestionsTask = GetActiveAwardQuestionsAsync();
 
             // Add all tasks to list
@@ -49,7 +77,7 @@ namespace MovieReviewApp.Application.Services
             tasks.Add(Task.Run(async () => viewModel.Settings = await settingsTask));
             tasks.Add(Task.Run(async () => viewModel.ExistingEvents = await eventsTask));
             tasks.Add(Task.Run(async () => viewModel.ExistingEventCount = (int)await eventCountTask));
-            tasks.Add(Task.Run(async () => viewModel.DbPhases = (await phasesTask).OrderBy(p => p.StartDate).ToList()));
+            tasks.Add(Task.Run(async () => viewModel.LastCompletedAward = await lastCompletedAwardTask));
             tasks.Add(Task.Run(async () => viewModel.AllAwardEvents = await awardEventsTask));
             tasks.Add(Task.Run(async () => viewModel.AllAwardQuestions = await awardQuestionsTask));
 
@@ -62,6 +90,9 @@ namespace MovieReviewApp.Application.Services
 
             // Wait for all basic data to load
             await Task.WhenAll(tasks);
+
+            // Ensure current and next months exist in database
+            await EnsureCurrentAndNextMonthExistAsync(viewModel);
 
             // Process settings
             ProcessSettings(viewModel);
@@ -83,22 +114,27 @@ namespace MovieReviewApp.Application.Services
 
         private async Task<List<DiscussionQuestion>> GetActiveDiscussionQuestionsAsync()
         {
-            FilterDefinition<DiscussionQuestion> filter = Builders<DiscussionQuestion>.Filter.Eq(q => q.IsActive, true);
-            SortDefinition<DiscussionQuestion> sort = Builders<DiscussionQuestion>.Sort.Ascending(q => q.Order);
-            return await _db.FindAsync(filter, sort);
+            // Use repository through the domain service to get active questions
+            List<DiscussionQuestion> allQuestions = await _discussionQuestionService.GetAllAsync();
+            return allQuestions.Where(q => q.IsActive).OrderBy(q => q.Order).ToList();
         }
 
         private async Task<List<AwardQuestion>> GetActiveAwardQuestionsAsync()
         {
-            FilterDefinition<AwardQuestion> filter = Builders<AwardQuestion>.Filter.Eq(q => q.IsActive, true);
-            return await _db.FindAsync(filter);
+            // Use repository through the domain service to get active award questions
+            List<AwardQuestion> allQuestions = await _awardQuestionService.GetAllAsync();
+            return allQuestions.Where(q => q.IsActive).ToList();
         }
 
         private async Task<List<SiteUpdate>> GetRecentSiteUpdatesAsync(DateTime since)
         {
-            FilterDefinition<SiteUpdate> filter = Builders<SiteUpdate>.Filter.Gte(u => u.UpdatedAt, since);
-            SortDefinition<SiteUpdate> sort = Builders<SiteUpdate>.Sort.Descending(u => u.UpdatedAt);
-            return await _db.FindAsync(filter, sort, limit: 10);
+            // Use repository through the domain service to get recent updates
+            List<SiteUpdate> allUpdates = await _siteUpdateService.GetAllAsync();
+            return allUpdates
+                .Where(u => u.UpdatedAt >= since)
+                .OrderByDescending(u => u.UpdatedAt)
+                .Take(10)
+                .ToList();
         }
 
         private void ProcessSettings(HomePageViewModel viewModel)
@@ -117,8 +153,9 @@ namespace MovieReviewApp.Application.Services
                                    bool.TryParse(respectOrderSetting.Value, out bool respect) &&
                                    respect;
 
-            // Extract names
+            // Extract names ordered by Order field
             viewModel.AllNames = viewModel.AllPeople
+                .OrderBy(x => x.Order)  // CRITICAL: Order by Order field first!
                 .Select(x => x.Name)
                 .Where(x => !string.IsNullOrEmpty(x))
                 .ToArray();
@@ -126,85 +163,79 @@ namespace MovieReviewApp.Application.Services
 
         private async Task DetermineAwardPhaseAsync(HomePageViewModel viewModel)
         {
-            // Check if we're in an award phase
+            // Check if we're in an award phase using domain service
             DateTime now = DateProvider.Now;
-            FilterDefinition<AwardEvent> filter = Builders<AwardEvent>.Filter.And(
-                Builders<AwardEvent>.Filter.Lte(ae => ae.StartDate, now),
-                Builders<AwardEvent>.Filter.Gte(ae => ae.EndDate, now)
-            );
 
-            List<AwardEvent> currentAwardEvents = await _db.FindAsync(filter, null, 1);
-            AwardEvent? currentAwardEvent = currentAwardEvents.FirstOrDefault();
+            // Get all award events and filter using LINQ
+            List<AwardEvent> allAwardEvents = await _awardEventService.GetAllAsync();
+            AwardEvent? currentAwardEvent = allAwardEvents
+                .FirstOrDefault(ae => ae.StartDate <= now && ae.EndDate >= now);
+
             viewModel.IsCurrentPhaseAwardPhase = currentAwardEvent != null;
         }
 
         private async Task<AwardSetting?> GetAwardSettingsAsync(List<Setting> settings)
         {
-            Setting? awardSettingEntry = settings.FirstOrDefault(s => s.Key == "AwardSettings");
-
-            if (awardSettingEntry != null && !string.IsNullOrEmpty(awardSettingEntry.Value))
-            {
-                return System.Text.Json.JsonSerializer.Deserialize<AwardSetting>(awardSettingEntry.Value);
-            }
-
-            // Return default if not found
-            ILogger<SettingService> settingLogger = new LoggerFactory().CreateLogger<SettingService>();
-            InstanceManager instanceManager = new InstanceManager();
-            DemoProtectionService demoProtectionService = new DemoProtectionService(instanceManager);
-            SettingService settingService = new SettingService(_db, settingLogger, demoProtectionService);
-            ApplicationSettings appSettings = await settingService.GetApplicationSettingsAsync();
-            return AwardSetting.CreateFromApplicationSettings(appSettings);
+            return await _settingService.GetAwardSettingsAsync();
         }
 
         private async Task DetermineCurrentAndNextEventsAsync(HomePageViewModel viewModel)
         {
             DateTime now = DateProvider.Now;
-            
-            // Current event
-            FilterDefinition<MovieEvent> currentFilter = Builders<MovieEvent>.Filter.And(
-                Builders<MovieEvent>.Filter.Lte(e => e.StartDate, now),
-                Builders<MovieEvent>.Filter.Gte(e => e.EndDate, now)
-            );
-            List<MovieEvent> currentEvents = await _db.FindAsync(currentFilter, null, 1);
-            viewModel.CurrentEvent = currentEvents.FirstOrDefault();
+
+            // Use already-loaded events from view model (avoids redundant database query)
+            List<MovieEvent> allEvents = viewModel.ExistingEvents;
+
+            // Current event - find event that contains current date
+            viewModel.CurrentEvent = allEvents
+                .FirstOrDefault(e => e.StartDate <= now && e.EndDate >= now);
 
             if (viewModel.CurrentEvent == null)
             {
                 // Get most recent past event
-                SortDefinition<MovieEvent> sort = Builders<MovieEvent>.Sort.Descending(e => e.EndDate);
-                FilterDefinition<MovieEvent> pastFilter = Builders<MovieEvent>.Filter.Lt(e => e.EndDate, now);
-                List<MovieEvent> pastEvents = await _db.FindAsync(pastFilter, sort, limit: 1);
-                viewModel.CurrentEvent = pastEvents.FirstOrDefault();
+                viewModel.CurrentEvent = allEvents
+                    .Where(e => e.EndDate < now)
+                    .OrderByDescending(e => e.EndDate)
+                    .FirstOrDefault();
                 viewModel.IsShowingPastEvent = viewModel.CurrentEvent != null;
             }
 
-            // Next event
-            FilterDefinition<MovieEvent> nextFilter = Builders<MovieEvent>.Filter.Gt(e => e.StartDate, now);
-            SortDefinition<MovieEvent> nextSort = Builders<MovieEvent>.Sort.Ascending(e => e.StartDate);
-            List<MovieEvent> nextEvents = await _db.FindAsync(nextFilter, nextSort, limit: 1);
-            viewModel.NextEvent = nextEvents.FirstOrDefault();
+            // Next event - find earliest future event
+            viewModel.NextEvent = allEvents
+                .Where(e => e.StartDate > now)
+                .OrderBy(e => e.StartDate)
+                .FirstOrDefault();
         }
 
         private async Task LoadAllQuestionResultsAsync(HomePageViewModel viewModel)
         {
-            if (!viewModel.AllAwardEvents.Any() || !viewModel.AllAwardQuestions.Any())
+            if (!viewModel.AllAwardQuestions.Any())
                 return;
 
-            // Get all votes and movie events in parallel
-            Task<List<AwardVote>> votesTask = _db.GetAllAsync<AwardVote>();
-            Task<List<MovieEvent>> eventsTask = _db.GetAllAsync<MovieEvent>();
-            
-            await Task.WhenAll(votesTask, eventsTask);
-            
-            List<AwardVote> allVotes = await votesTask;
-            List<MovieEvent> allEvents = await eventsTask;
+            // Build list of relevant award events (last completed + all from AllAwardEvents)
+            List<AwardEvent> relevantAwardEvents = viewModel.AllAwardEvents.ToList();
+            if (viewModel.LastCompletedAward != null && !relevantAwardEvents.Any(ae => ae.Id == viewModel.LastCompletedAward.Id))
+            {
+                relevantAwardEvents.Add(viewModel.LastCompletedAward);
+            }
 
-            // Process results for each award event and question combination
-            foreach (AwardEvent awardEvent in viewModel.AllAwardEvents)
+            if (!relevantAwardEvents.Any())
+                return;
+
+            // Get votes only for relevant award event IDs
+            List<AwardVote> allVotes = await _awardVoteService.GetAllAsync();
+            HashSet<Guid> relevantAwardEventIds = relevantAwardEvents.Select(ae => ae.Id).ToHashSet();
+            List<AwardVote> relevantVotes = allVotes.Where(v => relevantAwardEventIds.Contains(v.AwardEventId)).ToList();
+
+            // Use already-filtered ExistingEvents instead of fetching all events again
+            List<MovieEvent> allEvents = viewModel.ExistingEvents;
+
+            // Process results for each relevant award event and question combination
+            foreach (AwardEvent awardEvent in relevantAwardEvents)
             {
                 foreach (AwardQuestion question in viewModel.AllAwardQuestions.Where(q => awardEvent.Questions.Contains(q.Id)))
                 {
-                    List<QuestionResult> results = allVotes
+                    List<QuestionResult> results = relevantVotes
                         .Where(v => v.AwardEventId == awardEvent.Id && v.QuestionId == question.Id)
                         .GroupBy(v => v.MovieEventId)
                         .Select(g =>
@@ -224,8 +255,61 @@ namespace MovieReviewApp.Application.Services
                         .ThenByDescending(r => r.FirstPlaceVotes)
                         .ThenByDescending(r => r.SecondPlaceVotes)
                         .ToList();
-                    
+
                     viewModel.QuestionResults[(awardEvent.Id, question.Id)] = results;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ensures current month and next month exist in the database.
+        /// Delegates creation to MovieEventService for proper separation of concerns.
+        /// MovieEventService will automatically create Phase records if they don't exist.
+        /// </summary>
+        private async Task EnsureCurrentAndNextMonthExistAsync(HomePageViewModel viewModel)
+        {
+            DateTime currentMonth = DateProvider.Now.StartOfMonth();
+            DateTime nextMonth = currentMonth.AddMonths(1);
+
+            // Check if current month exists
+            bool currentExists = viewModel.ExistingEvents.Any(e =>
+                e.StartDate.Year == currentMonth.Year &&
+                e.StartDate.Month == currentMonth.Month);
+
+            if (!currentExists)
+            {
+                _logger.LogInformation("Creating missing event for current month: {Month:yyyy-MM}", currentMonth);
+                MovieEvent? createdEvent = await _movieEventService.GetOrCreateForMonthAsync(currentMonth);
+                if (createdEvent != null)
+                {
+                    viewModel.ExistingEvents.Add(createdEvent);
+                    _logger.LogInformation("Successfully created event for {Month:yyyy-MM} → {Person}",
+                        currentMonth, createdEvent.Person);
+                }
+                else
+                {
+                    _logger.LogInformation("Skipped event creation for {Month:yyyy-MM} (awards month)", currentMonth);
+                }
+            }
+
+            // Check if next month exists
+            bool nextExists = viewModel.ExistingEvents.Any(e =>
+                e.StartDate.Year == nextMonth.Year &&
+                e.StartDate.Month == nextMonth.Month);
+
+            if (!nextExists)
+            {
+                _logger.LogInformation("Creating missing event for next month: {Month:yyyy-MM}", nextMonth);
+                MovieEvent? createdEvent = await _movieEventService.GetOrCreateForMonthAsync(nextMonth);
+                if (createdEvent != null)
+                {
+                    viewModel.ExistingEvents.Add(createdEvent);
+                    _logger.LogInformation("Successfully created event for {Month:yyyy-MM} → {Person}",
+                        nextMonth, createdEvent.Person);
+                }
+                else
+                {
+                    _logger.LogInformation("Skipped event creation for {Month:yyyy-MM} (awards month)", nextMonth);
                 }
             }
         }

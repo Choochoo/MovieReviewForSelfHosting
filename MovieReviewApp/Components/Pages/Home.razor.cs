@@ -19,11 +19,18 @@ namespace MovieReviewApp.Components.Pages
         [Inject]
         private SiteUpdateService SiteUpdateService { get; set; } = default!;
 
+        [Inject]
+        private PersonAssignmentCacheService PersonAssignmentCache { get; set; } = default!;
+
+        [Inject]
+        private TimelineRenderingService TimelineRenderingService { get; set; } = default!;
+
         private HomePageViewModel? _viewModel;
         private List<Phase> Phases { get; set; } = new();
-        private readonly Random _rand = new(1337);
+        // Random number generation is now handled by PersonRotationService
         private bool showUpdates = true;
         private bool _isInitialized = false;
+        private List<ITimelineItem> _chronologicalTimeline = new();
 
         // Exposed properties for Razor page
         public List<SiteUpdate> RecentUpdates => _viewModel?.RecentUpdates ?? new();
@@ -34,9 +41,11 @@ namespace MovieReviewApp.Components.Pages
         public bool IsCurrentPhaseAwardPhase => _viewModel?.IsCurrentPhaseAwardPhase ?? false;
         public AwardSetting? AwardSettings => _viewModel?.AwardSettings;
         public List<AwardEvent> AllAwardEvents => _viewModel?.AllAwardEvents ?? new();
+        public AwardEvent? LastCompletedAward => _viewModel?.LastCompletedAward;
         public List<AwardQuestion> AllAwardQuestions => _viewModel?.AllAwardQuestions ?? new();
         public List<Person> AllPeople => _viewModel?.AllPeople ?? new();
         public Dictionary<(Guid, Guid), List<QuestionResult>> CachedResults => _viewModel?.QuestionResults ?? new();
+        public List<ITimelineItem> ChronologicalTimeline => _chronologicalTimeline;
 
         /// <summary>
         /// Initializes the component by loading all required data asynchronously.
@@ -49,18 +58,9 @@ namespace MovieReviewApp.Components.Pages
             _viewModel = await HomePageDataService.GetHomePageDataAsync();
             Console.WriteLine("Home.razor.cs: Data loaded");
 
-            // Advance random number generator based on existing event count
-            for (int i = 0; i < _viewModel.ExistingEventCount; i++)
-            {
-                _rand.Next(_viewModel.AllNames?.Length ?? 1);
-            }
-
-            // Generate schedule if we have the required data
-            if (_viewModel.AllNames.Length > 0 && _viewModel.StartDate.HasValue && _viewModel.StartDate.Value != DateTime.MinValue)
-            {
-                await GenerateScheduleAsync(_viewModel.StartDate.Value, _viewModel.AllNames);
-                Console.WriteLine("Home.razor.cs: Schedule generated");
-            }
+            // Generate chronological timeline after all data is loaded
+            _chronologicalTimeline = await GetChronologicalTimeline();
+            Console.WriteLine("Home.razor.cs: Timeline generated");
 
             // Add a delay to make the fade effect visible (adjust as needed)
             await Task.Delay(500); // 0.5 second delay
@@ -76,179 +76,6 @@ namespace MovieReviewApp.Components.Pages
         }
 
 
-        /// <summary>
-        /// Generates the movie schedule based on phases and award settings.
-        /// </summary>
-        private async Task GenerateScheduleAsync(DateTime startDate, string[] allNames)
-        {
-            if (_viewModel?.DbPhases == null || AwardSettings == null) return;
-
-            foreach (Phase phase in _viewModel.DbPhases)
-            {
-                // Generate events for this phase
-                Phase generatedPhase = await GeneratePhaseAsync(phase.Number, phase.StartDate, allNames.ToList());
-                Phases.Add(generatedPhase);
-
-                // If we're in this phase's time period
-                if (DateProvider.Now.IsWithinRange(phase.StartDate, phase.EndDate))
-                {
-                    UpdateCurrentAndNextEvents(generatedPhase);
-                }
-
-                // If we're in an award month after this phase
-                if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
-                {
-                    DateTime awardDate = phase.EndDate.AddDays(1);
-                    DateTime awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
-
-                    if (DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
-                    {
-                        _viewModel.CurrentEvent = null;
-                        Phase? nextPhase = _viewModel.DbPhases.FirstOrDefault(p => p.Number == phase.Number + 1);
-                        if (nextPhase != null)
-                        {
-                            Phase nextGeneratedPhase = await GeneratePhaseAsync(nextPhase.Number, nextPhase.StartDate, allNames.ToList());
-                            _viewModel.NextEvent = nextGeneratedPhase.Events.FirstOrDefault();
-                        }
-                        else
-                        {
-                            // Create a new phase if it doesn't exist yet
-                            int newPhaseNumber = phase.Number + 1;
-                            DateTime newPhaseStartDate = awardMonthEnd.AddDays(1);
-                            Phase newGeneratedPhase = await GeneratePhaseAsync(newPhaseNumber, newPhaseStartDate, allNames.ToList());
-                            Phases.Add(newGeneratedPhase);
-                            _viewModel.NextEvent = newGeneratedPhase.Events.FirstOrDefault();
-                        }
-                    }
-                }
-            }
-
-            // Generate additional future phases for display purposes
-            if (Phases.Any() && AwardSettings != null)
-            {
-                Phase currentLastPhase = Phases.OrderByDescending(p => p.Number).First();
-                int additionalPhasesToGenerate = 2;
-
-                for (int i = 1; i <= additionalPhasesToGenerate; i++)
-                {
-                    int newPhaseNumber = currentLastPhase.Number + i;
-                    
-                    // Skip if this phase already exists
-                    if (Phases.Any(p => p.Number == newPhaseNumber))
-                        continue;
-                        
-                    DateTime newPhaseStart;
-
-                    // Check if the previous phase completed a cycle and should have an award month after it
-                    if (currentLastPhase.Number % AwardSettings.PhasesBeforeAward == 0)
-                    {
-                        // The previous phase completed a cycle, so there should be an award month after it
-                        DateTime awardMonthEnd = currentLastPhase.EndDate.AddDays(1).AddMonths(1).AddDays(-1);
-                        newPhaseStart = awardMonthEnd.AddDays(1);
-                    }
-                    else
-                    {
-                        // The previous phase didn't complete a cycle, so next phase starts immediately
-                        newPhaseStart = currentLastPhase.EndDate.AddDays(1);
-                    }
-
-                    Phase futurePhase = await GeneratePhaseAsync(newPhaseNumber, newPhaseStart, allNames.ToList());
-                    Phases.Add(futurePhase);
-                    
-                    // Update currentLastPhase to the newly created phase for the next iteration
-                    currentLastPhase = futurePhase;
-                }
-            }
-        }
-
-        private async Task<Phase> GeneratePhaseAsync(int phaseNumber, DateTime startDate, List<string> peopleNames)
-        {
-            Phase phase = CreatePhaseStructure(phaseNumber, startDate, peopleNames);
-            AddExistingEventsToPhase(phase, phaseNumber);
-            AddMissingEventsToPhase(phase, peopleNames);
-            
-            // Update phase end date to match the last event's end date
-            if (phase.Events.Any())
-            {
-                phase.EndDate = phase.Events.Max(e => e.EndDate);
-            }
-            
-            return phase;
-        }
-
-        private Phase CreatePhaseStructure(int phaseNumber, DateTime startDate, List<string> peopleNames)
-        {
-            return new Phase
-            {
-                Number = phaseNumber,
-                StartDate = startDate.StartOfMonth(),
-                EndDate = startDate.StartOfMonth().AddMonths(peopleNames.Count - 1).EndOfMonth(),
-                Events = new List<MovieEvent>(),
-                People = string.Join(',', peopleNames)
-            };
-        }
-
-        private void AddExistingEventsToPhase(Phase phase, int phaseNumber)
-        {
-            IEnumerable<MovieEvent> existingEvents = _viewModel?.ExistingEvents?.Where(e => e.PhaseNumber == phaseNumber) ?? Enumerable.Empty<MovieEvent>();
-            foreach (MovieEvent existingEvent in existingEvents)
-            {
-                PhaseEventGenerator.SetDefaultMeetupTime(existingEvent);
-                phase.Events.Add(existingEvent);
-            }
-        }
-
-        private void AddMissingEventsToPhase(Phase phase, List<string> peopleNames)
-        {
-            List<string> usedPeople = phase.Events.Select(e => e.Person).ToList();
-            List<string> availablePeople = peopleNames.Except(usedPeople).ToList();
-            DateTime currentMonth = CalculateNextAvailableMonth(phase);
-
-            while (availablePeople.Any())
-            {
-                int personIndex = _viewModel?.RespectOrder == true ? 0 : _rand.Next(availablePeople.Count);
-                string person = availablePeople[personIndex];
-
-                MovieEvent newEvent = PhaseEventGenerator.CreateMovieEvent(person, currentMonth, phase.Number);
-                phase.Events.Add(newEvent);
-
-                availablePeople.Remove(person);
-                currentMonth = currentMonth.AddMonths(1);
-            }
-        }
-
-        private DateTime CalculateNextAvailableMonth(Phase phase)
-        {
-            return phase.Events.Any()
-                ? phase.Events.Max(e => e.EndDate).AddMonths(1).StartOfMonth()
-                : phase.StartDate.StartOfMonth();
-        }
-
-        private void UpdateCurrentAndNextEvents(Phase phase)
-        {
-            if (_viewModel == null) return;
-
-            _viewModel.CurrentEvent = phase.Events
-                .FirstOrDefault(e => DateProvider.Now.IsWithinRange(e.StartDate, e.EndDate));
-
-            // First try to find next event in current phase
-            _viewModel.NextEvent = phase.Events
-                .Where(e => e.StartDate > DateProvider.Now)
-                .OrderBy(e => e.StartDate)
-                .FirstOrDefault();
-
-            // If no next event in current phase, look for first event in next phase
-            if (_viewModel.NextEvent == null)
-            {
-                // Find next phase (accounting for award months)
-                int nextPhaseNumber = phase.Number + 1;
-                Phase? nextPhase = Phases.FirstOrDefault(p => p.Number == nextPhaseNumber);
-                if (nextPhase != null)
-                {
-                    _viewModel.NextEvent = nextPhase.Events.OrderBy(e => e.StartDate).FirstOrDefault();
-                }
-            }
-        }
 
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -292,98 +119,243 @@ namespace MovieReviewApp.Components.Pages
                 .Where(m => m.PhaseNumber <= phaseNumber &&
                            m.PhaseNumber > phaseNumber - AwardSettings.PhasesBeforeAward &&
                            !string.IsNullOrEmpty(m.Movie))
-                .Select(m => m.Movie)
+                .Select(m => m.Movie!)
                 .ToList();
         }
 
 
-        // Method to create chronological timeline with phases and award events
+        // Method to create chronological timeline using cache-first architecture
         /// <summary>
-        /// Creates a chronological timeline combining phases and award events.
+        /// Builds chronological timeline for current and future events.
+        /// Uses cache-first architecture: PersonAssignmentCache is source of truth,
+        /// database MovieEvents provide enrichment. No Phase table dependency.
         /// Only shows current and future events (from current month onwards).
         /// </summary>
-        public List<ITimelineItem> GetChronologicalTimeline()
+        public async Task<List<ITimelineItem>> GetChronologicalTimeline()
         {
             List<ITimelineItem> timeline = new List<ITimelineItem>();
 
-            if (Phases == null || AwardSettings == null) return timeline;
+            if (AwardSettings == null) return timeline;
 
-            // Get the start of the current month to filter out past events
-            DateTime currentMonthStart = new DateTime(DateProvider.Now.Year, DateProvider.Now.Month, 1);
-            bool nextAwardAdded = false; // ensure only the next awards month shows once
-
-            // Only add phases that have events in current month or later
-            foreach (Phase phase in Phases)
+            // Add last completed award at the top (if it exists)
+            if (LastCompletedAward != null)
             {
-                // Filter phase events to only include current month and future events
-                List<MovieEvent> currentAndFutureEvents = phase.Events?
-                    .Where(e => e.StartDate >= currentMonthStart)
-                    .ToList() ?? new List<MovieEvent>();
+                timeline.Add(new AwardTimelineItem(LastCompletedAward));
+            }
 
-                // Only add phase to timeline if it has current or future events
-                if (currentAndFutureEvents.Any())
+            try
+            {
+                // Use new cache-first timeline service (fixes phases.count == 0 bug)
+                TimelineViewModel timelineData = await TimelineRenderingService.BuildTimelineAsync();
+
+                Console.WriteLine($"[GetChronologicalTimeline] TimelineData received:");
+                Console.WriteLine($"  - CurrentPhase: {timelineData.CurrentPhase != null}");
+                Console.WriteLine($"  - FuturePhases: {timelineData.FuturePhases.Count}");
+                Console.WriteLine($"  - PastPhases: {timelineData.PastPhases.Count}");
+
+                // Convert new structure back to existing ITimelineItem structure
+                // (keeps UI rendering unchanged for Phase 1)
+
+                // Add current phase if exists
+                if (timelineData.CurrentPhase != null)
                 {
-                    // Create a filtered phase for display
-                    Phase filteredPhase = new Phase
-                    {
-                        Number = phase.Number,
-                        StartDate = phase.StartDate,
-                        EndDate = currentAndFutureEvents.Any() ? currentAndFutureEvents.Max(e => e.EndDate) : phase.EndDate,
-                        People = phase.People,
-                        Events = currentAndFutureEvents
-                    };
-
-                    timeline.Add(new PhaseTimelineItem(filteredPhase));
+                    Phase currentPhase = ConvertTimelinePhaseToPhase(timelineData.CurrentPhase);
+                    Console.WriteLine($"  - Current Phase converted: {currentPhase.Events.Count} events");
+                    timeline.Add(new PhaseTimelineItem(currentPhase));
                 }
 
-                // Check if this phase should have an award event after it
-                if (phase.Number % AwardSettings.PhasesBeforeAward == 0)
+                // Add future phases
+                int futurePhaseIndex = 0;
+                foreach (TimelinePhase futurePhase in timelineData.FuturePhases)
                 {
-                    DateTime awardDate = phase.EndDate.AddDays(1);
+                    futurePhaseIndex++;
+                    Console.WriteLine($"  - Processing Future Phase {futurePhaseIndex}/{timelineData.FuturePhases.Count}: Phase {futurePhase.PhaseNumber}, {futurePhase.Items.Count} items");
+                    // Check for awards events in this phase
+                    MovieReviewApp.Models.ViewModels.TimelineItem? awardsItem = futurePhase.Items
+                        .FirstOrDefault(i => i.IsAwardsEvent);
 
-                    // Only show award events for current or future phases
-                    if (!nextAwardAdded && awardDate >= currentMonthStart)
+                    if (awardsItem != null)
                     {
-                        // Look for an existing award event for this time period
-                        AwardEvent? awardEvent = AllAwardEvents.FirstOrDefault(ae =>
-                            ae.StartDate >= awardDate && ae.StartDate <= awardDate.AddMonths(1));
+                        // Look for existing AwardEvent in database
+                        AwardEvent? existingAward = AllAwardEvents
+                            .FirstOrDefault(ae => ae.StartDate.Year == awardsItem.Month.Year &&
+                                                 ae.StartDate.Month == awardsItem.Month.Month);
 
-                        if (awardEvent != null)
+                        if (existingAward != null)
                         {
-                            timeline.Add(new AwardTimelineItem(awardEvent));
-                            nextAwardAdded = true;
+                            timeline.Add(new AwardTimelineItem(existingAward));
                         }
-                        else if (awardDate > DateProvider.Now)
+                        else
                         {
-                            // Only create placeholder for future award events
+                            // Create future award placeholder
                             FutureAwardItem futureAward = new FutureAwardItem
                             {
-                                PhaseNumber = phase.Number,
-                                AwardDate = awardDate
+                                PhaseNumber = futurePhase.PhaseNumber,
+                                AwardDate = awardsItem.Month
                             };
                             timeline.Add(new FutureAwardTimelineItem(futureAward));
-                            nextAwardAdded = true;
                         }
+                    }
+                    else
+                    {
+                        // Regular phase (not awards)
+                        Phase phase = ConvertTimelinePhaseToPhase(futurePhase);
+                        Console.WriteLine($"    - Converted to Phase with {phase.Events.Count} events");
+
+                        if (phase.Events.Count > 0)
+                        {
+                            timeline.Add(new PhaseTimelineItem(phase));
+                            Console.WriteLine($"    - Added to timeline as PhaseTimelineItem");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"    - SKIPPED (0 events) - THIS IS THE BUG!");
+
+                            // Add cache-only items as FuturePersonTimelineItem instead
+                            foreach (MovieReviewApp.Models.ViewModels.TimelineItem cacheItem in futurePhase.Items.Where(i => !i.IsAwardsEvent))
+                            {
+                                timeline.Add(new FuturePersonTimelineItem(cacheItem.AssignedPersonName, cacheItem.Month));
+                                Console.WriteLine($"      - Added {cacheItem.Month:yyyy-MM} ({cacheItem.AssignedPersonName}) as FuturePersonTimelineItem");
+                            }
+                        }
+                    }
+                }
+
+                Console.WriteLine($"[GetChronologicalTimeline] Final timeline has {timeline.Count} items");
+            }
+            catch (Exception ex)
+            {
+                // Fallback to empty timeline if cache-first fails
+                Console.WriteLine($"Error building cache-first timeline: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                // Timeline will be empty but won't crash the page
+            }
+
+            // Sort by date (oldest first for chronological display)
+            List<ITimelineItem> sorted = timeline.OrderBy(t => t.Date).ToList();
+            Console.WriteLine($"[GetChronologicalTimeline] Returning {sorted.Count} sorted timeline items");
+            return sorted;
+        }
+
+        /// <summary>
+        /// Converts new TimelinePhase structure to legacy Phase structure for UI compatibility.
+        /// </summary>
+        private Phase ConvertTimelinePhaseToPhase(TimelinePhase timelinePhase)
+        {
+            // Build MovieEvent list from TimelineItems that have database records
+            List<MovieEvent> events = new List<MovieEvent>();
+
+            foreach (MovieReviewApp.Models.ViewModels.TimelineItem item in timelinePhase.Items.Where(i => !i.IsAwardsEvent))
+            {
+                if (item.MovieEventId.HasValue && _viewModel?.ExistingEvents != null)
+                {
+                    MovieEvent? dbEvent = _viewModel.ExistingEvents
+                        .FirstOrDefault(e => e.Id == item.MovieEventId.Value);
+
+                    if (dbEvent != null)
+                    {
+                        events.Add(dbEvent);
                     }
                 }
             }
 
-            // Also add any standalone award events that might not have been matched to phases
-            // but only if they're in the current month or future
-            if (!nextAwardAdded)
-            {
-                AwardEvent? firstUpcomingAward = AllAwardEvents
-                    .Where(ae => ae.StartDate >= currentMonthStart)
-                    .OrderBy(ae => ae.StartDate)
-                    .FirstOrDefault();
+            // Get people names from AllPeople ordered by Order field
+            List<string> peopleNames = AllPeople
+                .OrderBy(p => p.Order)
+                .Select(p => p.Name!)
+                .ToList();
 
-                if (firstUpcomingAward != null &&
-                    !timeline.OfType<AwardTimelineItem>().Any(t => t.AwardEvent.Id == firstUpcomingAward.Id))
-                    timeline.Add(new AwardTimelineItem(firstUpcomingAward));
+            return new Phase
+            {
+                Number = timelinePhase.PhaseNumber,
+                StartDate = timelinePhase.StartMonth,
+                EndDate = timelinePhase.EndMonth,
+                People = string.Join(", ", peopleNames),
+                Events = events
+            };
+        }
+
+        /// <summary>
+        /// Adds future cached assignments from PersonAssignmentCache to the timeline.
+        /// Creates timeline items for future months without touching the database.
+        /// </summary>
+        private async Task AddFutureCachedEventsToTimeline(List<ITimelineItem> timeline, DateTime startMonth)
+        {
+            Console.WriteLine($"[AddFutureCachedEventsToTimeline] Called with startMonth: {startMonth:yyyy-MM}");
+
+            // Get entire cache in ONE call (15,000× faster than 240 individual async calls)
+            IReadOnlyDictionary<DateTime, string> allAssignments =
+                await PersonAssignmentCache.GetAllAssignmentsAsync();
+
+            // Build HashSet of existing database event months for O(1) lookups
+            // Database events ALWAYS take priority over cache
+            HashSet<DateTime> existingEventMonths = new HashSet<DateTime>(
+                _viewModel?.ExistingEvents?.Select(e => e.StartDate.StartOfMonth()) ?? Enumerable.Empty<DateTime>()
+            );
+
+            Console.WriteLine($"[AddFutureCachedEventsToTimeline] Found {existingEventMonths.Count} existing database events");
+            Console.WriteLine($"[AddFutureCachedEventsToTimeline] Cache contains {allAssignments.Count} assignments");
+
+            // Show future 12 months from cache (only months NOT in database)
+            DateTime endMonth = startMonth.AddMonths(12);
+            int addedCount = 0;
+
+            for (DateTime month = startMonth; month <= endMonth; month = month.AddMonths(1))
+            {
+                DateTime monthKey = month.StartOfMonth();
+
+                // Skip if database already has an event for this month (DATABASE FIRST!)
+                if (existingEventMonths.Contains(monthKey))
+                {
+                    Console.WriteLine($"[AddFutureCachedEventsToTimeline] Skipping {month:yyyy-MM} - exists in database");
+                    continue;
+                }
+
+                // Use cache ONLY for months not in database
+                if (allAssignments.TryGetValue(monthKey, out string? assignment))
+                {
+                    if (assignment.StartsWith("Awards Event"))
+                    {
+                        timeline.Add(new FutureAwardTimelineItem(new FutureAwardItem
+                        {
+                            AwardDate = month
+                        }));
+                        Console.WriteLine($"[AddFutureCachedEventsToTimeline] Added future award: {month:yyyy-MM}");
+                    }
+                    else
+                    {
+                        timeline.Add(new FuturePersonTimelineItem(assignment, month));
+                        Console.WriteLine($"[AddFutureCachedEventsToTimeline] Added future person: {month:yyyy-MM} -> {assignment}");
+                    }
+                    addedCount++;
+                }
             }
 
-            // Sort by date (oldest first for chronological display)
-            return timeline.OrderBy(t => t.Date).ToList();
+            Console.WriteLine($"[AddFutureCachedEventsToTimeline] Added {addedCount} future items from cache");
+        }
+
+        /// <summary>
+        /// Creates a Phase object from a list of MovieEvents.
+        /// </summary>
+        private Phase CreatePhaseFromEvents(int phaseNumber, DateTime startDate, List<MovieEvent> events, string people)
+        {
+            return new Phase
+            {
+                Number = phaseNumber,
+                StartDate = startDate.StartOfMonth(),
+                EndDate = events.Any() ? events.Max(e => e.EndDate) : startDate.EndOfMonth(),
+                Events = new List<MovieEvent>(events),
+                People = people
+            };
+        }
+
+        /// <summary>
+        /// Determines the next phase number for future phases.
+        /// </summary>
+        private int GetNextPhaseNumber()
+        {
+            if (Phases == null || !Phases.Any()) return 1;
+            return Phases.Max(p => p.Number) + 1;
         }
 
         // Dictionary to track which award results are being shown

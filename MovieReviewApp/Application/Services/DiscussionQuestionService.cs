@@ -1,10 +1,10 @@
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
-public class DiscussionQuestionService(MongoDbService databaseService, ILogger<DiscussionQuestionService> logger)
-    : BaseService<DiscussionQuestion>(databaseService, logger)
+public class DiscussionQuestionService(IRepository<DiscussionQuestion> repository, ILogger<DiscussionQuestionService> logger)
+    : BaseService<DiscussionQuestion>(repository, logger)
 {
     public async Task<List<DiscussionQuestion>> GetActiveQuestionsAsync()
     {

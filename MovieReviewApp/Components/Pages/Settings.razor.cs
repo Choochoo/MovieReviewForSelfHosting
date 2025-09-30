@@ -123,6 +123,10 @@ namespace MovieReviewApp.Components.Pages
 
             // Load people and questions
             People = await PersonService.GetAllOrderedAsync(RespectOrder);
+
+            // Auto-populate Order field for any people missing it (migration for existing database records)
+            await EnsurePersonOrdersAsync();
+
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
 
             // Load current themes
@@ -247,33 +251,109 @@ namespace MovieReviewApp.Components.Pages
 
         private async Task MoveUp(Person person)
         {
+            if (!demoProtection.TryValidateNotDemo("Reorder Person", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
             if (person.Order <= 1) return;
 
-            Person? personAbove = People.FirstOrDefault(p => p.Order == person.Order - 1);
-            if (personAbove != null)
+            try
             {
-                personAbove.Order = person.Order;
-                person.Order = person.Order - 1;
+                Person? personAbove = People.FirstOrDefault(p => p.Order == person.Order - 1);
+                if (personAbove != null)
+                {
+                    personAbove.Order = person.Order;
+                    person.Order = person.Order - 1;
 
-                _ = await PersonService.UpsertAsync(person);
-                _ = await PersonService.UpsertAsync(personAbove);
-                People = await PersonService.GetAllOrderedAsync(RespectOrder);
+                    _ = await PersonService.UpsertAsync(person);
+                    _ = await PersonService.UpsertAsync(personAbove);
+                    People = await PersonService.GetAllOrderedAsync(RespectOrder);
+                }
+            }
+            catch (Exception ex)
+            {
+                apiMessage = $"Error reordering person: {ex.Message}";
+                apiMessageIsError = true;
+                StateHasChanged();
             }
         }
 
         private async Task MoveDown(Person person)
         {
+            if (!demoProtection.TryValidateNotDemo("Reorder Person", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
             if (person.Order >= People.Count) return;
 
-            Person? personBelow = People.FirstOrDefault(p => p.Order == person.Order + 1);
-            if (personBelow != null)
+            try
             {
-                personBelow.Order = person.Order;
-                person.Order = person.Order + 1;
+                Person? personBelow = People.FirstOrDefault(p => p.Order == person.Order + 1);
+                if (personBelow != null)
+                {
+                    personBelow.Order = person.Order;
+                    person.Order = person.Order + 1;
 
-                _ = await PersonService.UpsertAsync(person);
-                _ = await PersonService.UpsertAsync(personBelow);
-                People = await PersonService.GetAllOrderedAsync(RespectOrder);
+                    _ = await PersonService.UpsertAsync(person);
+                    _ = await PersonService.UpsertAsync(personBelow);
+                    People = await PersonService.GetAllOrderedAsync(RespectOrder);
+                }
+            }
+            catch (Exception ex)
+            {
+                apiMessage = $"Error reordering person: {ex.Message}";
+                apiMessageIsError = true;
+                StateHasChanged();
+            }
+        }
+
+        // Person Order Migration - Auto-populate Order field for existing database records
+        private async Task EnsurePersonOrdersAsync()
+        {
+            bool needsUpdate = false;
+
+            // Check if any people are missing Order values (Order = 0 indicates missing/default)
+            List<Person> peopleNeedingOrders = People.Where(p => p.Order == 0).ToList();
+
+            if (peopleNeedingOrders.Any())
+            {
+                // Find the highest existing Order value to continue sequence
+                int maxExistingOrder = People.Where(p => p.Order > 0).DefaultIfEmpty(new Person { Order = 0 }).Max(p => p.Order);
+
+                // Assign sequential order values starting from maxExistingOrder + 1
+                for (int i = 0; i < peopleNeedingOrders.Count; i++)
+                {
+                    peopleNeedingOrders[i].Order = maxExistingOrder + i + 1;
+                    needsUpdate = true;
+                }
+
+                // Save each person back to database to persist Order values
+                foreach (Person person in peopleNeedingOrders)
+                {
+                    try
+                    {
+                        await PersonService.UpsertAsync(person);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error but continue with other people
+                        Console.WriteLine($"Error updating Order for person {person.Name}: {ex.Message}");
+                    }
+                }
+
+                // If we updated any people, reload the list to show updated Order values
+                if (needsUpdate)
+                {
+                    People = await PersonService.GetAllOrderedAsync(RespectOrder);
+                }
             }
         }
 

@@ -1,17 +1,17 @@
 using MovieReviewApp.Models;
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 
 namespace MovieReviewApp.Application.Services;
 
 public class AwardVoteService : BaseService<AwardVote>
 {
-    private readonly AwardQuestionService _awardQuestionService;
+    private readonly Lazy<AwardQuestionService> _awardQuestionService;
 
     public AwardVoteService(
-        MongoDbService databaseService,
+        IRepository<AwardVote> repository,
         ILogger<AwardVoteService> logger,
-        AwardQuestionService awardQuestionService)
-        : base(databaseService, logger)
+        Lazy<AwardQuestionService> awardQuestionService)
+        : base(repository, logger)
     {
         _awardQuestionService = awardQuestionService;
     }
@@ -72,7 +72,7 @@ public class AwardVoteService : BaseService<AwardVote>
 
     public async Task<List<(AwardQuestion Question, int RemainingVotes)>> GetAvailableQuestionsForUserAsync(string userName, Guid awardEventId)
     {
-        List<AwardQuestion> questions = await _awardQuestionService.GetActiveAwardQuestionsAsync();
+        List<AwardQuestion> questions = await _awardQuestionService.Value.GetActiveAwardQuestionsAsync();
         Dictionary<Guid, int> remainingVotes = await GetRemainingVotesForUserAsync(userName, awardEventId, questions);
 
         return questions

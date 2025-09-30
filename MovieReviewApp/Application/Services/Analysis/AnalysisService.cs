@@ -61,8 +61,14 @@ public class AnalysisService
             _logger.LogDebug("Built combined transcript for session {SessionId}: {Length} characters",
                 session.Id, combinedTranscript?.Length ?? 0);
 
-            // Step 2: Generate analysis prompt
+            // Step 2: Generate analysis prompt - check for null transcript
             _logger.LogInformation("[ANALYSIS DEBUG] Step 2: Generating analysis prompt");
+            if (string.IsNullOrEmpty(combinedTranscript))
+            {
+                _logger.LogWarning("No transcript available for session {SessionId}", sessionId);
+                return false;
+            }
+
             string prompt = _promptGenerationService.GenerateAnalysisPrompt(session, combinedTranscript);
 
             // Step 3: Call OpenAI API

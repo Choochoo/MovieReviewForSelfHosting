@@ -1,3 +1,4 @@
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Models;
 using System.Security.Cryptography;
@@ -9,12 +10,15 @@ namespace MovieReviewApp.Application.Services;
 /// <summary>
 /// Service responsible for managing sound clips and their lifecycle.
 /// Handles CRUD operations, blob storage, and sound clip state.
+/// NOTE: This service requires direct MongoDB access for GridFS operations
 /// </summary>
 public class SoundClipService(
-    MongoDbService databaseService,
+    IRepository<SoundClipStorage> repository,
+    MongoDbService db,
     ILogger<SoundClipService> logger)
-    : BaseService<SoundClipStorage>(databaseService, logger)
+    : BaseService<SoundClipStorage>(repository, logger)
 {
+    private readonly MongoDbService _db = db;
 
     // Base CRUD methods are inherited from BaseService<SoundClipStorage>
     // GetAllAsync, GetByIdAsync(Guid), CreateAsync, UpdateAsync, DeleteAsync(Guid)

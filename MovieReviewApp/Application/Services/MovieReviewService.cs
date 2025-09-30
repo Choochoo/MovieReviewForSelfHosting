@@ -1,9 +1,9 @@
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
-public class MovieReviewService(MongoDbService databaseService, ILogger<MovieReviewService> logger)
-    : BaseService<MovieEvent>(databaseService, logger)
+public class MovieReviewService(IRepository<MovieEvent> repository, ILogger<MovieReviewService> logger)
+    : BaseService<MovieEvent>(repository, logger)
 {
 }

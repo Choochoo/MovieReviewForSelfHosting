@@ -1,5 +1,5 @@
 using MongoDB.Driver;
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
@@ -8,8 +8,8 @@ namespace MovieReviewApp.Application.Services;
 /// Service responsible for managing movie sessions and their lifecycle.
 /// Handles CRUD operations, session state management, and processing coordination.
 /// </summary>
-public class MovieSessionService(MongoDbService databaseService, ILogger<MovieSessionService> logger)
-    : BaseService<MovieSession>(databaseService, logger)
+public class MovieSessionService(IRepository<MovieSession> repository, ILogger<MovieSessionService> logger)
+    : BaseService<MovieSession>(repository, logger)
 {
 
     /// <summary>
@@ -34,6 +34,6 @@ public class MovieSessionService(MongoDbService databaseService, ILogger<MovieSe
     /// </summary>
     public async Task<List<MovieSession>> GetSessionsByStatusAsync(ProcessingStatus status)
     {
-        return await _db.FindAsync<MovieSession>(s => s.Status == status);
+        return await _repository.FindAsync(s => s.Status == status);
     }
 }

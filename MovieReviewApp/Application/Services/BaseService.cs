@@ -1,60 +1,57 @@
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
 /// <summary>
 /// Base service class providing common CRUD operations for entities
+/// Uses repository pattern to maintain proper separation of concerns
 /// </summary>
-public abstract class BaseService<T>(MongoDbService databaseService, ILogger logger) where T : BaseModel
+public abstract class BaseService<T>(IRepository<T> repository, ILogger logger) where T : BaseModel
 {
-    protected readonly MongoDbService _db = databaseService;
+    protected readonly IRepository<T> _repository = repository;
     protected readonly ILogger _logger = logger;
 
     public virtual async Task<List<T>> GetAllAsync()
     {
-        return await _db.GetAllAsync<T>();
+        return await _repository.GetAllAsync();
     }
 
     public virtual async Task<T?> GetByIdAsync(Guid id)
     {
-        return await _db.GetByIdAsync<T>(id);
+        return await _repository.GetByIdAsync(id);
+    }
+
+    public virtual async Task<List<T>> GetByDateRangeAsync(DateTime start, DateTime end, string dateFieldName = "StartDate")
+    {
+        return await _repository.GetByDateRangeAsync(start, end, dateFieldName);
+    }
+
+    public virtual async Task<long> GetCountAsync()
+    {
+        return await _repository.CountAsync();
     }
 
     public virtual async Task<T> CreateAsync(T entity)
     {
-        await _db.InsertAsync(entity);
-        _logger.LogInformation("Created {Type}", typeof(T).Name);
-        entity.UpdatedAt = DateTime.UtcNow;
-        return entity;
+        return await _repository.CreateAsync(entity);
     }
 
     public virtual async Task<T> UpdateAsync(T entity)
     {
-        await _db.UpsertAsync(entity);
-        _logger.LogInformation("Updated {Type}", typeof(T).Name);
-        entity.UpdatedAt = DateTime.UtcNow;
-        return entity;
+        return await _repository.UpdateAsync(entity);
     }
 
     public virtual async Task<T> UpsertAsync(T entity)
     {
-        await _db.UpsertAsync(entity);
-        _logger.LogInformation("Upserted {Type}", typeof(T).Name);
-        entity.UpdatedAt = DateTime.UtcNow;
-        return entity;
+        return await _repository.UpsertAsync(entity);
     }
 
     public virtual async Task<bool> DeleteAsync(Guid id)
     {
         try
         {
-            bool result = await _db.DeleteAsync<T>(id);
-            if (result)
-            {
-                _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, id);
-            }
-            return result;
+            return await _repository.DeleteAsync(id);
         }
         catch (Exception ex)
         {
@@ -67,12 +64,7 @@ public abstract class BaseService<T>(MongoDbService databaseService, ILogger log
     {
         try
         {
-            bool result = await _db.DeleteAsync<T>(entity.Id);
-            if (result)
-            {
-                _logger.LogInformation("Deleted {Type} {Id}", typeof(T).Name, entity.Id);
-            }
-            return result;
+            return await _repository.DeleteAsync(entity);
         }
         catch (Exception ex)
         {

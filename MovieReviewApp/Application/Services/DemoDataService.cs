@@ -12,11 +12,20 @@ namespace MovieReviewApp.Application.Services;
 
 public class DemoDataService
 {
-    private readonly MongoDbService _database;
+    private readonly PersonService _personService;
+    private readonly MovieEventService _movieEventService;
+    private readonly MovieSessionService _movieSessionService;
+    private readonly AwardEventService _awardEventService;
+    private readonly AwardQuestionService _awardQuestionService;
+    private readonly AwardVoteService _awardVoteService;
     private readonly Random _random;
     private readonly TmdbService _tmdbService;
     private readonly ImageService _imageService;
     private readonly DemoProtectionService _demoProtectionService;
+    private readonly SettingService _settingService;
+
+    // NOTE: DemoDataService legitimately needs direct DB access for bulk operations
+    private readonly MongoDbService _database;
     private readonly Dictionary<string, TmdbService.TmdbMovieInfo> _movieCache = new();
     private readonly HashSet<string> _usedMovies = new();
     
@@ -102,12 +111,30 @@ public class DemoDataService
         }
     };
 
-    public DemoDataService(MongoDbService database, TmdbService tmdbService, ImageService imageService, DemoProtectionService demoProtectionService)
+    public DemoDataService(
+        PersonService personService,
+        MovieEventService movieEventService,
+        MovieSessionService movieSessionService,
+        AwardEventService awardEventService,
+        AwardQuestionService awardQuestionService,
+        AwardVoteService awardVoteService,
+        MongoDbService database,
+        TmdbService tmdbService,
+        ImageService imageService,
+        DemoProtectionService demoProtectionService,
+        SettingService settingService)
     {
+        _personService = personService;
+        _movieEventService = movieEventService;
+        _movieSessionService = movieSessionService;
+        _awardEventService = awardEventService;
+        _awardQuestionService = awardQuestionService;
+        _awardVoteService = awardVoteService;
         _database = database;
         _tmdbService = tmdbService;
         _imageService = imageService;
         _demoProtectionService = demoProtectionService;
+        _settingService = settingService;
         _random = new Random(42); // Fixed seed for consistent data
     }
 
@@ -198,9 +225,7 @@ public class DemoDataService
     private async Task GeneratePhasesAndMovieEventsAsync(DateTime startDate, DateTime endDate)
     {
         // Get award settings to determine phase length
-        ILogger<SettingService> logger = new LoggerFactory().CreateLogger<SettingService>();
-        SettingService settingService = new SettingService(_database, logger, _demoProtectionService);
-        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        AwardSetting awardSettings = await _settingService.GetAwardSettingsAsync();
         
         int phaseNumber = 1;
         DateTime currentDate = startDate;
@@ -851,9 +876,7 @@ public class DemoDataService
             .ToList();
 
         // Get award settings to determine when awards should occur
-        ILogger<SettingService> logger = new LoggerFactory().CreateLogger<SettingService>();
-        SettingService settingService = new SettingService(_database, logger, _demoProtectionService);
-        AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
+        AwardSetting awardSettings = await _settingService.GetAwardSettingsAsync();
         
         if (!awardSettings.AwardsEnabled)
         {

@@ -1,14 +1,16 @@
 
 using System.Text.Json;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 
 namespace MovieReviewApp.Application.Services;
 
-public class SettingService(MongoDbService databaseService, ILogger<SettingService> logger, DemoProtectionService demoProtectionService)
-    : BaseService<Setting>(databaseService, logger)
+public class SettingService(IRepository<Setting> repository, MongoDbService db, ILogger<SettingService> logger, DemoProtectionService demoProtectionService)
+    : BaseService<Setting>(repository, logger)
 {
+    private readonly MongoDbService _db = db;
 
     public async Task AddOrUpdateSettingAsync(Setting setting)
     {

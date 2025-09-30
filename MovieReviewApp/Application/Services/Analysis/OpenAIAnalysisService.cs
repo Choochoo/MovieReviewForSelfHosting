@@ -128,7 +128,7 @@ public class OpenAIAnalysisService
     /// <summary>
     /// Loads the prompt template for OpenAI analysis.
     /// </summary>
-    private async Task<string> LoadPromptTemplateAsync()
+    private string LoadPromptTemplate()
     {
         // In a real implementation, this could load from a file or database
         // For now, return the hardcoded template

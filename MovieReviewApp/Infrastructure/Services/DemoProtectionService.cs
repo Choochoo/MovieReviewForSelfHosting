@@ -8,10 +8,11 @@ public class DemoProtectionService
     private readonly HashSet<string> _blockedOperations = new()
     {
         "Delete MovieSession",
-        "Delete Person", 
+        "Delete Person",
         "Delete Award",
         "Purge audio files",
-        "Reset database"
+        "Reset database",
+        "Reorder Person"
     };
     
     private const string DemoProtectionMessage = "Uh oh, don't mess with the demo data please! '{0}' is not allowed in demo mode.";

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.StaticFiles;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Conventions;
@@ -9,10 +8,10 @@ using MovieReviewApp.Application.Services;
 using MovieReviewApp.Application.Services.Analysis;
 using MovieReviewApp.Application.Services.Processing;
 using MovieReviewApp.Components;
-using MovieReviewApp.Controllers;
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.FileSystem;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Middleware;
 using MovieReviewApp.Models;
@@ -159,18 +158,25 @@ builder.Services.Configure<FormOptions>(options =>
 
 // Register database service
 builder.Services.AddSingleton<MongoDbService>();
+builder.Services.AddSingleton<PersonAssignmentCacheService>();
+
+// Register repository interfaces (enforces separation of concerns)
+builder.Services.AddScoped(typeof(IRepository<>), typeof(MongoRepository<>));
 
 // Register model services
 builder.Services.AddScoped<AwardEventService>();
 builder.Services.AddScoped<AwardQuestionService>();
 builder.Services.AddScoped<AwardVoteService>();
+
+// Register Lazy<T> factory for circular dependency resolution
+builder.Services.AddScoped(provider => new Lazy<AwardQuestionService>(() => provider.GetRequiredService<AwardQuestionService>()));
 builder.Services.AddScoped<ImageStorageService>();
 builder.Services.AddScoped<MovieEventService>();
 builder.Services.AddScoped<PersonService>();
-builder.Services.AddScoped<PhaseService>();
 builder.Services.AddScoped<SettingService>();
 builder.Services.AddScoped<SiteUpdateService>();
 builder.Services.AddScoped<SoundClipService>();
+builder.Services.AddScoped<TimelineRenderingService>();
 
 builder.Services.AddScoped<MovieReviewService>();
 
@@ -215,14 +221,12 @@ builder.Services.AddScoped<HomePageDataService>();
 // Analysis Services
 builder.Services.AddScoped<AnalysisService>();
 builder.Services.AddScoped<OpenAIAnalysisService>();
-builder.Services.AddScoped<TranscriptProcessingService>();
 
 // Background Services
 builder.Services.AddHostedService<MovieReviewApp.Application.Services.MonthlyDataGenerationService>();
 
 // Processing Services
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
-builder.Services.AddScoped<AudioProcessingStateMachine>();
 builder.Services.AddScoped<FileUploadService>();
 
 // Configure Facebook settings from secure config  
@@ -292,5 +296,16 @@ if (!isIISHosted)
     Console.WriteLine("Press Ctrl+C to stop the application");
     Console.WriteLine();
 }
+
+// Initialize the person assignment cache on startup
+// This builds the complete assignment map in server memory using our linear KISS algorithm
+Console.WriteLine("🎯 Initializing Person Assignment Cache...");
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    PersonAssignmentCacheService cacheService = scope.ServiceProvider.GetRequiredService<PersonAssignmentCacheService>();
+    await cacheService.InitializeCacheOnStartupAsync();
+}
+Console.WriteLine("✅ Person Assignment Cache initialized successfully!");
+Console.WriteLine();
 
 app.Run();

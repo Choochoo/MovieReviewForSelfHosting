@@ -1,11 +1,13 @@
 using MovieReviewApp.Models;
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 
 namespace MovieReviewApp.Application.Services;
 
-public class AwardQuestionService(MongoDbService databaseService, ILogger<AwardQuestionService> logger)
-    : BaseService<AwardQuestion>(databaseService, logger)
+public class AwardQuestionService(IRepository<AwardQuestion> repository, AwardVoteService awardVoteService, MovieEventService movieEventService, ILogger<AwardQuestionService> logger)
+    : BaseService<AwardQuestion>(repository, logger)
 {
+    private readonly AwardVoteService _awardVoteService = awardVoteService;
+    private readonly MovieEventService _movieEventService = movieEventService;
     public async Task<List<AwardQuestion>> GetActiveAwardQuestionsAsync()
     {
         List<AwardQuestion> questions = await GetAllAsync();
@@ -43,8 +45,8 @@ public class AwardQuestionService(MongoDbService databaseService, ILogger<AwardQ
 
     public async Task<List<QuestionResult>> GetQuestionResultsAsync(Guid awardEventId, Guid questionId)
     {
-        List<AwardVote> votes = await _db.GetAllAsync<AwardVote>();
-        List<MovieEvent> events = await _db.GetAllAsync<MovieEvent>();
+        List<AwardVote> votes = await _awardVoteService.GetAllAsync();
+        List<MovieEvent> events = await _movieEventService.GetAllAsync();
 
         List<QuestionResult> results = votes
             .Where(v => v.AwardEventId == awardEventId && v.QuestionId == questionId)

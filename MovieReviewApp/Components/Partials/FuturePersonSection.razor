@@ -1,0 +1,23 @@
+@using MovieReviewApp.Extensions
+
+<div class="timeline-item future-person-item" style="background-color: var(--surface-color); border: 1px dashed var(--accent-primary); color: var(--text-primary); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
+    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+        <i class="bi bi-calendar-event me-2"></i>
+        Future Movie Event
+    </h5>
+    <div class="timeline-content">
+        <div style="color: var(--accent-secondary); font-weight: 600; margin-bottom: 0.5rem;">@EventDate.ToLocalDisplay().ToString("MMMM yyyy")</div>
+        <div style="color: var(--text-primary); font-size: 1.1rem;">
+            <i class="bi bi-person-circle me-2"></i>
+            <strong>@PersonName</strong>'s movie selection
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string PersonName { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public DateTime EventDate { get; set; }
+}

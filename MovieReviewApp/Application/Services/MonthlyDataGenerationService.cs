@@ -44,6 +44,7 @@ public class MonthlyDataGenerationService : BackgroundService
         using IServiceScope scope = _scopeFactory.CreateScope();
         MongoDbService database = scope.ServiceProvider.GetRequiredService<MongoDbService>();
         InstanceTypeService instanceTypeService = scope.ServiceProvider.GetRequiredService<InstanceTypeService>();
+        PersonAssignmentCacheService personCache = scope.ServiceProvider.GetRequiredService<PersonAssignmentCacheService>();
         
         // Only generate demo data for demo instance
         if (!instanceTypeService.ShouldGenerateDemoData())
@@ -74,11 +75,11 @@ public class MonthlyDataGenerationService : BackgroundService
         // Check if it's a new month (1st-3rd of month, to ensure we catch it)
         if (now.Day <= 3)
         {
-            await GenerateNextMonthData(database, firstOfNextMonth);
+            await GenerateNextMonthData(database, personCache, firstOfNextMonth);
         }
     }
 
-    private async Task GenerateNextMonthData(MongoDbService database, DateTime nextMonth)
+    private async Task GenerateNextMonthData(MongoDbService database, PersonAssignmentCacheService personCache, DateTime nextMonth)
     {
         _logger.LogInformation("Generating data for {Month:yyyy-MM}", nextMonth);
 
@@ -113,7 +114,7 @@ public class MonthlyDataGenerationService : BackgroundService
             }
             else
             {
-                await GenerateMovieEventForMonth(database, nextMonth, relevantPhases, recentEvents);
+                await GenerateMovieEventForMonth(database, personCache, nextMonth, relevantPhases, recentEvents);
                 _logger.LogInformation("Generated movie event for {Month:yyyy-MM}", nextMonth);
             }
         }
@@ -127,9 +128,7 @@ public class MonthlyDataGenerationService : BackgroundService
     {
         // Get award settings to determine when award months should occur
         using IServiceScope scope = _scopeFactory.CreateScope();
-        DemoProtectionService demoProtectionService = scope.ServiceProvider.GetRequiredService<DemoProtectionService>();
-        ILogger<SettingService> logger = scope.ServiceProvider.GetRequiredService<ILogger<SettingService>>();
-        SettingService settingService = new SettingService(database, logger, demoProtectionService);
+        SettingService settingService = scope.ServiceProvider.GetRequiredService<SettingService>();
         AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
         
         if (!awardSettings.AwardsEnabled)
@@ -158,9 +157,7 @@ public class MonthlyDataGenerationService : BackgroundService
     {
         // Get award settings to determine which phase this award follows
         using IServiceScope scope = _scopeFactory.CreateScope();
-        DemoProtectionService demoProtectionService = scope.ServiceProvider.GetRequiredService<DemoProtectionService>();
-        ILogger<SettingService> logger = scope.ServiceProvider.GetRequiredService<ILogger<SettingService>>();
-        SettingService settingService = new SettingService(database, logger, demoProtectionService);
+        SettingService settingService = scope.ServiceProvider.GetRequiredService<SettingService>();
         AwardSetting awardSettings = await settingService.GetAwardSettingsAsync();
         
         // Find the phase that this award month follows
@@ -211,27 +208,42 @@ public class MonthlyDataGenerationService : BackgroundService
         await database.UpsertAsync(awardEvent);
     }
 
-    private async Task GenerateMovieEventForMonth(MongoDbService database, DateTime month, List<Phase> phases, List<MovieEvent> existingEvents)
+    private async Task GenerateMovieEventForMonth(MongoDbService database, PersonAssignmentCacheService personCache, DateTime month, List<Phase> phases, List<MovieEvent> existingEvents)
     {
         // Determine which phase this month belongs to
         Phase? currentPhase = phases.FirstOrDefault(p => month >= p.StartDate && month <= p.EndDate);
-        
+
         if (currentPhase == null)
         {
             // Need to create a new phase
             currentPhase = await CreateNewPhase(database, month, phases);
         }
 
-        // Determine whose turn it is in this phase
-        List<MovieEvent> phaseEvents = existingEvents
-            .Where(me => me.PhaseNumber == currentPhase.Number)
-            .OrderBy(me => me.StartDate)
-            .ToList();
+        // Get actual people from database instead of hardcoded names
+        IMongoCollection<Person>? peopleCollection = database.GetCollection<Person>();
+        if (peopleCollection == null)
+        {
+            _logger.LogError("Cannot generate movie event - People collection not found");
+            return;
+        }
 
-        string[] memberNames = { "Marcus Chen", "Sofia Rodriguez", "Amit Patel", "Rebecca Thompson", "Jamal Williams", "Elena Volkov", "David Park" };
-        
-        // Find who should select this month
-        string selector = memberNames[phaseEvents.Count % memberNames.Length];
+        List<Person> people = await peopleCollection.Find(_ => true).ToListAsync();
+        if (!people.Any())
+        {
+            _logger.LogError("Cannot generate movie event - No people found in database");
+            return;
+        }
+
+        // Use cache for person assignment - simple O(1) lookup, zero simulation
+        string? selector = await personCache.GetPersonForMonthAsync(month);
+
+        if (selector == null)
+        {
+            _logger.LogWarning($"No person assignment found in cache for {month:yyyy-MM}");
+            return;
+        }
+
+        _logger.LogInformation($"Person assigned from cache: {selector} for {month:yyyy-MM}");
 
         // Generate movie event
         MovieEvent movieEvent = new MovieEvent
@@ -247,6 +259,7 @@ public class MonthlyDataGenerationService : BackgroundService
         };
 
         await database.UpsertAsync(movieEvent);
+        _logger.LogInformation($"Generated movie event for {selector} in {month:yyyy-MM}");
     }
 
     private async Task<Phase> CreateNewPhase(MongoDbService database, DateTime month, List<Phase> existingPhases)

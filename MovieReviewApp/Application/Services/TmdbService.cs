@@ -9,7 +9,7 @@ public class TmdbService
 {
     private readonly HttpClient _httpClient;
     private readonly SecretsManager _secretsManager;
-    private readonly string _apiKey;
+    private readonly string? _apiKey;
     private const string BaseUrl = "https://api.themoviedb.org/3";
     private const string ImageBaseUrl = "https://image.tmdb.org/t/p/w500";
 
@@ -48,7 +48,7 @@ public class TmdbService
             string responseBody = await response.Content.ReadAsStringAsync();
             JObject searchResult = JObject.Parse(responseBody);
 
-            if (searchResult["results"] == null || !searchResult["results"].HasValues)
+            if (searchResult["results"] == null || !searchResult["results"]!.HasValues)
             {
                 Console.WriteLine($"No TMDB results found for '{movieTitle}'");
                 return null;
@@ -56,12 +56,12 @@ public class TmdbService
 
             // Find best match - prioritize exact title matches and English language
             JToken? bestMatch = null;
-            foreach (JToken result in searchResult["results"])
+            foreach (JToken result in searchResult["results"]!)
             {
                 string? title = result["title"]?.ToString();
                 string? originalTitle = result["original_title"]?.ToString();
                 string? language = result["original_language"]?.ToString();
-                
+
                 // Exact match (case insensitive)
                 if (string.Equals(title, movieTitle, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(originalTitle, movieTitle, StringComparison.OrdinalIgnoreCase))
@@ -69,13 +69,13 @@ public class TmdbService
                     bestMatch = result;
                     break;
                 }
-                
+
                 // Prefer English movies if no exact match found yet
                 if (bestMatch == null && language == "en")
                 {
                     bestMatch = result;
                 }
-                
+
                 // Fall back to first result if nothing better found
                 if (bestMatch == null)
                 {
@@ -89,7 +89,14 @@ public class TmdbService
                 return null;
             }
 
-            int movieId = (int)bestMatch["id"];
+            JToken? idToken = bestMatch["id"];
+            if (idToken == null)
+            {
+                Console.WriteLine($"Invalid movie ID in TMDB response for '{movieTitle}'");
+                return null;
+            }
+
+            int movieId = (int)idToken;
             string matchedTitle = bestMatch["title"]?.ToString() ?? "Unknown";
             string matchedYear = bestMatch["release_date"]?.ToString()?.Substring(0, 4) ?? "";
             Console.WriteLine($"   🎬 Matched '{movieTitle}' → '{matchedTitle}' ({matchedYear}) [ID: {movieId}]");
@@ -115,21 +122,21 @@ public class TmdbService
                 Title = movieDetails["title"]?.ToString() ?? movieTitle,
                 Synopsis = movieDetails["overview"]?.ToString() ?? "",
                 PosterPath = movieDetails["poster_path"]?.ToString(),
-                PosterUrl = !string.IsNullOrEmpty(movieDetails["poster_path"]?.ToString()) 
-                    ? $"{ImageBaseUrl}{movieDetails["poster_path"]}" 
+                PosterUrl = !string.IsNullOrEmpty(movieDetails["poster_path"]?.ToString())
+                    ? $"{ImageBaseUrl}{movieDetails["poster_path"]}"
                     : null,
                 ImdbId = movieDetails["external_ids"]?["imdb_id"]?.ToString(),
                 ImdbUrl = !string.IsNullOrEmpty(movieDetails["external_ids"]?["imdb_id"]?.ToString())
-                    ? $"https://www.imdb.com/title/{movieDetails["external_ids"]["imdb_id"]}"
+                    ? $"https://www.imdb.com/title/{movieDetails["external_ids"]!["imdb_id"]}"
                     : null,
-                ReleaseDate = DateTime.TryParse(movieDetails["release_date"]?.ToString(), out DateTime releaseDate) 
-                    ? releaseDate 
+                ReleaseDate = DateTime.TryParse(movieDetails["release_date"]?.ToString(), out DateTime releaseDate)
+                    ? releaseDate
                     : null,
                 TmdbId = movieId,
                 OriginalTitle = movieDetails["original_title"]?.ToString() ?? movieTitle,
                 Runtime = movieDetails["runtime"]?.ToObject<int?>(),
                 VoteAverage = movieDetails["vote_average"]?.ToObject<double?>(),
-                Genres = movieDetails["genres"]?.Select(g => g["name"]?.ToString()).Where(g => g != null).ToList() ?? new List<string>()
+                Genres = movieDetails["genres"]?.Select(g => g["name"]?.ToString()).OfType<string>().ToList() ?? new List<string>()
             };
         }
         catch (Exception ex)

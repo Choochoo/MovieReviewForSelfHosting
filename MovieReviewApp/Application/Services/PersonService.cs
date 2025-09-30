@@ -1,6 +1,5 @@
-using MovieReviewApp.Infrastructure.Database;
+using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Models;
-using MongoDB.Driver;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -8,20 +7,18 @@ namespace MovieReviewApp.Application.Services;
 /// Service responsible for managing people and their lifecycle.
 /// Handles CRUD operations and person state management.
 /// </summary>
-public class PersonService(MongoDbService databaseService, ILogger<PersonService> logger)
-    : BaseService<Person>(databaseService, logger)
+public class PersonService(IRepository<Person> repository, ILogger<PersonService> logger)
+    : BaseService<Person>(repository, logger)
 {
     public async Task<List<Person>> GetAllOrderedAsync(bool respectOrder)
     {
-        IMongoCollection<Person>? collection = _db.GetCollection<Person>();
-        FilterDefinition<Person> filter = Builders<Person>.Filter.Empty;
-        
+        List<Person> allPeople = await _repository.GetAllAsync();
+
         if (respectOrder)
         {
-            SortDefinition<Person> sort = Builders<Person>.Sort.Ascending(p => p.Order);
-            return await collection.Find(filter).Sort(sort).ToListAsync();
+            return allPeople.OrderBy(p => p.Order).ToList();
         }
-        
-        return await collection.Find(filter).ToListAsync();
+
+        return allPeople;
     }
 }

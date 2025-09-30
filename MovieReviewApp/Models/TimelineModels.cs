@@ -45,4 +45,16 @@ namespace MovieReviewApp.Models
         public int PhaseNumber { get; set; }
         public DateTime AwardDate { get; set; }
     }
+
+    public class FuturePersonTimelineItem : ITimelineItem
+    {
+        public string PersonName { get; }
+        public DateTime Date { get; }
+
+        public FuturePersonTimelineItem(string personName, DateTime date)
+        {
+            PersonName = personName;
+            Date = date;
+        }
+    }
 }

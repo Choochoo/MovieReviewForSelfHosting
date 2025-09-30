@@ -30,13 +30,18 @@ else if (Item is FutureAwardTimelineItem futureAwardItem)
     // Only show it in the timeline if it's not the current award phase
     DateTime awardDate = futureAward.AwardDate;
     DateTime awardMonthEnd = awardDate.AddMonths(1).AddDays(-1);
-    
+
     if (!DateProvider.Now.IsWithinRange(awardDate, awardMonthEnd))
     {
-        <FutureAwardSection PhaseNumber="futureAward.PhaseNumber" 
-                          AwardDate="awardDate" 
+        <FutureAwardSection PhaseNumber="futureAward.PhaseNumber"
+                          AwardDate="awardDate"
                           EligibleMovies="eligibleMovies" />
     }
+}
+else if (Item is FuturePersonTimelineItem futurePersonItem)
+{
+    <FuturePersonSection PersonName="@futurePersonItem.PersonName"
+                        EventDate="@futurePersonItem.Date" />
 }
 
 @code {

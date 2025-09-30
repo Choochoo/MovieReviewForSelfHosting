@@ -125,12 +125,12 @@
             </div>
         }
 
-        @if (Phases?.Any() == true && AwardSettings != null)
+        @if (ChronologicalTimeline?.Any() == true && AwardSettings != null)
         {
             <div class="row mt-4">
                 <div class="col-md-12">
                     <div class="chronological-timeline">
-                        @foreach (ITimelineItem timelineItem in GetChronologicalTimeline())
+                        @foreach (ITimelineItem timelineItem in ChronologicalTimeline)
                         {
                             <TimelineItemRenderer Item="timelineItem"
                                                 CurrentEvent="CurrentEvent"
