@@ -21,7 +21,18 @@
                 {
                     try
                     {
-                        <div><b>Person:</b> @MovieEvent.Person</div>
+                        <div class="form-group">
+                            <label><b>Person:</b></label>
+                            <select @bind="_selectedPerson" class="form-control">
+                                @if (_allPeople != null)
+                                {
+                                    @foreach (Person person in _allPeople.OrderBy(p => p.Order))
+                                    {
+                                        <option value="@person.Name">@person.Name</option>
+                                    }
+                                }
+                            </select>
+                        </div>
                         <div class="form-group">
                             <label><b>Movie: </b></label>
                             <input type="text" @bind="@MovieEvent.Movie" class="form-control" />

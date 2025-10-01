@@ -1374,6 +1374,85 @@ label, .form-label {
 }
 
 /* ============================= */
+/* TIMELINE COMPONENT STYLES     */
+/* ============================= */
+
+/* Base timeline item - shared styles for all timeline items */
+.timeline-item {
+  background-color: var(--surface-color);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Timeline item variations - borders */
+.timeline-item-award {
+  border: 2px solid var(--accent-primary);
+}
+
+.timeline-item-phase {
+  border: 1px solid var(--border-color);
+}
+
+.timeline-item-future-person {
+  border: 1px dashed var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.timeline-item-future-award {
+  border: 1px dashed var(--accent-orange);
+  color: var(--text-primary);
+}
+
+/* Timeline headings */
+.timeline-heading-primary {
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+}
+
+.timeline-heading-orange {
+  color: var(--accent-orange);
+  margin-bottom: 1rem;
+}
+
+.timeline-heading-secondary {
+  color: var(--accent-secondary);
+  margin-bottom: 1rem;
+}
+
+/* Timeline content elements */
+.timeline-date {
+  color: var(--accent-secondary);
+  font-weight: 600;
+}
+
+.timeline-person {
+  color: var(--text-primary);
+}
+
+.timeline-content-inner {
+  padding: 0.75rem;
+  background-color: var(--background-secondary);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Movie badge styles */
+.movie-badge {
+  background-color: var(--accent-tertiary);
+  color: var(--surface-color);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.movie-badge-primary {
+  background-color: var(--accent-primary);
+  color: var(--text-primary);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* ============================= */
 /* HISTORY PAGE STYLES           */
 /* ============================= */
 

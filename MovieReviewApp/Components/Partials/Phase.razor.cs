@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using MovieReviewApp.Models;
 using MovieReviewApp.Application.Services;
+using MovieReviewApp.Extensions;
 using MovieReviewApp.Infrastructure.Configuration;
 using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Infrastructure.Services;
@@ -39,12 +40,23 @@ namespace MovieReviewApp.Components.Partials
         [Inject]
         private PromptService PromptService { get; set; } = default!;
 
+        [Inject]
+        private PersonService PersonService { get; set; } = default!;
+
+        [Inject]
+        private PersonAssignmentCacheService PersonAssignmentCache { get; set; } = default!;
+
         private bool showMarkdownPreview = false;
         private bool isLoading = false;
         private bool isSpicing = false;
         private bool spiceItUp = false;
         private string selectedStyle = "";
         private int selectedYear = DateTime.Now.Year;
+
+        // Month swap fields
+        private List<Person>? _allPeople;
+        private string? _originalPerson;
+        private string? _selectedPerson;
 
         // Property to handle datetime-local input binding properly
         private DateTime? MeetupTimeForInput
@@ -92,6 +104,11 @@ namespace MovieReviewApp.Components.Partials
                 {
                     await LoadSynopsisAsync();
                 }
+
+                // Load all people for swap dropdown
+                _allPeople = await PersonService.GetAllAsync();
+                _originalPerson = MovieEvent?.Person;
+                _selectedPerson = MovieEvent?.Person;
             }
             catch (Exception ex)
             {
@@ -265,6 +282,10 @@ namespace MovieReviewApp.Components.Partials
                     {
                         MovieEvent.MeetupTime = DateTime.SpecifyKind(MovieEvent.EndDate.Date.AddHours(18), DateTimeKind.Local);
                     }
+
+                    // Reset swap tracking when entering edit mode
+                    _originalPerson = MovieEvent.Person;
+                    _selectedPerson = MovieEvent.Person;
                 }
             }
             catch (Exception ex)
@@ -337,7 +358,37 @@ namespace MovieReviewApp.Components.Partials
                         await ShowDemoNotification(saveErrorMessage);
                         return;
                     }
-                    
+
+                    // Handle person swap if person was changed
+                    if (_selectedPerson != _originalPerson && !string.IsNullOrEmpty(_selectedPerson))
+                    {
+                        // Find where the new person is currently assigned
+                        DateTime? targetMonth = await FindMonthForPersonAsync(_selectedPerson);
+
+                        if (targetMonth.HasValue)
+                        {
+                            // Perform swap (handles both MovieEvent creates/updates)
+                            await MovieEventService.SwapMonthAssignmentsAsync(MovieEvent.StartDate, targetMonth.Value);
+
+                            // Reload the event to get updated data
+                            MovieEvent? updatedEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
+                            if (updatedEvent != null)
+                            {
+                                MovieEvent = updatedEvent;
+                                MovieEvent.IsEditing = false;
+                                _originalPerson = MovieEvent.Person;
+                                _selectedPerson = MovieEvent.Person;
+                            }
+                            else
+                            {
+                                MovieEvent.IsEditing = false;
+                            }
+
+                            StateHasChanged();
+                            return; // Exit early - swap already handled save
+                        }
+                    }
+
                     await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
 
                     MovieEvent? updatedMovieEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
@@ -352,7 +403,7 @@ namespace MovieReviewApp.Components.Partials
                     {
                         MovieEvent.IsEditing = false;
                     }
-                    
+
                     StateHasChanged();
                 }
             }
@@ -378,6 +429,41 @@ namespace MovieReviewApp.Components.Partials
         {
             showDemoNotification = false;
             StateHasChanged();
+        }
+
+        /// <summary>
+        /// Finds the month where the specified person is currently assigned in the cache.
+        /// Returns null if person is not found in any future month.
+        /// </summary>
+        private async Task<DateTime?> FindMonthForPersonAsync(string personName)
+        {
+            if (string.IsNullOrEmpty(personName) || MovieEvent == null)
+                return null;
+
+            // Get all cache assignments
+            IReadOnlyDictionary<DateTime, string> allAssignments = await PersonAssignmentCache.GetAllAssignmentsAsync();
+
+            // Find the first future month where this person is assigned
+            DateTime currentMonth = MovieEvent.StartDate.StartOfMonth();
+
+            foreach (KeyValuePair<DateTime, string> assignment in allAssignments)
+            {
+                // Skip current month, awards months, and past months
+                if (assignment.Key == currentMonth)
+                    continue;
+
+                if (assignment.Value.StartsWith("Awards Event"))
+                    continue;
+
+                if (assignment.Key < DateTime.Now.StartOfMonth())
+                    continue;
+
+                // Check if this month is assigned to the person we're looking for
+                if (assignment.Value == personName)
+                    return assignment.Key;
+            }
+
+            return null;
         }
     }
 }

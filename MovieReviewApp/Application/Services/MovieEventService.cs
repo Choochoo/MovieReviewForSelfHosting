@@ -1,4 +1,5 @@
 using MovieReviewApp.Infrastructure.Repositories;
+using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Utilities;
@@ -11,12 +12,14 @@ public class MovieEventService(
     ILogger<MovieEventService> logger,
     PersonAssignmentCacheService personAssignmentCache,
     SettingService settingService,
-    PersonService personService)
+    PersonService personService,
+    DemoProtectionService demoProtection)
     : BaseService<MovieEvent>(repository, logger)
 {
     private readonly PersonAssignmentCacheService _personAssignmentCache = personAssignmentCache;
     private readonly SettingService _settingService = settingService;
     private readonly PersonService _personService = personService;
+    private readonly DemoProtectionService _demoProtection = demoProtection;
 
     /// <summary>
     /// Gets an existing movie event for the specified month, or creates a placeholder if it doesn't exist.
@@ -101,5 +104,69 @@ public class MovieEventService(
             _logger.LogError(ex, "Error getting movie names for phases {Phases}", string.Join(",", phaseNumbers));
             return new List<string>();
         }
+    }
+
+    /// <summary>
+    /// Swaps person assignments between two months by creating/updating MovieEvent records.
+    /// MovieEvent records override the cache, persisting swaps across server restarts.
+    /// </summary>
+    /// <param name="month1">First month to swap</param>
+    /// <param name="month2">Second month to swap</param>
+    public async Task SwapMonthAssignmentsAsync(DateTime month1, DateTime month2)
+    {
+        // Demo protection
+        _demoProtection.ValidateNotDemo("Swap Month Assignment");
+
+        // Validate: cannot swap same month
+        if (month1.StartOfMonth() == month2.StartOfMonth())
+        {
+            throw new ArgumentException("Cannot swap a month with itself");
+        }
+
+        // Get cache assignments
+        string? person1 = await _personAssignmentCache.GetPersonForMonthAsync(month1);
+        string? person2 = await _personAssignmentCache.GetPersonForMonthAsync(month2);
+
+        // Validate: both months must exist in cache
+        if (string.IsNullOrEmpty(person1))
+        {
+            throw new InvalidOperationException($"Month {month1:yyyy-MM} not found in assignment cache");
+        }
+
+        if (string.IsNullOrEmpty(person2))
+        {
+            throw new InvalidOperationException($"Month {month2:yyyy-MM} not found in assignment cache");
+        }
+
+        // Validate: cannot swap awards months
+        if (person1.StartsWith("Awards Event") || person2.StartsWith("Awards Event"))
+        {
+            throw new InvalidOperationException("Cannot swap awards months");
+        }
+
+        // Get or create MovieEvents for both months
+        MovieEvent? event1 = await GetOrCreateForMonthAsync(month1);
+        MovieEvent? event2 = await GetOrCreateForMonthAsync(month2);
+
+        if (event1 == null || event2 == null)
+        {
+            throw new InvalidOperationException("Failed to create/retrieve MovieEvent records for swap");
+        }
+
+        // Swap Person fields (preserving all other data like Movie, IMDb, etc.)
+        string tempPerson = event1.Person!;
+        event1.Person = event2.Person!;
+        event2.Person = tempPerson;
+
+        // Update both events in database
+        event1.UpdatedAt = DateTime.UtcNow;
+        event2.UpdatedAt = DateTime.UtcNow;
+
+        await UpdateAsync(event1);
+        await UpdateAsync(event2);
+
+        _logger.LogInformation(
+            "Swapped month assignments: {Month1:yyyy-MM} ({Person1}) ↔ {Month2:yyyy-MM} ({Person2})",
+            month1, event1.Person, month2, event2.Person);
     }
 } 

@@ -12,7 +12,8 @@ public class DemoProtectionService
         "Delete Award",
         "Purge audio files",
         "Reset database",
-        "Reorder Person"
+        "Reorder Person",
+        "Swap Month Assignment"
     };
     
     private const string DemoProtectionMessage = "Uh oh, don't mess with the demo data please! '{0}' is not allowed in demo mode.";
