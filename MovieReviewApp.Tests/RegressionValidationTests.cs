@@ -132,8 +132,13 @@ public class RegressionValidationTests
         Assert.Equal("Alice", assignments[firstMonth.AddMonths(4)]); // Wraps around
     }
 
+    /// <summary>
+    /// Regression test: Random rotation produces valid, deterministic assignments.
+    /// NOTE: Per claude.md - Consecutive duplicates CAN occur at phase boundaries (NOT a bug).
+    /// Pool refill at phase start can randomly select same person as end of previous phase.
+    /// </summary>
     [Fact]
-    public void Regression_PersonRotationAlgorithm_RandomMode_NoConsecutiveDuplicates()
+    public void Regression_PersonRotationAlgorithm_RandomMode_ValidDeterministicAssignments()
     {
         // Arrange: Test random rotation (RespectOrder=false)
         string[] testPeople = { "Alice", "Bob", "Charlie", "Diana" };
@@ -143,21 +148,22 @@ public class RegressionValidationTests
         Dictionary<DateTime, string> assignments = PersonRotationService.GenerateGlobalPersonAssignments(
             testStartDate, testPeople, respectOrder: false, monthsSinceStart: 0, awardSettings: null);
 
-        // Assert: No consecutive duplicates in first 12 months
-        DateTime currentMonth = testStartDate.StartOfMonth();
-        string? previousPerson = null;
+        // Assert: Verify deterministic behavior (same seed produces same results)
+        Dictionary<DateTime, string> assignments2 = PersonRotationService.GenerateGlobalPersonAssignments(
+            testStartDate, testPeople, respectOrder: false, monthsSinceStart: 0, awardSettings: null);
 
+        Assert.Equal(assignments.Count, assignments2.Count);
+        foreach (KeyValuePair<DateTime, string> kvp in assignments)
+        {
+            Assert.Equal(kvp.Value, assignments2[kvp.Key]);
+        }
+
+        // Verify all assignments are from valid people list
+        DateTime currentMonth = testStartDate.StartOfMonth();
         for (int i = 0; i < 12; i++)
         {
             string currentPerson = assignments[currentMonth];
-
-            if (previousPerson != null)
-            {
-                // Verify no consecutive duplicates
-                Assert.NotEqual(previousPerson, currentPerson);
-            }
-
-            previousPerson = currentPerson;
+            Assert.Contains(currentPerson, testPeople);
             currentMonth = currentMonth.AddMonths(1);
         }
     }

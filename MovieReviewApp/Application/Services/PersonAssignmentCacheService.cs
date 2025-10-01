@@ -29,7 +29,7 @@ public class PersonAssignmentCacheService
     /// Gets person assigned to a specific month. Thread-safe with lazy initialization.
     /// Generates cache on first call, subsequent calls are O(1) lookups.
     /// </summary>
-    public async Task<string?> GetPersonForMonthAsync(DateTime month)
+    public virtual async Task<string?> GetPersonForMonthAsync(DateTime month)
     {
         if (_cache == null)
         {
@@ -46,7 +46,7 @@ public class PersonAssignmentCacheService
     /// Returns IReadOnlyDictionary to prevent external modification.
     /// Performance: 15,000× faster than 240 individual async calls.
     /// </summary>
-    public async Task<IReadOnlyDictionary<DateTime, string>> GetAllAssignmentsAsync()
+    public virtual async Task<IReadOnlyDictionary<DateTime, string>> GetAllAssignmentsAsync()
     {
         if (_cache == null)
         {
@@ -60,7 +60,7 @@ public class PersonAssignmentCacheService
     /// Forces immediate cache initialization on app startup.
     /// This builds the complete assignment map in server memory.
     /// </summary>
-    public async Task InitializeCacheOnStartupAsync()
+    public virtual async Task InitializeCacheOnStartupAsync()
     {
         if (_cache == null)
         {

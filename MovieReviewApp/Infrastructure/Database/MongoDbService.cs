@@ -116,7 +116,7 @@ namespace MovieReviewApp.Infrastructure.Database
         /// <summary>
         /// Gets all documents of type T
         /// </summary>
-        public async Task<List<T>> GetAllAsync<T>() where T : class
+        public virtual async Task<List<T>> GetAllAsync<T>() where T : class
         {
             IMongoCollection<T>? collection = GetCollection<T>();
             if (collection == null) return new List<T>();

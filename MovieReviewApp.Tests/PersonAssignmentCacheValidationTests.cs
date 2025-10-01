@@ -18,8 +18,10 @@ public class PersonAssignmentCacheValidationTests
     public async Task Cache_ShouldContainDataForFutureMonths()
     {
         // Arrange
-        Mock<MongoDbService> mockDb = new Mock<MongoDbService>(Mock.Of<ILogger<MongoDbService>>());
-        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = new Mock<ILogger<PersonAssignmentCacheService>>();
+        MongoDbService mockDbService = Mock.Of<MongoDbService>();
+        Mock<MongoDbService> mockDb = Mock.Get(mockDbService);
+        ILogger<PersonAssignmentCacheService> mockLoggerService = Mock.Of<ILogger<PersonAssignmentCacheService>>();
+        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = Mock.Get(mockLoggerService);
 
         DateTime clubStartDate = new DateTime(2024, 3, 1);
         DateTime now = DateTime.Now;
@@ -97,8 +99,10 @@ public class PersonAssignmentCacheValidationTests
     public async Task Cache_ShouldHandleAwardsMonthsInFuture()
     {
         // Arrange
-        Mock<MongoDbService> mockDb = new Mock<MongoDbService>(Mock.Of<ILogger<MongoDbService>>());
-        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = new Mock<ILogger<PersonAssignmentCacheService>>();
+        MongoDbService mockDbService = Mock.Of<MongoDbService>();
+        Mock<MongoDbService> mockDb = Mock.Get(mockDbService);
+        ILogger<PersonAssignmentCacheService> mockLoggerService = Mock.Of<ILogger<PersonAssignmentCacheService>>();
+        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = Mock.Get(mockLoggerService);
 
         DateTime clubStartDate = new DateTime(2024, 3, 1);
 
@@ -169,8 +173,10 @@ public class PersonAssignmentCacheValidationTests
     public async Task Cache_ShouldContainEnoughDataForTimeline()
     {
         // Arrange
-        Mock<MongoDbService> mockDb = new Mock<MongoDbService>(Mock.Of<ILogger<MongoDbService>>());
-        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = new Mock<ILogger<PersonAssignmentCacheService>>();
+        MongoDbService mockDbService = Mock.Of<MongoDbService>();
+        Mock<MongoDbService> mockDb = Mock.Get(mockDbService);
+        ILogger<PersonAssignmentCacheService> mockLoggerService = Mock.Of<ILogger<PersonAssignmentCacheService>>();
+        Mock<ILogger<PersonAssignmentCacheService>> mockLogger = Mock.Get(mockLoggerService);
 
         DateTime clubStartDate = new DateTime(2024, 3, 1);
 

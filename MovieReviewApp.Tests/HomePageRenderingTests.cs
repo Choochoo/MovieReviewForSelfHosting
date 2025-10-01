@@ -21,40 +21,43 @@ public class HomePageRenderingTests
 
     public HomePageRenderingTests()
     {
-        // Create mock services with proper dependencies
-        Mock<ILogger<HomePageDataService>> mockHomePageLogger = new Mock<ILogger<HomePageDataService>>();
-        Mock<SettingService> mockSettingService = new Mock<SettingService>();
-        Mock<PersonService> mockPersonService = new Mock<PersonService>();
-        Mock<MovieEventService> mockMovieEventService = new Mock<MovieEventService>();
-        Mock<AwardEventService> mockAwardEventService = new Mock<AwardEventService>();
-        Mock<AwardQuestionService> mockAwardQuestionService = new Mock<AwardQuestionService>();
-        Mock<DiscussionQuestionService> mockDiscussionQuestionService = new Mock<DiscussionQuestionService>();
-        Mock<AwardVoteService> mockAwardVoteService = new Mock<AwardVoteService>();
+        // Create mock services using Mock.Of<> to avoid constructor issues
+        ILogger<HomePageDataService> mockHomePageLogger = Mock.Of<ILogger<HomePageDataService>>();
+        SettingService mockSettingService = Mock.Of<SettingService>();
+        PersonService mockPersonService = Mock.Of<PersonService>();
+        MovieEventService mockMovieEventService = Mock.Of<MovieEventService>();
+        AwardEventService mockAwardEventService = Mock.Of<AwardEventService>();
+        AwardQuestionService mockAwardQuestionService = Mock.Of<AwardQuestionService>();
+        DiscussionQuestionService mockDiscussionQuestionService = Mock.Of<DiscussionQuestionService>();
+        AwardVoteService mockAwardVoteService = Mock.Of<AwardVoteService>();
+        SiteUpdateService mockSiteUpdateService = Mock.Of<SiteUpdateService>();
 
-        _mockSiteUpdateService = new Mock<SiteUpdateService>();
+        _mockSiteUpdateService = Mock.Get(mockSiteUpdateService);
 
         _mockHomePageDataService = new Mock<HomePageDataService>(
-            mockHomePageLogger.Object,
-            mockSettingService.Object,
-            mockPersonService.Object,
-            mockMovieEventService.Object,
-            mockAwardEventService.Object,
-            mockAwardQuestionService.Object,
-            mockDiscussionQuestionService.Object,
-            _mockSiteUpdateService.Object,
-            mockAwardVoteService.Object
+            mockHomePageLogger,
+            mockSettingService,
+            mockPersonService,
+            mockMovieEventService,
+            mockAwardEventService,
+            mockAwardQuestionService,
+            mockDiscussionQuestionService,
+            mockSiteUpdateService,
+            mockAwardVoteService
         );
 
-        Mock<ILogger<TimelineRenderingService>> mockTimelineLogger = new Mock<ILogger<TimelineRenderingService>>();
+        ILogger<TimelineRenderingService> mockTimelineLogger = Mock.Of<ILogger<TimelineRenderingService>>();
+        PersonAssignmentCacheService mockCache = Mock.Of<PersonAssignmentCacheService>();
+
         _mockTimelineRenderingService = new Mock<TimelineRenderingService>(
-            It.IsAny<PersonAssignmentCacheService>(),
-            mockMovieEventService.Object,
-            mockSettingService.Object,
-            mockPersonService.Object,
-            mockTimelineLogger.Object
+            mockCache,
+            mockMovieEventService,
+            mockSettingService,
+            mockPersonService,
+            mockTimelineLogger
         );
 
-        _mockPersonAssignmentCache = new Mock<PersonAssignmentCacheService>();
+        _mockPersonAssignmentCache = Mock.Get(mockCache);
     }
 
     [Fact]
@@ -116,7 +119,7 @@ public class HomePageRenderingTests
     }
 
     [Fact]
-    public async Task OnInitializedAsync_PreservesExistingFunctionality_CurrentEvent()
+    public void OnInitializedAsync_PreservesExistingFunctionality_CurrentEvent()
     {
         // Arrange: Mock HomePageDataService to return test data
         DateTime now = DateTime.UtcNow;
@@ -167,7 +170,7 @@ public class HomePageRenderingTests
     }
 
     [Fact]
-    public async Task OnInitializedAsync_PreservesExistingFunctionality_NextEvent()
+    public void OnInitializedAsync_PreservesExistingFunctionality_NextEvent()
     {
         // Arrange: Mock HomePageDataService to return test data with NextEvent
         DateTime now = DateTime.UtcNow;

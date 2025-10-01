@@ -307,8 +307,10 @@ public HomePageDataService(SettingService settingService) { ... }
 ### General
 - ❌ **NEVER** modify Program.cs service registration order
 - ❌ **NEVER** use `var` keyword (enforced as build error)
+- ❌ **NEVER** edit test files in MovieReviewApp.Tests (banned permanently)
 - ✅ **ALWAYS** run tests before committing
 - ✅ **ALWAYS** use MongoDbService for data access (instance isolation)
+- ✅ **ALWAYS** fix application code to make tests pass, never modify tests
 
 ---
 

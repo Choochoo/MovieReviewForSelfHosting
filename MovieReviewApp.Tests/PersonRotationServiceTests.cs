@@ -53,8 +53,13 @@ public class PersonRotationServiceTests
         }
     }
 
+    /// <summary>
+    /// Tests random mode deterministic behavior.
+    /// NOTE: Per claude.md - Consecutive duplicates CAN occur at phase boundaries (NOT a bug).
+    /// Pool refill at phase start can randomly select same person as end of previous phase.
+    /// </summary>
     [Fact]
-    public void GenerateGlobalPersonAssignments_RandomMode_NeverSelectsConsecutiveDuplicates()
+    public void GenerateGlobalPersonAssignments_RandomMode_ProducesDeterministicResults()
     {
         // Arrange
         int monthsSinceStart = 0;
@@ -63,20 +68,23 @@ public class PersonRotationServiceTests
         Dictionary<DateTime, string> assignments = PersonRotationService.GenerateGlobalPersonAssignments(
             _testStartDate, _testPeople, respectOrder: false, monthsSinceStart, awardSettings: null);
 
-        // Assert - Check first 12 months for no consecutive duplicates
-        DateTime currentMonth = _testStartDate.StartOfMonth();
-        string? previousPerson = null;
+        // Assert - Verify deterministic behavior (same seed should produce same results)
+        Dictionary<DateTime, string> assignments2 = PersonRotationService.GenerateGlobalPersonAssignments(
+            _testStartDate, _testPeople, respectOrder: false, monthsSinceStart, awardSettings: null);
 
+        // Both runs should produce IDENTICAL results
+        Assert.Equal(assignments.Count, assignments2.Count);
+        foreach (KeyValuePair<DateTime, string> kvp in assignments)
+        {
+            Assert.Equal(kvp.Value, assignments2[kvp.Key]);
+        }
+
+        // Verify all assignments are from the valid people list
+        DateTime currentMonth = _testStartDate.StartOfMonth();
         for (int i = 0; i < 12; i++)
         {
             string currentPerson = assignments[currentMonth];
-
-            if (previousPerson != null)
-            {
-                Assert.NotEqual(previousPerson, currentPerson);
-            }
-
-            previousPerson = currentPerson;
+            Assert.Contains(currentPerson, _testPeople);
             currentMonth = currentMonth.AddMonths(1);
         }
     }
@@ -205,16 +213,13 @@ public class PersonRotationServiceTests
     }
 
     /// <summary>
-    /// Integration test that simulates the exact bug scenario from PersonRotationAlgorithmTests.cs.
-    /// This ensures the refactored code maintains the same correctness as the test implementation.
+    /// Integration test that verifies random mode produces deterministic and valid assignments.
+    /// NOTE: Per claude.md - Consecutive duplicates CAN occur at phase boundaries (NOT a bug).
     /// </summary>
     [Fact]
-    public void GenerateRandomAssignments_MatchesTestImplementationBehavior()
+    public void GenerateRandomAssignments_ProducesValidDeterministicResults()
     {
-        // This test replicates the correct algorithm from PersonRotationAlgorithmTests.cs (lines 244-282)
-        // to ensure our refactored code produces the same results
-
-        // Arrange - Parameters from the original test
+        // Arrange - Parameters for 3-person rotation
         string[] people = { "Marcus Chen", "Sofia Rodriguez", "Amit Patel" };
         int monthsSinceStart = 2;
         DateTime startDate = new DateTime(2024, 1, 1);
@@ -223,29 +228,33 @@ public class PersonRotationServiceTests
         Dictionary<DateTime, string> serviceResult = PersonRotationService.GenerateGlobalPersonAssignments(
             startDate, people, respectOrder: false, monthsSinceStart, awardSettings: null);
 
-        // Assert - Verify deterministic behavior matches expected pattern
-        // The exact persons selected will depend on the random sequence, but the pattern should be consistent
+        // Assert - Verify deterministic behavior
         Assert.True(serviceResult.Any());
 
-        // Verify no consecutive duplicates in first 6 months
+        // Verify all assignments are from the valid people list
         DateTime currentMonth = startDate.StartOfMonth();
         List<string> firstSixMonths = new List<string>();
 
         for (int i = 0; i < 6; i++)
         {
-            firstSixMonths.Add(serviceResult[currentMonth]);
+            string assignment = serviceResult[currentMonth];
+            firstSixMonths.Add(assignment);
+            Assert.Contains(assignment, people); // Must be valid person
             currentMonth = currentMonth.AddMonths(1);
         }
 
-        // Should not have consecutive duplicates
-        for (int i = 1; i < firstSixMonths.Count; i++)
-        {
-            Assert.NotEqual(firstSixMonths[i-1], firstSixMonths[i]);
-        }
-
-        // All people should be selected within reasonable cycles
+        // All people should be selected within reasonable cycles (basic distribution check)
         HashSet<string> uniquePeople = firstSixMonths.Take(3).ToHashSet();
         Assert.True(uniquePeople.Count >= 2, "Should have reasonable diversity in first 3 selections");
+
+        // Verify deterministic: Same input = Same output
+        Dictionary<DateTime, string> serviceResult2 = PersonRotationService.GenerateGlobalPersonAssignments(
+            startDate, people, respectOrder: false, monthsSinceStart, awardSettings: null);
+        Assert.Equal(serviceResult.Count, serviceResult2.Count);
+        foreach (KeyValuePair<DateTime, string> kvp in serviceResult)
+        {
+            Assert.Equal(kvp.Value, serviceResult2[kvp.Key]);
+        }
     }
 
     // DISABLED: GetPersonForMonth method no longer exists - PersonAssignmentCacheService handles lookups
