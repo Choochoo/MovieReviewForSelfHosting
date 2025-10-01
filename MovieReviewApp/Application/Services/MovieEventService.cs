@@ -70,4 +70,36 @@ public class MovieEventService(
 
         return newEvent;
     }
+
+    /// <summary>
+    /// Gets movie titles for the specified phase numbers.
+    /// Used for awards event eligible movies display.
+    /// </summary>
+    /// <param name="phaseNumbers">Array of phase numbers (e.g., [3, 4])</param>
+    /// <returns>List of movie titles from those phases</returns>
+    public async Task<List<string>> GetMovieNamesByPhasesAsync(int[] phaseNumbers)
+    {
+        try
+        {
+            // Convert to list for MongoDB query compatibility
+            List<int> phaseList = phaseNumbers.ToList();
+
+            // Query MongoDB for MovieEvents where PhaseNumber is in the list
+            List<MovieEvent> events = await _repository.FindAsync(e =>
+                e.PhaseNumber.HasValue &&
+                phaseList.Contains(e.PhaseNumber.Value) &&
+                !string.IsNullOrEmpty(e.Movie));
+
+            // Extract movie titles and return
+            return events
+                .Select(e => e.Movie!)
+                .Distinct()
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting movie names for phases {Phases}", string.Join(",", phaseNumbers));
+            return new List<string>();
+        }
+    }
 } 

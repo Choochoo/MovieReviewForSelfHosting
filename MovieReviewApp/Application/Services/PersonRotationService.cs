@@ -1,5 +1,6 @@
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Constants;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -9,7 +10,6 @@ namespace MovieReviewApp.Application.Services;
 /// </summary>
 public static class PersonRotationService
 {
-
     /// <summary>
     /// Generates global person assignments for the entire timeline from StartDate.
     /// This ensures continuous rotation without phase resets.
@@ -52,9 +52,7 @@ public static class PersonRotationService
         AwardSetting? awardSettings)
     {
         DateTime currentMonth = timelineStart;
-        // For testing purposes, limit to reasonable timeframe to prevent test timeouts
-        // In production, cache service calls this once at startup and caches results
-        DateTime endDate = timelineStart.AddMonths(60); // 5 years is sufficient for tests
+        DateTime endDate = DateTime.Now.AddMonths(CacheConstants.WINDOW_MONTHS);
         int globalEventIndex = 0;
         int eventsInCurrentPhase = 0;
         int currentPhase = 1;
@@ -97,7 +95,7 @@ public static class PersonRotationService
     /// Generates assignments using random pool selection (RespectOrder=false).
     /// KISS Linear Algorithm: ONE timelineRand.Next() call per person event.
     /// Event 1 → call #1, Event 2 → call #2, etc. Awards months have no random calls.
-    /// Cache contains ALL assignments from start date to +20 years.
+    /// Cache contains ALL assignments from start date to +2 years from start.
     /// </summary>
     private static void GenerateRandomAssignments(
         Dictionary<DateTime, string> assignments,
@@ -113,20 +111,19 @@ public static class PersonRotationService
 
         List<string> pool = peopleNames.ToList(); // Initialize pool in Order field sequence
         DateTime currentMonth = timelineStart;
-        // For testing purposes, limit to reasonable timeframe to prevent test timeouts
-        // In production, cache service calls this once at startup and caches results
-        DateTime endDate = timelineStart.AddMonths(240); // 5 years is sufficient for tests
+        DateTime endDate = DateTime.Now.AddMonths(CacheConstants.WINDOW_MONTHS);
         int globalEventIndex = 0;
         int currentPhase = 1;
         int eventsInCurrentPhase = 0;
         int awardsEventCounter = 1;
 
         // Full console logging enabled for complete transparency
-        Console.WriteLine($"\n[PersonRotation] Generating person assignments from {timelineStart:yyyy-MM} for 20 years");
+        Console.WriteLine($"\n[PersonRotation] Generating person assignments from {timelineStart:yyyy-MM} to {endDate:yyyy-MM}");
         Console.WriteLine($"[PersonRotation] People: [{string.Join(", ", peopleNames)}]");
         Console.WriteLine($"[PersonRotation] Awards: {(awardSettings?.AwardsEnabled == true ? $"Enabled, every {awardSettings.PhasesBeforeAward} phases" : "Disabled")}\n");
 
-        while (currentMonth <= endDate)
+        // Continue until endDate OR until we complete any partial phase we started
+        while (currentMonth <= endDate || eventsInCurrentPhase > 0)
         {
             // Check if we've completed a phase and need awards month
             if (eventsInCurrentPhase == peopleNames.Count)
@@ -142,17 +139,22 @@ public static class PersonRotationService
                     awardsEventCounter++;
                     currentMonth = currentMonth.AddMonths(1);
 
-                    // Safety check
-                    if (currentMonth > endDate) break;
+                    // Safety check: only break if we're past endDate AND not mid-phase
+                    if (currentMonth > endDate && eventsInCurrentPhase == 0) break;
                 }
 
                 currentPhase++;
                 eventsInCurrentPhase = 0;
             }
 
-            // Refill pool when empty
+            // Refill pool when empty (start new phase)
             if (pool.Count == 0)
             {
+                // Don't start a new phase if we're past the endDate
+                // (only finish the partial phase we're already in)
+                if (currentMonth > endDate)
+                    break;
+
                 pool = peopleNames.ToList(); // Always refill with SAME order
                 Console.WriteLine($"=== PHASE {currentPhase} START ===");
                 Console.WriteLine($"Pool: [{string.Join(", ", pool)}]\n");

@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Cache-First Architecture
 
-**The Single Source of Truth:** `PersonAssignmentCacheService` generates ALL person assignments at startup (20 years, Dictionary<DateTime, string>). Phase numbers are **computed values** via `PhaseCalculator`, not database lookups.
+**The Single Source of Truth:** `PersonAssignmentCacheService` generates ALL person assignments at startup (from clubStartDate to DateTime.Now + 24 months, Dictionary<DateTime, string>). Phase numbers are **computed values** via `PhaseCalculator`, not database lookups.
 
 **Key Services:**
 - **PersonAssignmentCacheService** (Singleton): Pre-computed rotation assignments
@@ -70,7 +70,7 @@ public class Phase : BaseModel
 
 ### Person Rotation Algorithm
 
-**What it is:** Deterministic assignment generator (20 years, pre-computed at startup).
+**What it is:** Deterministic assignment generator (clubStartDate to DateTime.Now + 24 months, pre-computed at startup).
 
 **Two Modes:**
 1. **Ordered** (RespectOrder=true): Sequential rotation by Person.Order field
@@ -199,7 +199,7 @@ dotnet format --verify-no-changes
 4. **Key Services**:
    - `InstanceManager`: Multi-instance isolation
    - `SecretsManager`: Encrypted API keys
-   - `PersonAssignmentCacheService`: 20-year rotation cache (Singleton)
+   - `PersonAssignmentCacheService`: Historical + 2-year forward cache (Singleton)
    - `PhaseCalculator`: Static phase number computation
    - `TimelineRenderingService`: Cache-first timeline builder
    - `DemoProtectionService`: Read-only mode
@@ -318,6 +318,8 @@ public HomePageDataService(SettingService settingService) { ... }
 - Phase table → Legacy (demo only)
 - PhaseCalculator → Static computation (production)
 - TimelineRenderingService → Cache-first timeline builder
+- Cache window → clubStartDate to DateTime.Now + 24 months (KISS approach)
+- Centralized constant → CacheConstants.WINDOW_MONTHS (DRY principle)
 - Removed ~1,500 lines of unused abstraction layers
 
 **Impact:**
@@ -336,11 +338,12 @@ public HomePageDataService(SettingService settingService) { ... }
 - `Models/AwardEvent.cs` - Awards month entity
 
 ### Critical Services
-- `Services/PersonAssignmentCacheService.cs` - 20-year cache (Singleton)
+- `Services/PersonAssignmentCacheService.cs` - Historical + 2-year forward cache (Singleton)
 - `Services/PersonRotationService.cs` - Rotation algorithm (static)
 - `Services/TimelineRenderingService.cs` - Cache-first timeline builder
 - `Services/MovieEventService.cs` - Movie event logic
 - `Utilities/PhaseCalculator.cs` - Static phase number computation
+- `Constants/CacheConstants.cs` - Centralized cache configuration
 
 ### UI
 - `Components/Pages/Home.razor.cs` - Timeline display

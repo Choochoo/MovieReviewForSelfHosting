@@ -1,5 +1,6 @@
 using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
+using MovieReviewApp.Constants;
 
 namespace MovieReviewApp.Utilities;
 
@@ -40,11 +41,11 @@ public static class PhaseCalculator
 
             if (isAwardsMonth)
             {
-                // Awards month creates a new phase
+                // Awards month is a gap between phases, belongs to just-completed phase
                 if (currentMonth == target)
                     return phaseNumber;
 
-                phaseNumber++;
+                // Don't increment phaseNumber - awards are gaps, not phases
                 eventsInPhase = 0;
                 consecutivePhases++;
             }
@@ -97,7 +98,7 @@ public static class PhaseCalculator
         DateTime? phaseEnd = null;
 
         // Iterate through months to find the target phase
-        int maxMonthsToCheck = 240; // 20 years safety limit
+        int maxMonthsToCheck = CacheConstants.WINDOW_MONTHS * 2; // 2x cache window for safety
         int monthsChecked = 0;
 
         while (monthsChecked < maxMonthsToCheck)
@@ -122,14 +123,14 @@ public static class PhaseCalculator
 
             if (isAwardsMonth)
             {
-                // Awards month creates a new phase
+                // Awards month is a gap between phases, belongs to just-completed phase
                 if (currentPhaseNumber == phaseNumber)
                 {
-                    // This awards month is the last month of the target phase
+                    // This awards month is part of the target phase (as a trailing gap)
                     return (phaseStart!.Value, phaseEnd!.Value);
                 }
 
-                currentPhaseNumber++;
+                // Don't increment currentPhaseNumber - awards are gaps, not phases
                 eventsInPhase = 0;
                 consecutivePhases++;
             }

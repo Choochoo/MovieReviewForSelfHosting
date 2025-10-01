@@ -17,6 +17,9 @@ public class TimelineItem
     public bool HasRecording { get; set; }
     public bool HasTranscription { get; set; }
 
+    // Awards event eligible movies (populated for awards events only)
+    public List<string> EligibleMovies { get; set; } = new();
+
     // Computed state
     public TimelineItemState State { get; set; }
 }
@@ -50,4 +53,9 @@ public class TimelineViewModel
     public TimelinePhase? CurrentPhase { get; set; }
     public List<TimelinePhase> FuturePhases { get; set; } = new();
     public List<TimelinePhase> PastPhases { get; set; } = new();
+
+    // Awards as separate gaps between phases
+    public TimelineItem? CurrentAward { get; set; }
+    public List<TimelineItem> FutureAwards { get; set; } = new();
+    public List<TimelineItem> PastAwards { get; set; } = new();
 }

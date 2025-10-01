@@ -2,6 +2,7 @@
 @using MovieReviewApp.Components.Partials
 @using MovieReviewApp.Extensions
 @using MovieReviewApp.Models
+@using MovieReviewApp.Models.ViewModels
 
 
 <PageTitle>Movie Review</PageTitle>
@@ -125,22 +126,113 @@
             </div>
         }
 
-        @if (ChronologicalTimeline?.Any() == true && AwardSettings != null)
+        @if (StructuredTimeline != null)
         {
             <div class="row mt-4">
                 <div class="col-md-12">
                     <div class="chronological-timeline">
-                        @foreach (ITimelineItem timelineItem in ChronologicalTimeline)
+                        @* Current Phase *@
+                        @if (StructuredTimeline.CurrentPhase != null)
                         {
-                            <TimelineItemRenderer Item="timelineItem"
-                                                CurrentEvent="CurrentEvent"
-                                                NextEvent="NextEvent"
-                                                AllAwardQuestions="AllAwardQuestions"
-                                                AllPeople="AllPeople"
-                                                CachedResults="CachedResults"
-                                                IsShowingResults="IsShowingResults"
-                                                OnToggleResults="ToggleResults"
-                                                GetEligibleMoviesForPhase="GetEligibleMoviesForPhase" />
+                            <PhaseGroupRenderer Phase="@StructuredTimeline.CurrentPhase" />
+                        }
+
+                        @* Current Award *@
+                        @if (StructuredTimeline.CurrentAward != null)
+                        {
+                            var award = StructuredTimeline.CurrentAward;
+                            <div class="timeline-item award-item"
+                                 style="background-color: var(--surface-color);
+                                        border: 2px solid var(--accent-primary);
+                                        border-radius: 0.75rem;
+                                        padding: 1.5rem;
+                                        margin-bottom: 2rem;">
+                                <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+                                    <i class="bi bi-trophy-fill me-2"></i>
+                                    Awards Event @award.AwardsEventNumber
+                                </h5>
+                                <div style="color: var(--text-primary);">
+                                    <span style="color: var(--accent-secondary); font-weight: 600;">
+                                        @award.Month.ToLocalDisplay().ToString("MMMM yyyy")
+                                    </span>
+                                    <span class="badge bg-primary ms-2">Current</span>
+                                </div>
+                                @if (award.EligibleMovies.Any())
+                                {
+                                    <div class="mt-3" style="color: var(--text-primary);">
+                                        <strong style="color: var(--accent-secondary);">Eligible Movies:</strong>
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach (string movie in award.EligibleMovies)
+                                            {
+                                                <span class="badge"
+                                                      style="background-color: var(--accent-tertiary);
+                                                             color: var(--surface-color);
+                                                             padding: 0.5rem 0.75rem;
+                                                             font-size: 0.875rem;">
+                                                    @movie
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Future Timeline: Merge Phases and Awards chronologically *@
+                        @{
+                            var futureTimeline = StructuredTimeline.FuturePhases
+                                .Select(p => new { Month = p.StartMonth, Type = "Phase", Phase = p, Award = (TimelineItem?)null })
+                                .Concat(StructuredTimeline.FutureAwards.Select(a => new { Month = a.Month, Type = "Award", Phase = (TimelinePhase?)null, Award = a }))
+                                .OrderBy(x => x.Month)
+                                .ToList();
+                        }
+
+                        @foreach (var item in futureTimeline)
+                        {
+                            @if (item.Type == "Phase" && item.Phase != null)
+                            {
+                                <PhaseGroupRenderer Phase="@item.Phase" />
+                            }
+                            else if (item.Type == "Award" && item.Award != null)
+                            {
+                                <div class="timeline-item award-item"
+                                     style="background-color: var(--surface-color);
+                                            border: 2px solid var(--accent-primary);
+                                            border-radius: 0.75rem;
+                                            padding: 1.5rem;
+                                            margin-bottom: 2rem;">
+                                    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+                                        <i class="bi bi-trophy-fill me-2"></i>
+                                        Awards Event @item.Award.AwardsEventNumber
+                                    </h5>
+                                    <div style="color: var(--text-primary);">
+                                        <span style="color: var(--accent-secondary); font-weight: 600;">
+                                            @item.Award.Month.ToLocalDisplay().ToString("MMMM yyyy")
+                                        </span>
+                                        <span class="badge bg-warning text-dark ms-2">Upcoming</span>
+                                    </div>
+
+                                    @* Show eligible movies for this award event (pre-populated from service layer) *@
+                                    @if (item.Award.EligibleMovies.Any())
+                                    {
+                                        <div class="mt-3" style="color: var(--text-primary);">
+                                            <strong style="color: var(--accent-secondary);">Eligible Movies:</strong>
+                                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                                @foreach (string movie in item.Award.EligibleMovies)
+                                                {
+                                                    <span class="badge"
+                                                          style="background-color: var(--accent-tertiary);
+                                                                 color: var(--surface-color);
+                                                                 padding: 0.5rem 0.75rem;
+                                                                 font-size: 0.875rem;">
+                                                        @movie
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         }
                     </div>
                 </div>

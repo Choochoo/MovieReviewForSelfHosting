@@ -158,8 +158,7 @@ public class PersonAssignmentCacheService
 
                 _logger.LogInformation(
                     $"Cache initialized: {_cache.Count} assignments generated " +
-                    $"(StartDate: {clubStartDate:yyyy-MM}, RespectOrder: {respectOrder}, " +
-                    $"People: {allNames.Length}, MonthsSinceStart: {monthsSinceStart})");
+                    $"(StartDate: {clubStartDate:yyyy-MM}, RespectOrder: {respectOrder}, People: {allNames.Length})");
 
                 // Log ALL assignments for complete transparency
                 _logger.LogInformation($"Complete assignment list ({_cache.Count} events):");

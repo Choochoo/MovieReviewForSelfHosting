@@ -1,0 +1,88 @@
+@using MovieReviewApp.Models.ViewModels
+@using MovieReviewApp.Extensions
+
+<div class="timeline-item phase-item"
+     style="background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;">
+
+    <!-- Phase Header -->
+    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+        <i class="bi bi-calendar-event me-2"></i>
+        Phase @Phase.PhaseNumber
+        (@Phase.StartMonth.ToLocalDisplay().ToString("MMMM yyyy") -
+         @Phase.EndMonth.ToLocalDisplay().ToString("MMMM yyyy"))
+    </h5>
+
+    <!-- Individual month items -->
+    @foreach (TimelineItem item in Phase.Items.Where(i =>
+        i.State == TimelineItemState.Current || i.State == TimelineItemState.Future))
+    {
+        <div class="timeline-content"
+             style="padding: 0.75rem;
+                    background-color: var(--background-secondary);
+                    border-radius: 0.5rem;
+                    margin-bottom: 0.5rem;">
+            <span class="date" style="color: var(--accent-secondary); font-weight: 600;">
+                @item.Month.ToLocalDisplay().ToString("MMMM yyyy")
+            </span>
+            -
+            <span class="person" style="color: var(--text-primary);">
+                @item.AssignedPersonName
+            </span>
+
+            @* Always show state badge (Current/Next/Future) *@
+            <span class="badge @GetBadgeColorClass(item) ms-2">@GetItemBadgeLabel(item)</span>
+
+            @* Show completion indicators for past events *@
+            @if (item.State == TimelineItemState.Past && item.MovieEventId.HasValue)
+            {
+                @if (item.HasRecording)
+                {
+                    <i class="bi bi-mic-fill text-success ms-2" title="Recording available"></i>
+                }
+                @if (item.HasTranscription)
+                {
+                    <i class="bi bi-file-text-fill text-info ms-2" title="Transcription available"></i>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public TimelinePhase Phase { get; set; } = default!;
+
+    private DateTime CurrentMonth => DateTime.Now.StartOfMonth();
+    private DateTime NextMonth => CurrentMonth.AddMonths(1);
+
+    private string GetItemBadgeLabel(TimelineItem item)
+    {
+        // Compare item's month to current/next month (ignore phase)
+        DateTime itemMonth = item.Month.StartOfMonth();
+
+        if (itemMonth.Year == CurrentMonth.Year && itemMonth.Month == CurrentMonth.Month)
+            return "Current";
+
+        if (itemMonth.Year == NextMonth.Year && itemMonth.Month == NextMonth.Month)
+            return "Next";
+
+        return "Future";
+    }
+
+    private string GetBadgeColorClass(TimelineItem item)
+    {
+        string label = GetItemBadgeLabel(item);
+
+        return label switch
+        {
+            "Current" => "bg-primary",      // Blue
+            "Next" => "bg-warning text-dark", // Yellow with dark text
+            "Future" => "bg-info",          // Light blue
+            _ => "bg-secondary"
+        };
+    }
+}

@@ -69,16 +69,27 @@ public class TimelineRenderingService
             DateTime now = DateProvider.Now;
             List<TimelineItem> allItems = BuildTimelineItems(cacheAssignments, eventsByMonth, now);
 
-            // 6. Calculate phase boundaries (NO database lookup)
-            List<TimelinePhase> phases = CalculatePhaseBoundaries(allItems, clubStartDate, peoplePerPhase, now);
+            // 6. Get award settings for eligible movies calculation
+            AwardSetting? awardSettings = await _settingService.GetAwardSettingsAsync();
 
-            // 7. Return structured view model
+            // 7. Populate eligible movies for awards events
+            await PopulateEligibleMoviesForAwardsAsync(allItems, awardSettings);
+
+            // 8. Calculate phase boundaries (NO database lookup) - returns (phases, awards)
+            (List<TimelinePhase> phases, List<TimelineItem> awards) = CalculatePhaseBoundaries(allItems, clubStartDate, peoplePerPhase, now);
+
+            // 9. Return structured view model with separate award collections
             DateTime currentMonth = now.StartOfMonth();
             TimelineViewModel viewModel = new TimelineViewModel
             {
                 CurrentPhase = phases.FirstOrDefault(p => p.IsCurrentPhase),
                 FuturePhases = phases.Where(p => p.StartMonth > currentMonth).OrderBy(p => p.PhaseNumber).ToList(),
-                PastPhases = phases.Where(p => p.EndMonth < currentMonth).OrderBy(p => p.PhaseNumber).ToList()
+                PastPhases = phases.Where(p => p.EndMonth < currentMonth).OrderBy(p => p.PhaseNumber).ToList(),
+
+                // Awards as separate collections
+                CurrentAward = awards.FirstOrDefault(a => a.Month == currentMonth),
+                FutureAwards = awards.Where(a => a.Month > currentMonth).OrderBy(a => a.Month).ToList(),
+                PastAwards = awards.Where(a => a.Month < currentMonth).OrderBy(a => a.Month).ToList()
             };
 
             _logger.LogInformation("Timeline view model created:");
@@ -86,6 +97,9 @@ public class TimelineRenderingService
                 viewModel.CurrentPhase != null, viewModel.CurrentPhase?.PhaseNumber ?? 0);
             _logger.LogInformation("  - Future Phases: {Count} phases", viewModel.FuturePhases.Count);
             _logger.LogInformation("  - Past Phases: {Count} phases", viewModel.PastPhases.Count);
+            _logger.LogInformation("  - Current Award: {HasAward}", viewModel.CurrentAward != null);
+            _logger.LogInformation("  - Future Awards: {Count} awards", viewModel.FutureAwards.Count);
+            _logger.LogInformation("  - Past Awards: {Count} awards", viewModel.PastAwards.Count);
 
             foreach (TimelinePhase futurePhase in viewModel.FuturePhases.Take(3))
             {
@@ -140,7 +154,7 @@ public class TimelineRenderingService
             items.Add(new TimelineItem
             {
                 Month = month,
-                AssignedPersonName = isAwards ? "Awards Event" : assignedPerson,
+                AssignedPersonName = isAwards ? "Awards Event" : (dbEvent?.Person ?? assignedPerson),
                 IsAwardsEvent = isAwards,
                 AwardsEventNumber = awardsNumber,
 
@@ -161,14 +175,16 @@ public class TimelineRenderingService
 
     /// <summary>
     /// Calculates phase boundaries from timeline items (no database queries)
+    /// Returns tuple: (phases containing only regular events, awards as separate gaps)
     /// </summary>
-    private List<TimelinePhase> CalculatePhaseBoundaries(
+    private (List<TimelinePhase> Phases, List<TimelineItem> Awards) CalculatePhaseBoundaries(
         List<TimelineItem> items,
         DateTime clubStartDate,
         int peoplePerPhase,
         DateTime now)
     {
         List<TimelinePhase> phases = new List<TimelinePhase>();
+        List<TimelineItem> awards = new List<TimelineItem>();
         TimelinePhase? currentPhase = null;
         int eventsInCurrentPhase = 0;
         int phaseCounter = 1;
@@ -176,13 +192,20 @@ public class TimelineRenderingService
 
         foreach (TimelineItem item in items.OrderBy(i => i.Month))
         {
-            // Start new phase if:
-            // 1. No current phase exists, OR
-            // 2. Reached people count limit, OR
-            // 3. Hit an awards event (awards create phase boundaries)
-            if (currentPhase == null ||
-                eventsInCurrentPhase >= peoplePerPhase ||
-                (item.IsAwardsEvent && eventsInCurrentPhase > 0))
+            // Awards are separate gaps - add to awards list, NOT to any phase
+            if (item.IsAwardsEvent)
+            {
+                awards.Add(item);
+
+                // Check if this awards month is the current month
+                if (item.Month == currentMonth && currentPhase != null)
+                    currentPhase.IsCurrentPhase = true;
+
+                continue; // Skip to next item - awards don't belong in phases
+            }
+
+            // Regular event - check if new phase needed
+            if (currentPhase == null || eventsInCurrentPhase >= peoplePerPhase)
             {
                 currentPhase = new TimelinePhase
                 {
@@ -196,7 +219,7 @@ public class TimelineRenderingService
                 eventsInCurrentPhase = 0;
             }
 
-            // Add item to phase
+            // Add regular event to current phase
             currentPhase.Items.Add(item);
             currentPhase.EndMonth = item.Month;
 
@@ -204,20 +227,65 @@ public class TimelineRenderingService
             if (item.Month == currentMonth)
                 currentPhase.IsCurrentPhase = true;
 
-            // Count non-awards events only for phase rotation
-            if (!item.IsAwardsEvent)
-            {
-                eventsInCurrentPhase++;
-                if (item.MovieEventId != null)
-                    currentPhase.CompletedEvents++;
-            }
+            // Count regular events for phase rotation
+            eventsInCurrentPhase++;
+            if (item.MovieEventId != null)
+                currentPhase.CompletedEvents++;
 
             currentPhase.TotalEvents = currentPhase.Items.Count;
         }
 
-        _logger.LogInformation("Calculated {Count} phase boundaries (people per phase: {PeoplePerPhase})",
-            phases.Count, peoplePerPhase);
+        _logger.LogInformation("Calculated {PhaseCount} phase boundaries and {AwardCount} awards (people per phase: {PeoplePerPhase})",
+            phases.Count, awards.Count, peoplePerPhase);
 
-        return phases;
+        return (phases, awards);
+    }
+
+    /// <summary>
+    /// Populates eligible movies for awards events by querying database.
+    /// Implements requirement: "every movie event since last awards needs to be shown on next awards"
+    /// </summary>
+    private async Task PopulateEligibleMoviesForAwardsAsync(List<TimelineItem> items, AwardSetting? awardSettings)
+    {
+        if (awardSettings == null || !awardSettings.AwardsEnabled)
+        {
+            _logger.LogInformation("Awards disabled or settings not found, skipping eligible movies population");
+            return;
+        }
+
+        int phasesBeforeAward = awardSettings.PhasesBeforeAward;
+        List<TimelineItem> awardsItems = items.Where(i => i.IsAwardsEvent && i.AwardsEventNumber.HasValue).ToList();
+
+        if (!awardsItems.Any())
+        {
+            _logger.LogInformation("No awards events found in timeline");
+            return;
+        }
+
+        _logger.LogInformation("Populating eligible movies for {Count} awards events", awardsItems.Count);
+
+        foreach (TimelineItem awardItem in awardsItems)
+        {
+            int awardsEventNumber = awardItem.AwardsEventNumber!.Value;
+
+            // Calculate eligible phase numbers
+            // Formula: For Awards Event N with PhasesBeforeAward=P
+            // - Last completed phase = N * P
+            // - First eligible phase = (N-1) * P + 1
+            // - Eligible phases = [(N-1)*P + 1, N*P]
+            int lastCompletedPhase = awardsEventNumber * phasesBeforeAward;
+            int firstEligiblePhase = ((awardsEventNumber - 1) * phasesBeforeAward) + 1;
+            int[] phaseNumbers = Enumerable.Range(firstEligiblePhase, phasesBeforeAward).ToArray();
+
+            _logger.LogInformation("Awards Event {Number}: Querying phases {Phases}",
+                awardsEventNumber, string.Join(", ", phaseNumbers));
+
+            // Query database for movie names
+            List<string> eligibleMovies = await _movieEventService.GetMovieNamesByPhasesAsync(phaseNumbers);
+            awardItem.EligibleMovies = eligibleMovies;
+
+            _logger.LogInformation("Awards Event {Number}: Found {Count} eligible movies",
+                awardsEventNumber, eligibleMovies.Count);
+        }
     }
 }
