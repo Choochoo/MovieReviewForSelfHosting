@@ -16,6 +16,9 @@ namespace MovieReviewApp.Components.Partials
         [Parameter]
         public MovieEvent? MovieEvent { get; set; }
 
+        [Parameter]
+        public EventCallback OnPersonSwapped { get; set; }
+
         [Inject]
         private MovieEventService MovieEventService { get; set; } = default!;
 
@@ -46,6 +49,9 @@ namespace MovieReviewApp.Components.Partials
         [Inject]
         private PersonAssignmentCacheService PersonAssignmentCache { get; set; } = default!;
 
+        [Inject]
+        private TmdbService TmdbService { get; set; } = default!;
+
         private bool showMarkdownPreview = false;
         private bool isLoading = false;
         private bool isSpicing = false;
@@ -57,6 +63,10 @@ namespace MovieReviewApp.Components.Partials
         private List<Person>? _allPeople;
         private string? _originalPerson;
         private string? _selectedPerson;
+
+        // Auto-download poster fields
+        private bool autoDownloadPoster = false;
+        private TmdbService.TmdbMovieInfo? _cachedMovieInfo;
 
         // Property to handle datetime-local input binding properly
         private DateTime? MeetupTimeForInput
@@ -162,7 +172,7 @@ namespace MovieReviewApp.Components.Partials
         }
 
         /// <summary>
-        /// Fetches movie synopsis from TMDB API and caches it.
+        /// Fetches movie synopsis and metadata from TMDB using TmdbService and caches it.
         /// </summary>
         private async Task GetMovieSynopsisAsync(string movieTitle)
         {
@@ -174,94 +184,49 @@ namespace MovieReviewApp.Components.Partials
 
             try
             {
-                if (string.IsNullOrEmpty(_apiKey))
-                {
-                    Console.WriteLine("API Key is empty or null");
-                    Synopsis = "Configuration error: API key not found";
-                    return;
-                }
-
+                // Return cached synopsis if already available
                 if (MovieEvent != null && !string.IsNullOrEmpty(MovieEvent.Synopsis))
                 {
                     Synopsis = MovieEvent.Synopsis;
                     return;
                 }
 
-                string encodedTitle = Uri.EscapeDataString(movieTitle);
-                string searchUrl = $"https://api.themoviedb.org/3/search/movie?api_key={_apiKey}&query={encodedTitle}";
+                // Fetch movie info from TMDB using TmdbService
+                _cachedMovieInfo = await TmdbService.GetMovieInfoAsync(movieTitle);
 
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
-                request.Headers.Add("User-Agent", "MovieReviewApp/1.0");
-                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                using HttpResponseMessage response = await Http.SendAsync(request);
-                string responseBody = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
+                if (_cachedMovieInfo == null)
                 {
-                    Console.WriteLine($"Error Response Body: {responseBody}");
-                    Synopsis = $"API Error: {response.StatusCode} - {responseBody}";
+                    Synopsis = "Movie not found.";
                     return;
                 }
 
-                JObject searchResult = JObject.Parse(responseBody);
+                Synopsis = _cachedMovieInfo.Synopsis;
 
-                if (searchResult["results"] != null && searchResult["results"].HasValues)
+                // Save synopsis to database if valid
+                if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) &&
+                    Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
                 {
-                    int movieId = (int)searchResult["results"][0]["id"];
-                    string detailsUrl = $"https://api.themoviedb.org/3/movie/{movieId}?api_key={_apiKey}";
-
-                    HttpRequestMessage detailsRequest = new HttpRequestMessage(HttpMethod.Get, detailsUrl);
-                    detailsRequest.Headers.Add("User-Agent", "MovieReviewApp/1.0");
-                    detailsRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-                    using HttpResponseMessage detailsResponse = await Http.SendAsync(detailsRequest);
-                    string detailsBody = await detailsResponse.Content.ReadAsStringAsync();
-
-                    if (!detailsResponse.IsSuccessStatusCode)
+                    try
                     {
-                        Console.WriteLine($"Details Error Response: {detailsBody}");
-                        Synopsis = $"Movie Details Error: {detailsResponse.StatusCode}";
-                        return;
+                        if (!demoProtection.TryValidateNotDemo("Update movie synopsis", out string errorMessage))
+                        {
+                            await ShowDemoNotification(errorMessage);
+                            return;
+                        }
+
+                        MovieEvent.Synopsis = Synopsis;
+                        await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
                     }
-
-                    JObject movieDetails = JObject.Parse(detailsBody);
-                    Synopsis = movieDetails["overview"]?.ToString() ?? "Synopsis not available.";
-
-                    if (MovieEvent != null && !string.IsNullOrEmpty(Synopsis) &&
-                        Synopsis != "Synopsis not available." && Synopsis != "Movie not found.")
+                    catch (Exception ex)
                     {
-                        try
-                        {
-                            if (!demoProtection.TryValidateNotDemo("Update movie synopsis", out string errorMessage))
-                            {
-                                await ShowDemoNotification(errorMessage);
-                                return;
-                            }
-                            
-                            MovieEvent.Synopsis = Synopsis;
-                            await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Cache error: {ex.Message}");
-                        }
+                        Console.WriteLine($"Cache error: {ex.Message}");
                     }
                 }
-                else
-                {
-                    Synopsis = "Movie not found.";
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                Console.WriteLine($"HTTP Request Exception: {ex.Message}");
-                Synopsis = $"Network Error: {ex.Message}";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"General Exception: {ex.Message}");
-                Synopsis = $"Error: {ex.Message}";
+                Console.WriteLine($"Error fetching movie synopsis: {ex.Message}");
+                Synopsis = "Error loading movie data.";
             }
         }
 
@@ -323,14 +288,42 @@ namespace MovieReviewApp.Components.Partials
                     {
                         isSpicing = true;
                         StateHasChanged();
-                        
+
                         string spicedText = await PromptService.SpiceUpTextAsync(MovieEvent.Reasoning, selectedStyle);
                         if (!string.IsNullOrEmpty(spicedText))
                         {
                             MovieEvent.Reasoning = spicedText;
                         }
-                        
+
                         isSpicing = false;
+                    }
+
+                    // Auto-download poster from TMDB if checkbox is checked
+                    if (autoDownloadPoster && !MovieEvent.ImageId.HasValue && !string.IsNullOrEmpty(MovieEvent.Movie))
+                    {
+                        try
+                        {
+                            // Re-fetch if movie title changed since synopsis load
+                            if (_cachedMovieInfo?.Title != MovieEvent.Movie)
+                            {
+                                _cachedMovieInfo = await TmdbService.GetMovieInfoAsync(MovieEvent.Movie);
+                            }
+
+                            // Download poster directly to ImageId (never set PosterUrl)
+                            if (_cachedMovieInfo?.PosterUrl != null)
+                            {
+                                Guid? imageId = await ImageService.SaveImageFromUrlAsync(_cachedMovieInfo.PosterUrl);
+                                if (imageId.HasValue)
+                                {
+                                    MovieEvent.ImageId = imageId;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Auto-download poster failed: {ex.Message}");
+                            // Continue save - graceful degradation
+                        }
                     }
 
                     if (!string.IsNullOrEmpty(MovieEvent.PosterUrl) && !MovieEvent.ImageId.HasValue)
@@ -362,6 +355,10 @@ namespace MovieReviewApp.Components.Partials
                     // Handle person swap if person was changed
                     if (_selectedPerson != _originalPerson && !string.IsNullOrEmpty(_selectedPerson))
                     {
+                        // CRITICAL: Save ALL user edits BEFORE swap to prevent data loss
+                        // Swap logic reloads from DB which would overwrite unsaved changes (Movie, Reasoning, IMDb, ImageId)
+                        await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
+
                         // Find where the new person is currently assigned
                         DateTime? targetMonth = await FindMonthForPersonAsync(_selectedPerson);
 
@@ -385,6 +382,10 @@ namespace MovieReviewApp.Components.Partials
                             }
 
                             StateHasChanged();
+
+                            // Notify parent component to refresh timeline
+                            await OnPersonSwapped.InvokeAsync();
+
                             return; // Exit early - swap already handled save
                         }
                     }

@@ -42,9 +42,20 @@
                             <input type="text" @bind="@MovieEvent.IMDb" class="form-control" />
                         </div>
                         <div class="form-group">
-                            <ImageUpload @bind-ImageId="@MovieEvent.ImageId" 
-                                       @bind-PosterUrl="@MovieEvent.PosterUrl" />
+                            <div class="form-check">
+                                <input type="checkbox" @bind="autoDownloadPoster" class="form-check-input" id="autoDownloadCheck" />
+                                <label class="form-check-label" for="autoDownloadCheck">
+                                    <strong>Automatically download poster</strong>
+                                </label>
+                            </div>
                         </div>
+                        @if (!autoDownloadPoster)
+                        {
+                            <div class="form-group">
+                                <ImageUpload @bind-ImageId="@MovieEvent.ImageId"
+                                           @bind-PosterUrl="@MovieEvent.PosterUrl" />
+                            </div>
+                        }
                         <div class="form-group">
                             <label><b>Reason:</b></label>
                             <div class="markdown-editor-container">

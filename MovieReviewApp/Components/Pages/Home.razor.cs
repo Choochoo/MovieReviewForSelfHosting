@@ -143,5 +143,26 @@ namespace MovieReviewApp.Components.Pages
             showResultsDict[key] = !showResultsDict[key];
             StateHasChanged();
         }
+
+        /// <summary>
+        /// Handles person swap event from child Phase component.
+        /// Reloads all data to ensure UI consistency across timeline.
+        /// </summary>
+        private async Task HandlePersonSwapped()
+        {
+            Console.WriteLine("Home.razor.cs: HandlePersonSwapped called");
+
+            // Reload view model (CurrentEvent, NextEvent)
+            _viewModel = await HomePageDataService.GetHomePageDataAsync();
+            Console.WriteLine("Home.razor.cs: View model reloaded");
+
+            // Reload timeline (PhaseGroupRenderer data)
+            _structuredTimeline = await TimelineRenderingService.BuildTimelineAsync();
+            Console.WriteLine("Home.razor.cs: Timeline reloaded");
+
+            // Trigger UI update
+            await InvokeAsync(StateHasChanged);
+            Console.WriteLine("Home.razor.cs: StateHasChanged completed");
+        }
     }
 }

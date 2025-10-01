@@ -192,6 +192,7 @@ builder.Services.AddHttpClient<GladiaService>(client =>
 });
 builder.Services.AddScoped<ClaudeService>();
 builder.Services.AddScoped<PromptService>();
+builder.Services.AddScoped<TmdbService>();
 
 // Register refactored analysis services
 builder.Services.AddScoped<WordAnalysisService>();
