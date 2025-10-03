@@ -1,9 +1,8 @@
+using MovieReviewApp.Extensions;
 using MovieReviewApp.Infrastructure.Repositories;
 using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
-using MovieReviewApp.Extensions;
 using MovieReviewApp.Utilities;
-using Microsoft.Extensions.Logging;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -107,6 +106,58 @@ public class MovieEventService(
     }
 
     /// <summary>
+
+    /// Gets existing MovieEvent for a month, or builds an in-memory placeholder for swap operations.
+    /// DOES NOT persist to database - caller is responsible for saving via UpsertAsync.
+    /// </summary>
+    private async Task<MovieEvent> GetOrBuildForSwapAsync(DateTime targetMonth, string assignedPerson)
+    {
+        // Check if event already exists in database
+        DateTime monthStart = targetMonth.StartOfMonth();
+        DateTime monthEnd = targetMonth.EndOfMonth();
+        List<MovieEvent> existing = await GetByDateRangeAsync(monthStart, monthEnd);
+
+        if (existing.Any())
+        {
+            return existing.First(); // Return existing record (with its Id preserved)
+        }
+
+        // Build in-memory placeholder (NOT persisted yet)
+        // Get settings for phase calculation
+        List<Setting> settings = await _settingService.GetAllAsync();
+        Setting? startDateSetting = settings.FirstOrDefault(s => s.Key == "StartDate");
+
+        if (startDateSetting == null || !DateTime.TryParse(startDateSetting.Value, out DateTime clubStartDate))
+        {
+            clubStartDate = new DateTime(2024, 3, 1); // Fallback
+        }
+
+        List<Person> people = await _personService.GetAllAsync();
+        int peoplePerPhase = people.Count > 0 ? people.Count : 6;
+
+        AwardSetting? awardSettings = await _settingService.GetAwardSettingsAsync();
+
+        // Calculate phase number using PhaseCalculator
+        int phaseNumber = PhaseCalculator.CalculatePhaseNumber(
+            targetMonth,
+            clubStartDate,
+            peoplePerPhase,
+            awardSettings);
+
+        // Create placeholder (in-memory only - NOT saved to DB yet)
+        MovieEvent placeholder = PhaseEventGenerator.CreateMovieEvent(
+            assignedPerson,
+            targetMonth,
+            phaseNumber);
+
+        _logger.LogInformation(
+            "Built in-memory placeholder for swap: {Month:yyyy-MM} → {Person} (Phase {PhaseNumber})",
+            targetMonth, assignedPerson, phaseNumber);
+
+        return placeholder;
+    }
+
+    /// <summary>
     /// Swaps person assignments between two months by creating/updating MovieEvent records.
     /// MovieEvent records override the cache, persisting swaps across server restarts.
     /// </summary>
@@ -144,29 +195,24 @@ public class MovieEventService(
             throw new InvalidOperationException("Cannot swap awards months");
         }
 
-        // Get or create MovieEvents for both months
-        MovieEvent? event1 = await GetOrCreateForMonthAsync(month1);
-        MovieEvent? event2 = await GetOrCreateForMonthAsync(month2);
-
-        if (event1 == null || event2 == null)
-        {
-            throw new InvalidOperationException("Failed to create/retrieve MovieEvent records for swap");
-        }
+        // Get or build MovieEvents for both months (does NOT persist to DB yet)
+        MovieEvent event1 = await GetOrBuildForSwapAsync(month1, person1);
+        MovieEvent event2 = await GetOrBuildForSwapAsync(month2, person2);
 
         // Swap Person fields (preserving all other data like Movie, IMDb, etc.)
         string tempPerson = event1.Person!;
         event1.Person = event2.Person!;
         event2.Person = tempPerson;
 
-        // Update both events in database
+        // Update both events in database (UpsertAsync handles both new and existing records)
         event1.UpdatedAt = DateTime.UtcNow;
         event2.UpdatedAt = DateTime.UtcNow;
 
-        await UpdateAsync(event1);
-        await UpdateAsync(event2);
+        await _repository.UpsertAsync(event1);
+        await _repository.UpsertAsync(event2);
 
         _logger.LogInformation(
             "Swapped month assignments: {Month1:yyyy-MM} ({Person1}) ↔ {Month2:yyyy-MM} ({Person2})",
             month1, event1.Person, month2, event2.Person);
     }
-} 
+}

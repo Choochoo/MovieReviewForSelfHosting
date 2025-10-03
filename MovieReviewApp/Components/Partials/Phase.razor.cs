@@ -433,33 +433,46 @@ namespace MovieReviewApp.Components.Partials
         }
 
         /// <summary>
-        /// Finds the month where the specified person is currently assigned in the cache.
-        /// Returns null if person is not found in any future month.
+        /// Finds the month where the specified person is currently assigned.
+        /// Database overrides cache (source of truth for swapped assignments).
         /// </summary>
         private async Task<DateTime?> FindMonthForPersonAsync(string personName)
         {
             if (string.IsNullOrEmpty(personName) || MovieEvent == null)
                 return null;
 
-            // Get all cache assignments
-            IReadOnlyDictionary<DateTime, string> allAssignments = await PersonAssignmentCache.GetAllAssignmentsAsync();
-
-            // Find the first future month where this person is assigned
             DateTime currentMonth = MovieEvent.StartDate.StartOfMonth();
+            DateTime now = DateTime.Now.StartOfMonth();
 
-            foreach (KeyValuePair<DateTime, string> assignment in allAssignments)
+            // Get all future database events (source of truth for swaps)
+            List<MovieEvent> allEvents = await MovieEventService.GetAllAsync();
+
+            // Check database first
+            MovieEvent? dbMatch = allEvents
+                .Where(e => e.Person == personName &&
+                           e.StartDate >= now &&
+                           e.StartDate.StartOfMonth() != currentMonth)
+                .OrderBy(e => e.StartDate)
+                .FirstOrDefault();
+
+            if (dbMatch != null)
+                return dbMatch.StartDate.StartOfMonth();
+
+            // Fall back to cache for months without database records
+            IReadOnlyDictionary<DateTime, string> cacheAssignments = await PersonAssignmentCache.GetAllAssignmentsAsync();
+
+            foreach (KeyValuePair<DateTime, string> assignment in cacheAssignments)
             {
-                // Skip current month, awards months, and past months
-                if (assignment.Key == currentMonth)
+                // Skip current month, awards, and past months
+                if (assignment.Key == currentMonth ||
+                    assignment.Value.StartsWith("Awards Event") ||
+                    assignment.Key < now)
                     continue;
 
-                if (assignment.Value.StartsWith("Awards Event"))
+                // Skip if database has a record for this month (already checked above)
+                if (allEvents.Any(e => e.StartDate.StartOfMonth() == assignment.Key))
                     continue;
 
-                if (assignment.Key < DateTime.Now.StartOfMonth())
-                    continue;
-
-                // Check if this month is assigned to the person we're looking for
                 if (assignment.Value == personName)
                     return assignment.Key;
             }
