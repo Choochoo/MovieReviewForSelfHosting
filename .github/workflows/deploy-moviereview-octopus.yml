@@ -121,7 +121,8 @@ jobs:
           --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
           --space "${{ env.OCTOPUS_SPACE }}" `
           --deployTo "Production" `
-          --progress
+          --progress `
+          --ignoreexisting
       shell: powershell
 
     - name: Deploy to Friends Instance
@@ -135,7 +136,8 @@ jobs:
           --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
           --space "${{ env.OCTOPUS_SPACE }}" `
           --deployTo "Production" `
-          --progress
+          --progress `
+          --ignoreexisting
       shell: powershell
 
     - name: Deploy to Kids Instance
@@ -149,7 +151,8 @@ jobs:
           --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
           --space "${{ env.OCTOPUS_SPACE }}" `
           --deployTo "Production" `
-          --progress
+          --progress `
+          --ignoreexisting
       shell: powershell
 
     - name: Deployment Summary
