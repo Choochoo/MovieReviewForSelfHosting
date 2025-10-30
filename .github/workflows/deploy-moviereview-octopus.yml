@@ -1,0 +1,170 @@
+name: Deploy MovieReview via Octopus (3 Instances)
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+concurrency:
+  group: moviereview-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  SOLUTION_PATH: './MovieReviewApp.sln'
+  PROJECT_PATH: './MovieReviewApp/MovieReviewApp.csproj'
+  BUILD_OUTPUT: './publish'
+  OCTOPUS_PROJECT_DEMO: 'MovieReview-Demo'
+  OCTOPUS_PROJECT_FRIENDS: 'MovieReview-Friends'
+  OCTOPUS_PROJECT_KIDS: 'MovieReview-Kids'
+  OCTOPUS_SPACE: 'Default'
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+    name: Build and Test MovieReview
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+    - name: Build solution
+      run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+    # Tests are commented out in original workflow
+    # - name: Run tests
+    #   run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-build --verbosity normal
+
+    - name: Publish application
+      run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --output ${{ env.BUILD_OUTPUT }} --no-build
+
+    - name: Verify build output
+      run: |
+        if (!(Test-Path "${{ env.BUILD_OUTPUT }}\MovieReviewApp.dll")) {
+          Write-Error "Build failed: MovieReviewApp.dll not found"
+          exit 1
+        }
+        $fileCount = (Get-ChildItem -Path "${{ env.BUILD_OUTPUT }}" -Recurse -File).Count
+        Write-Host "Build successful: $fileCount files generated"
+      shell: powershell
+
+  deploy-via-octopus:
+    if: github.event_name == 'push'  # Only deploy on push to main/master
+    runs-on: self-hosted
+    name: Deploy via Octopus (All Instances)
+    needs: build-and-test
+
+    steps:
+    - name: Verify build output exists from previous job
+      run: |
+        if (-not (Test-Path "${{ env.BUILD_OUTPUT }}")) {
+          Write-Host "::error::Build output not found at ${{ env.BUILD_OUTPUT }}"
+          exit 1
+        }
+        Write-Host "✅ Build output found"
+      shell: powershell
+
+    - name: Setup Octopus CLI
+      run: |
+        $octoPath = "C:\Program Files\Octopus CLI\octo.exe"
+        if (Test-Path $octoPath) {
+          Write-Host "Octopus CLI found at: $octoPath"
+          & $octoPath version
+        } else {
+          Write-Host "::error::Octopus CLI not found at: $octoPath"
+          exit 1
+        }
+        $env:Path += ";C:\Program Files\Octopus CLI"
+        echo "C:\Program Files\Octopus CLI" >> $env:GITHUB_PATH
+      shell: powershell
+
+    - name: Package build artifacts
+      run: |
+        $version = "${{ github.run_number }}.0.0"
+        $packageName = "MovieReview.$version.zip"
+
+        Write-Host "Creating package: $packageName"
+        Compress-Archive -Path "${{ env.BUILD_OUTPUT }}\*" -DestinationPath $packageName -Force
+
+        Write-Host "Package created: $(Get-Item $packageName | Select-Object -ExpandProperty Length) bytes"
+        echo "PACKAGE_PATH=$packageName" >> $env:GITHUB_ENV
+        echo "PACKAGE_VERSION=$version" >> $env:GITHUB_ENV
+      shell: powershell
+
+    - name: Push package to Octopus
+      run: |
+        octo push `
+          --package ${{ env.PACKAGE_PATH }} `
+          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
+          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
+          --space "${{ env.OCTOPUS_SPACE }}" `
+          --replace-existing
+      shell: powershell
+
+    - name: Deploy to Demo Instance
+      run: |
+        Write-Host "Creating release for Demo instance..." -ForegroundColor Cyan
+        octo create-release `
+          --project "${{ env.OCTOPUS_PROJECT_DEMO }}" `
+          --version ${{ env.PACKAGE_VERSION }} `
+          --packageVersion ${{ env.PACKAGE_VERSION }} `
+          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
+          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
+          --space "${{ env.OCTOPUS_SPACE }}" `
+          --deployTo "Production" `
+          --progress
+      shell: powershell
+
+    - name: Deploy to Friends Instance
+      run: |
+        Write-Host "Creating release for Friends instance..." -ForegroundColor Cyan
+        octo create-release `
+          --project "${{ env.OCTOPUS_PROJECT_FRIENDS }}" `
+          --version ${{ env.PACKAGE_VERSION }} `
+          --packageVersion ${{ env.PACKAGE_VERSION }} `
+          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
+          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
+          --space "${{ env.OCTOPUS_SPACE }}" `
+          --deployTo "Production" `
+          --progress
+      shell: powershell
+
+    - name: Deploy to Kids Instance
+      run: |
+        Write-Host "Creating release for Kids instance..." -ForegroundColor Cyan
+        octo create-release `
+          --project "${{ env.OCTOPUS_PROJECT_KIDS }}" `
+          --version ${{ env.PACKAGE_VERSION }} `
+          --packageVersion ${{ env.PACKAGE_VERSION }} `
+          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
+          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
+          --space "${{ env.OCTOPUS_SPACE }}" `
+          --deployTo "Production" `
+          --progress
+      shell: powershell
+
+    - name: Deployment Summary
+      run: |
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host " All Instances Deployed!" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Version: ${{ env.PACKAGE_VERSION }}" -ForegroundColor White
+        Write-Host "Instances:" -ForegroundColor White
+        Write-Host "  - Demo (port 5015): C:\inetpub\wwwroot\MovieReview_demo" -ForegroundColor Gray
+        Write-Host "  - Friends (port 5010): C:\inetpub\wwwroot\MovieReview_friends" -ForegroundColor Gray
+        Write-Host "  - Kids (port 5012): C:\inetpub\wwwroot\MovieReview_kids" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "View in Octopus: ${{ secrets.OCTOPUS_SERVER_URL }}" -ForegroundColor Cyan
+        Write-Host ""
+      shell: powershell
