@@ -245,18 +245,57 @@ public class MonthlyDataGenerationService : BackgroundService
 
         _logger.LogInformation($"Person assigned from cache: {selector} for {month:yyyy-MM}");
 
-        // Generate movie event
+        // Get TMDB and Image services for cover fetching
+        using IServiceScope scope = _scopeFactory.CreateScope();
+        TmdbService tmdbService = scope.ServiceProvider.GetRequiredService<TmdbService>();
+        ImageService imageService = scope.ServiceProvider.GetRequiredService<ImageService>();
+
+        // Select movie and fetch TMDB info
+        string movieTitle = await SelectRandomMovieForMember(selector);
+        TmdbService.TmdbMovieInfo? tmdbInfo = null;
+        try
+        {
+            tmdbInfo = await tmdbService.GetMovieInfoAsync(movieTitle);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch TMDB info for {Movie}", movieTitle);
+        }
+
+        // Generate movie event with TMDB data
         MovieEvent movieEvent = new MovieEvent
         {
             PhaseNumber = currentPhase.Number,
             Person = selector,
-            Movie = await SelectRandomMovieForMember(selector),
+            Movie = tmdbInfo?.Title ?? movieTitle,
             Reasoning = GenerateReasonForMember(selector),
             StartDate = month,
             EndDate = month.AddMonths(1).AddDays(-1),
             MeetupTime = DateTime.SpecifyKind(GetLastFridayOfMonth(month).AddHours(19), DateTimeKind.Local),
-            AlreadySeen = false
+            AlreadySeen = false,
+            Synopsis = tmdbInfo?.Synopsis,
+            IMDb = tmdbInfo?.ImdbUrl,
+            PosterUrl = tmdbInfo?.PosterUrl
         };
+
+        // Download and store poster image
+        if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
+        {
+            try
+            {
+                Guid? imageId = await imageService.SaveImageFromUrlAsync(movieEvent.PosterUrl);
+                if (imageId.HasValue)
+                {
+                    movieEvent.ImageId = imageId;
+                    movieEvent.PosterUrl = null; // Clear URL after storing
+                    _logger.LogInformation("Downloaded and stored poster for {Movie}", movieEvent.Movie);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to download poster for {Movie}", movieEvent.Movie);
+            }
+        }
 
         await database.UpsertAsync(movieEvent);
         _logger.LogInformation($"Generated movie event for {selector} in {month:yyyy-MM}");

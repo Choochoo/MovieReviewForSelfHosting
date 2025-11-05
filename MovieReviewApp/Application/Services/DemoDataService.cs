@@ -1133,6 +1133,91 @@ public class DemoDataService
         }
     }
 
+    public async Task<(int Success, int Failure)> BackfillMissingCoversAsync()
+    {
+        Console.WriteLine("🎬 Starting immediate backfill of missing movie covers...");
+
+        // Find all MovieEvents without covers
+        var eventsWithoutCovers = await _database.GetCollection<MovieEvent>()!
+            .Find(me => me.ImageId == null)
+            .ToListAsync();
+
+        if (!eventsWithoutCovers.Any())
+        {
+            Console.WriteLine("✅ No movie events missing covers!");
+            return (0, 0);
+        }
+
+        Console.WriteLine($"📋 Found {eventsWithoutCovers.Count} movie events missing covers");
+
+        int successCount = 0;
+        int failureCount = 0;
+
+        foreach (var movieEvent in eventsWithoutCovers)
+        {
+            try
+            {
+                // If there's already a PosterUrl, try to download it directly
+                if (!string.IsNullOrEmpty(movieEvent.PosterUrl))
+                {
+                    var imageId = await _imageService.SaveImageFromUrlAsync(movieEvent.PosterUrl);
+                    if (imageId.HasValue)
+                    {
+                        movieEvent.ImageId = imageId;
+                        movieEvent.PosterUrl = null;
+                        await _database.UpsertAsync(movieEvent);
+                        successCount++;
+                        Console.WriteLine($"   ✅ {movieEvent.Movie} - Downloaded from existing URL");
+                        continue;
+                    }
+                }
+
+                // Otherwise, fetch from TMDB
+                var tmdbInfo = await _tmdbService.GetMovieInfoAsync(movieEvent.Movie);
+
+                if (tmdbInfo != null && !string.IsNullOrEmpty(tmdbInfo.PosterUrl))
+                {
+                    var imageId = await _imageService.SaveImageFromUrlAsync(tmdbInfo.PosterUrl);
+                    if (imageId.HasValue)
+                    {
+                        movieEvent.ImageId = imageId;
+
+                        // Also update other TMDB fields if they're missing
+                        if (string.IsNullOrEmpty(movieEvent.Synopsis))
+                            movieEvent.Synopsis = tmdbInfo.Synopsis;
+                        if (string.IsNullOrEmpty(movieEvent.IMDb))
+                            movieEvent.IMDb = tmdbInfo.ImdbUrl;
+
+                        await _database.UpsertAsync(movieEvent);
+                        successCount++;
+                        Console.WriteLine($"   ✅ {movieEvent.Movie} - Fetched from TMDB");
+                    }
+                    else
+                    {
+                        failureCount++;
+                        Console.WriteLine($"   ⚠️ {movieEvent.Movie} - Failed to save image");
+                    }
+                }
+                else
+                {
+                    failureCount++;
+                    Console.WriteLine($"   ⚠️ {movieEvent.Movie} - No TMDB data found");
+                }
+            }
+            catch (Exception ex)
+            {
+                failureCount++;
+                Console.WriteLine($"   ❌ {movieEvent.Movie} - Error: {ex.Message}");
+            }
+
+            // Small delay to avoid overwhelming TMDB API
+            await Task.Delay(250);
+        }
+
+        Console.WriteLine($"\n🎉 Backfill completed: {successCount} successful, {failureCount} failed");
+        return (successCount, failureCount);
+    }
+
     private class DemoMember
     {
         public string Name { get; set; } = string.Empty;

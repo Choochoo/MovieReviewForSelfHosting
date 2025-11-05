@@ -225,6 +225,7 @@ builder.Services.AddScoped<OpenAIAnalysisService>();
 
 // Background Services
 builder.Services.AddHostedService<MovieReviewApp.Application.Services.MonthlyDataGenerationService>();
+builder.Services.AddHostedService<MovieReviewApp.Application.Services.CoverBackfillService>();
 
 // Processing Services
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
