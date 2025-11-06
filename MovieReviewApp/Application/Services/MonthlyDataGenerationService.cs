@@ -1,5 +1,6 @@
 using MovieReviewApp.Infrastructure.Database;
 using MovieReviewApp.Infrastructure.Services;
+using MovieReviewApp.Infrastructure.FileSystem;
 using MovieReviewApp.Models;
 using MovieReviewApp.Extensions;
 using MongoDB.Driver;

@@ -7,6 +7,7 @@ using MovieReviewApp.Infrastructure.Services;
 using MovieReviewApp.Models;
 using MovieReviewApp.Extensions;
 using System.Net.Http;
+using MongoDB.Driver;
 
 namespace MovieReviewApp.Application.Services;
 
