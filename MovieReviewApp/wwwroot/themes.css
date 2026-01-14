@@ -1,8 +1,8 @@
 /* Theme System - Enhanced with unique fonts and better colors */
 /* This file only contains theme variable definitions - no layout changes */
 
-/* Import Google Fonts for theme variety */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=Dancing+Script:wght@400;700&family=Creepster&family=Bebas+Neue&family=Righteous&family=Pacifico&family=Bungee&family=Press+Start+2P&family=Cinzel:wght@400;700&family=Lobster&family=Abril+Fatface&family=Fredoka:wght@400;700&family=Kalam:wght@400;700&family=Permanent+Marker&family=Audiowide&family=Russo+One&family=Share+Tech+Mono&family=Major+Mono+Display&family=Bungee+Shade&family=Monoton&family=Special+Elite&family=IM+Fell+English&family=UnifrakturMaguntia&family=VT323&display=swap');
+/* Import focused cinema-style fonts */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap');
 
 /* Dark Theme (Default) - Enhanced Cyberpunk */
 :root[data-theme="dark"], :root {
@@ -10,27 +10,27 @@
   --background-secondary: #141414;
   --surface-color: #1a1a1a;
   --surface-hover: #242424;
-  --accent-primary: #00D9FF;
-  --accent-secondary: #FF0080;
-  --accent-tertiary: #00FF88;
-  --accent-purple: #9945FF;
-  --accent-orange: #FF6B00;
+  --accent-primary: #e50914;
+  --accent-secondary: #ff4d4d;
+  --accent-tertiary: #ff7a7a;
+  --accent-purple: #b31217;
+  --accent-orange: #ff7a00;
   --text-primary: #FFFFFF;
   --text-secondary: #E0E0E0;
   --text-muted: #666666;
   --border-color: #333333;
   --border-light: #444444;
   --success-color: #00FF88;
-  --error-color: #FF0080;
+  --error-color: #e50914;
   --warning-color: #FFB800;
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.3);
+  --shadow-glow: 0 0 18px rgba(229, 9, 20, 0.35);
   /* Theme fonts */
-  --font-family-display: 'Russo One', 'Arial Black', sans-serif;
-  --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --gradient-shift: linear-gradient(45deg, #00D9FF, #FF0080, #00FF88, #9945FF);
+  --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+  --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+  --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
   --gradient-shift-size: 400% 400%;
 }
 
@@ -40,11 +40,11 @@
     --background-secondary: #F8F9FA;
     --surface-color: #FFFFFF;
     --surface-hover: #F0F2F5;
-    --accent-primary: #0066CC;
-    --accent-secondary: #E91E63;
-    --accent-tertiary: #4CAF50;
-    --accent-purple: #7B1FA2;
-    --accent-orange: #FF6F00;
+    --accent-primary: #e50914;
+    --accent-secondary: #ff4d4d;
+    --accent-tertiary: #ff7a7a;
+    --accent-purple: #b31217;
+    --accent-orange: #ff7a00;
     --text-primary: #212121;
     --text-secondary: #424242;
     --text-muted: #757575;
@@ -56,71 +56,71 @@
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
-    --shadow-glow: 0 0 20px rgba(0, 102, 204, 0.2);
+    --shadow-glow: 0 0 14px rgba(229, 9, 20, 0.25);
     /* Theme fonts */
-    --font-family-display: 'Russo One', 'Arial Black', sans-serif;
-    --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --gradient-shift: linear-gradient(45deg, #0066CC, #E91E63, #4CAF50, #7B1FA2);
+    --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+    --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+    --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
     --gradient-shift-size: 400% 400%;
   }
 
   /* Cyberpunk Dark */
-  :root[data-theme="cyberpunk-dark"] {
-    --background-primary: #0a0a0a;
-    --background-secondary: #0f0f0f;
-    --surface-color: #1a1a1a;
-    --surface-hover: #252525;
-    --accent-primary: #00D9FF;
-    --accent-secondary: #FF0080;
-    --accent-tertiary: #00FF88;
-    --accent-purple: #9945FF;
-    --accent-orange: #FF6B00;
-    --text-primary: #FFFFFF;
-    --text-secondary: #E0E0E0;
-    --text-muted: #808080;
-    --border-color: #2a2a2a;
-    --border-light: #3a3a3a;
-    --success-color: #00FF88;
-    --error-color: #FF0080;
-    --warning-color: #FFB800;
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.8);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.9);
-    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 1);
-    --shadow-glow: 0 0 30px rgba(0, 217, 255, 0.5);
-    --font-family-display: 'Orbitron', 'Courier New', monospace;
-    --font-family-body: 'Roboto', 'Arial', sans-serif;
-    --gradient-shift: linear-gradient(45deg, #00D9FF, #FF0080, #00FF88, #9945FF);
-    --gradient-shift-size: 400% 400%;
-  }
+:root[data-theme="cyberpunk-dark"] {
+  --background-primary: #0a0a0a;
+  --background-secondary: #0f0f0f;
+  --surface-color: #1a1a1a;
+  --surface-hover: #252525;
+  --accent-primary: #e50914;
+  --accent-secondary: #ff4d4d;
+  --accent-tertiary: #ff7a7a;
+  --accent-purple: #b31217;
+  --accent-orange: #ff7a00;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E0E0E0;
+  --text-muted: #808080;
+  --border-color: #2a2a2a;
+  --border-light: #3a3a3a;
+  --success-color: #00FF88;
+  --error-color: #e50914;
+  --warning-color: #FFB800;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.8);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.9);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 1);
+  --shadow-glow: 0 0 18px rgba(229, 9, 20, 0.35);
+  --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+  --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+  --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
+  --gradient-shift-size: 400% 400%;
+}
 
   /* Cyberpunk Light */
-  :root[data-theme="cyberpunk-light"] {
-    --background-primary: #f5f5f5;
-    --background-secondary: #ffffff;
-    --surface-color: #ffffff;
-    --surface-hover: #f0f0f0;
-    --accent-primary: #0088CC;
-    --accent-secondary: #E91E63;
-    --accent-tertiary: #00C853;
-    --accent-purple: #7B1FA2;
-    --accent-orange: #FF6F00;
-    --text-primary: #1a1a1a;
-    --text-secondary: #424242;
-    --text-muted: #757575;
-    --border-color: #e0e0e0;
-    --border-light: #f0f0f0;
-    --success-color: #00C853;
-    --error-color: #E91E63;
-    --warning-color: #FFA000;
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
-    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.16);
-    --shadow-glow: 0 0 20px rgba(0, 136, 204, 0.2);
-    --font-family-display: 'Orbitron', 'Courier New', monospace;
-    --font-family-body: 'Roboto', 'Arial', sans-serif;
-    --gradient-shift: linear-gradient(45deg, #0088CC, #E91E63, #00C853, #7B1FA2);
-    --gradient-shift-size: 400% 400%;
-  }
+:root[data-theme="cyberpunk-light"] {
+  --background-primary: #f5f5f5;
+  --background-secondary: #ffffff;
+  --surface-color: #ffffff;
+  --surface-hover: #f0f0f0;
+  --accent-primary: #e50914;
+  --accent-secondary: #ff4d4d;
+  --accent-tertiary: #ff7a7a;
+  --accent-purple: #b31217;
+  --accent-orange: #ff7a00;
+  --text-primary: #1a1a1a;
+  --text-secondary: #424242;
+  --text-muted: #757575;
+  --border-color: #e0e0e0;
+  --border-light: #f0f0f0;
+  --success-color: #00C853;
+  --error-color: #e50914;
+  --warning-color: #FFA000;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.16);
+  --shadow-glow: 0 0 14px rgba(229, 9, 20, 0.25);
+  --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+  --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+  --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
+  --gradient-shift-size: 400% 400%;
+}
 
   /* Nature Dark */
   :root[data-theme="nature-dark"] {
@@ -460,10 +460,10 @@
     --success-color: #006600;
     --error-color: #cc0000;
     --warning-color: #cc6600;
-    --shadow-sm: 0 2px 4px rgba(0, 102, 204, 0.1);
-    --shadow-md: 0 4px 8px rgba(0, 102, 204, 0.15);
-    --shadow-lg: 0 8px 16px rgba(0, 102, 204, 0.2);
-    --shadow-glow: 0 0 20px rgba(0, 102, 204, 0.15);
+    --shadow-sm: 0 2px 4px rgba(229, 9, 20, 0.12);
+    --shadow-md: 0 4px 8px rgba(229, 9, 20, 0.18);
+    --shadow-lg: 0 8px 16px rgba(229, 9, 20, 0.22);
+    --shadow-glow: 0 0 14px rgba(229, 9, 20, 0.2);
     --font-family-display: 'VT323', 'Courier New', monospace;
     --font-family-body: 'Share Tech Mono', 'Courier New', monospace;
     --gradient-shift: linear-gradient(45deg, #0066cc, #cc0066, #cc6600, #6600cc);
@@ -512,7 +512,7 @@ h1, h2, h3, h4, h5, h6 {
 :root[data-theme="cyberpunk-light"] body::before,
 :root[data-theme="nature-light"] body::before,
 :root[data-theme="ocean-light"] body::before {
-  background: radial-gradient(circle at 20% 50%, rgba(0, 102, 204, 0.05) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(233, 30, 99, 0.05) 0%, transparent 50%), radial-gradient(circle at 40% 20%, rgba(123, 31, 162, 0.05) 0%, transparent 50%);
+  background: radial-gradient(circle at 20% 50%, rgba(229, 9, 20, 0.04) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255, 77, 77, 0.04) 0%, transparent 50%), radial-gradient(circle at 40% 20%, rgba(179, 18, 23, 0.04) 0%, transparent 50%);
 }
 
 /* All existing light theme styles remain the same */
@@ -576,7 +576,7 @@ h1, h2, h3, h4, h5, h6 {
   :root[data-theme="cyberpunk-light"] .btn-primary:hover,
   :root[data-theme="nature-light"] .btn-primary:hover,
   :root[data-theme="ocean-light"] .btn-primary:hover {
-    box-shadow: 0 5px 15px rgba(0, 102, 204, 0.3);
+    box-shadow: 0 5px 15px rgba(229, 9, 20, 0.28);
   }
 
 :root[data-theme="light"] .btn-secondary,
@@ -594,7 +594,7 @@ h1, h2, h3, h4, h5, h6 {
   :root[data-theme="ocean-light"] .btn-secondary:hover {
     border-color: var(--accent-primary);
     color: var(--accent-primary);
-    box-shadow: inset 0 0 10px rgba(0, 102, 204, 0.1);
+    box-shadow: inset 0 0 10px rgba(229, 9, 20, 0.12);
   }
 
 /* Form controls remain the same */
@@ -612,7 +612,7 @@ h1, h2, h3, h4, h5, h6 {
   :root[data-theme="nature-light"] .form-control:focus,
   :root[data-theme="ocean-light"] .form-control:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12);
   }
 
 /* All existing sidebar and navigation styles remain unchanged */
@@ -624,7 +624,7 @@ h1, h2, h3, h4, h5, h6 {
   background-color: #F8F9FA !important;
   background-image: none !important;
   background: #F8F9FA !important;
-  box-shadow: inset -1px 0 0 rgba(0, 102, 204, 0.1);
+  box-shadow: inset -1px 0 0 rgba(229, 9, 20, 0.12);
 }
 
 :root[data-theme="light"] .top-row,
@@ -762,7 +762,7 @@ h1, h2, h3, h4, h5, h6 {
   .theme-toggle:hover {
     background-color: var(--surface-hover);
     border-color: var(--accent-primary);
-    box-shadow: 0 0 10px rgba(0, 217, 255, 0.2);
+    box-shadow: 0 0 10px rgba(229, 9, 20, 0.2);
   }
 
 .theme-icon {
@@ -862,7 +862,7 @@ h1, h2, h3, h4, h5, h6 {
 :root[data-theme="cyberpunk-dark"] .settings-section {
   background: var(--surface-color);
   border: 1px solid var(--accent-primary);
-  box-shadow: 0 0 10px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.12);
 }
 
 :root[data-theme="cyberpunk-dark"] .section-title {
@@ -941,7 +941,7 @@ h1, h2, h3, h4, h5, h6 {
 
 :root[data-theme="cyberpunk-dark"] .form-control:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 0.2rem rgba(0, 217, 255, 0.25);
+  box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.2);
 }
 
 /* Light Theme Overrides */
@@ -968,4 +968,24 @@ h1, h2, h3, h4, h5, h6 {
 
 :root[data-theme="light"] .text-muted {
   color: var(--text-secondary) !important;
+}
+
+/* Cinema typography + glow overrides across themes */
+:root,
+:root[data-theme] {
+  --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+  --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+}
+
+:root[data-theme] h1,
+:root[data-theme] h2,
+:root[data-theme] h3,
+:root[data-theme] h4,
+:root[data-theme] h5,
+:root[data-theme] h6 {
+  background: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: var(--accent-primary) !important;
+  text-shadow: 0 0 12px rgba(229, 9, 20, 0.35);
+  animation: none !important;
 }

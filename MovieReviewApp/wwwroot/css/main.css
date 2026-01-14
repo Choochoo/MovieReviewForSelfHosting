@@ -3,8 +3,8 @@
 /* Movie Review App              */
 /* ============================= */
 
-/* Import Google Fonts for theme variety */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Playfair+Display:wght@400;700;900&family=Dancing+Script:wght@400;700&family=Creepster&family=Bebas+Neue&family=Righteous&family=Pacifico&family=Bungee&family=Press+Start+2P&family=Cinzel:wght@400;700&family=Lobster&family=Abril+Fatface&family=Fredoka:wght@400;700&family=Kalam:wght@400;700&family=Permanent+Marker&family=Audiowide&family=Russo+One&family=Share+Tech+Mono&family=Major+Mono+Display&family=Bungee+Shade&family=Monoton&display=swap');
+/* Import focused cinema-style fonts */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Source+Sans+3:wght@400;600;700&display=swap');
 
 /* ============================= */
 /* THEME SYSTEM                  */
@@ -16,11 +16,11 @@
   --background-secondary: #141414;
   --surface-color: #1a1a1a;
   --surface-hover: #242424;
-  --accent-primary: #00D9FF;
-  --accent-secondary: #FF0080;
-  --accent-tertiary: #00FF88;
-  --accent-purple: #9945FF;
-  --accent-orange: #FF6B00;
+  --accent-primary: #e50914;
+  --accent-secondary: #ff4d4d;
+  --accent-tertiary: #ff7a7a;
+  --accent-purple: #b31217;
+  --accent-orange: #ff7a00;
   --text-primary: #FFFFFF;
   --text-secondary: #E0E0E0;
   --text-muted: #666666;
@@ -32,11 +32,11 @@
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 20px rgba(0, 217, 255, 0.3);
+  --shadow-glow: 0 0 18px rgba(229, 9, 20, 0.35);
   /* Theme fonts */
-  --font-family-display: 'Orbitron', 'Courier New', monospace;
-  --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --gradient-shift: linear-gradient(45deg, #00D9FF, #FF0080, #00FF88, #9945FF);
+  --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+  --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+  --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
   --gradient-shift-size: 400% 400%;
 }
 
@@ -46,11 +46,11 @@
     --background-secondary: #F8F9FA;
     --surface-color: #FFFFFF;
     --surface-hover: #F0F2F5;
-    --accent-primary: #0066CC;
-    --accent-secondary: #E91E63;
-    --accent-tertiary: #4CAF50;
-    --accent-purple: #7B1FA2;
-    --accent-orange: #FF6F00;
+    --accent-primary: #e50914;
+    --accent-secondary: #ff4d4d;
+    --accent-tertiary: #ff7a7a;
+    --accent-purple: #b31217;
+    --accent-orange: #ff7a00;
     --text-primary: #212121;
     --text-secondary: #424242;
     --text-muted: #757575;
@@ -62,11 +62,11 @@
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
-    --shadow-glow: 0 0 20px rgba(0, 102, 204, 0.2);
+    --shadow-glow: 0 0 14px rgba(229, 9, 20, 0.25);
     /* Theme fonts */
-    --font-family-display: 'Russo One', 'Arial Black', sans-serif;
-    --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --gradient-shift: linear-gradient(45deg, #0066CC, #E91E63, #4CAF50, #7B1FA2);
+    --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
+    --font-family-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+    --gradient-shift: linear-gradient(120deg, #b31217, #e50914, #ff4d4d);
     --gradient-shift-size: 400% 400%;
   }
 
@@ -155,12 +155,11 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   margin-top: 0;
   margin-bottom: 1rem;
-  background: var(--gradient-shift);
-  background-size: var(--gradient-shift-size);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 3s ease infinite;
+  color: var(--accent-primary);
+  text-shadow: 0 0 12px rgba(229, 9, 20, 0.35);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
 }
 
 @keyframes gradientShift {
@@ -235,7 +234,7 @@ a {
 
   .btn-primary:hover, .themed-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 217, 255, 0.4);
+    box-shadow: 0 5px 15px rgba(229, 9, 20, 0.28);
   }
 
   .btn-secondary, .themed-btn.secondary {
@@ -247,7 +246,7 @@ a {
     .btn-secondary:hover, .themed-btn.secondary:hover {
       border-color: var(--accent-primary);
       color: var(--accent-primary);
-      box-shadow: inset 0 0 10px rgba(0, 217, 255, 0.2);
+      box-shadow: inset 0 0 10px rgba(229, 9, 20, 0.18);
     }
 
 /* ============================= */
@@ -269,7 +268,7 @@ a {
   .form-control:focus, .themed .form-control:focus {
     outline: none;
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1), inset 0 0 5px rgba(0, 217, 255, 0.2);
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12), inset 0 0 5px rgba(229, 9, 20, 0.18);
   }
 
 label, .form-label {
@@ -344,12 +343,11 @@ label, .form-label {
   font-size: 1.75rem;
   font-weight: 700;
   font-family: var(--font-family-display) !important;
-  background: var(--gradient-shift);
-  background-size: var(--gradient-shift-size);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 3s ease infinite;
+  color: var(--accent-primary);
+  text-shadow: 0 0 14px rgba(229, 9, 20, 0.4);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
   letter-spacing: -0.02em;
   text-decoration: none;
   margin-bottom: 0.25rem;
@@ -950,7 +948,7 @@ label, .form-label {
 .form-input-styled:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12);
 }
 
 .form-input-small {
@@ -1531,7 +1529,7 @@ label, .form-label {
 
 .movie-card:hover {
   transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 217, 255, 0.3);
+  box-shadow: 0 20px 40px rgba(229, 9, 20, 0.22);
   border-color: var(--accent-primary);
 }
 
@@ -2017,7 +2015,7 @@ td .reasoning-content {
 .setup-section .form-control:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12);
 }
 
 .setup-section .help-text {
@@ -2280,10 +2278,10 @@ td .reasoning-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(0, 217, 255, 0.1);
+  background: rgba(229, 9, 20, 0.08);
   padding: 0.75rem 1rem;
   border-radius: 0.25rem;
-  border: 1px solid rgba(0, 217, 255, 0.3);
+  border: 1px solid rgba(229, 9, 20, 0.22);
   margin-top: 1rem;
   color: var(--accent-primary);
   font-size: 0.9rem;
@@ -2662,7 +2660,7 @@ td .reasoning-content {
 
 .question-item:hover {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 10px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 0 10px rgba(229, 9, 20, 0.12);
 }
 
 .question-main {
