@@ -2,6 +2,7 @@ using MovieReviewApp.Extensions;
 using MovieReviewApp.Models;
 using MovieReviewApp.Infrastructure.Database;
 using System.Text.Json;
+using MovieReviewApp.Utilities;
 
 namespace MovieReviewApp.Application.Services;
 
@@ -124,7 +125,8 @@ public class PersonAssignmentCacheService
                 // CRITICAL: Must count calendar months, NOT database events
                 // This ensures Random(1337) produces deterministic results regardless of database state
                 int monthsSinceStart = 0;
-                DateTime now = DateTime.Now;
+                // Use DateProvider so date simulation is consistent across the app.
+                DateTime now = DateProvider.Now;
                 if (now > clubStartDate)
                 {
                     // Calculate total months between StartDate and now

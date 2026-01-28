@@ -1,0 +1,400 @@
+@using MovieReviewApp.Models
+@using MovieReviewApp.Extensions
+
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4" style="background-color: var(--surface-color); border: 2px solid var(--accent-primary); color: var(--text-primary);">
+            <div class="card-header" style="background-color: var(--accent-primary); color: var(--surface-color);">
+                <h4 class="mb-0">
+                    <i class="bi bi-list-check me-2"></i>
+                    Category Voting - @CurrentDate.ToLocalDisplay().ToString("MMMM yyyy")
+                </h4>
+                <small>Rate every category (Don't Like / Like / Love). Top 12 will be used for awards.</small>
+            </div>
+            <div class="card-body">
+                @if (IsLoading)
+                {
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading categories...</p>
+                    </div>
+                }
+                else if (VotingEvent == null)
+                {
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Unable to load category voting event. Please refresh the page.
+                    </div>
+                }
+                else
+                {
+                    <!-- Voting Status Banner -->
+                    <div class="alert mb-4" style="background-color: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="mb-0" style="color: var(--text-primary);">Voting Status</h5>
+                            <span class="badge" style="background-color: var(--accent-secondary); color: var(--surface-color);">
+                                @CompletedVoterCount / @TotalVoterCount voted
+                            </span>
+                        </div>
+                        @if (PendingVoters.Any())
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (Person voter in AllVoters)
+                                {
+                                    bool hasVoted = !PendingVoters.Any(p => p.Name.Equals(voter.Name, StringComparison.OrdinalIgnoreCase));
+                                    <span class="badge @(hasVoted ? "bg-success" : "bg-warning text-dark")"
+                                          style="padding: 0.5rem 0.75rem;">
+                                        @voter.Name
+                                        @if (hasVoted)
+                                        {
+                                            <i class="bi bi-check-circle ms-1"></i>
+                                        }
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-success">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                All members have voted! Voting is now locked.
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Identity Selection -->
+                    @if (string.IsNullOrEmpty(SelectedUser))
+                    {
+                        <div class="card mb-4" style="background-color: var(--surface-hover); border: 1px solid var(--border-color);">
+                            <div class="card-body">
+                                <h5 style="color: var(--text-primary);">Select Your Identity</h5>
+                                <p class="text-muted">Choose who you are to start voting. Your identity will be locked to your device.</p>
+
+                                @if (!string.IsNullOrEmpty(LockedIdentityName))
+                                {
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Your device is already registered as <strong>@LockedIdentityName</strong>.
+                                        <button class="btn btn-sm btn-primary ms-2" @onclick="UseLockedIdentity">
+                                            Continue as @LockedIdentityName
+                                        </button>
+                                    </div>
+                                }
+
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (Person person in AllVoters)
+                                    {
+                                        <button class="btn btn-outline-primary"
+                                                @onclick="() => SelectIdentity(person.Name)"
+                                                disabled="@(!string.IsNullOrEmpty(LockedIdentityName) && !person.Name.Equals(LockedIdentityName, StringComparison.OrdinalIgnoreCase))">
+                                            @person.Name
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- User Info Banner -->
+                        <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded"
+                             style="background-color: var(--surface-hover); border: 1px solid var(--border-color);">
+                            <div>
+                                <span style="color: var(--text-secondary);">Voting as:</span>
+                                <strong style="color: var(--accent-primary); margin-left: 0.5rem;">@SelectedUser</strong>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="LogOut">
+                                <i class="bi bi-box-arrow-right me-1"></i>Log Out
+                            </button>
+                        </div>
+
+                        @if (IsVotingLocked)
+                        {
+                            <div class="alert alert-success mb-4">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                Voting is complete and locked. Results are shown below.
+                            </div>
+
+                            @if (UserCategoryRatings.Any())
+                            {
+                                <div class="card mb-4" style="background-color: var(--surface-hover); border: 1px solid var(--border-color);">
+                                    <div class="card-header" style="background-color: var(--surface-color);">
+                                        <h5 class="mb-0" style="color: var(--text-primary);">Your Ratings</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" style="color: var(--text-primary);">
+                                                <thead>
+                                                    <tr style="background-color: var(--surface-hover);">
+                                                        <th>Category</th>
+                                                        <th style="width: 160px;">Rating</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (string category in VotingEvent.GeneratedCategories)
+                                                    {
+                                                        int rating = UserCategoryRatings.TryGetValue(category, out int value) ? value : -1;
+                                                        <tr>
+                                                            <td>@category</td>
+                                                            <td>
+                                                                <span class="badge @GetRatingBadgeClass(rating)">@GetRatingLabel(rating)</span>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>
+                                    You did not submit ratings before voting closed.
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            @if (HasVoted)
+                            {
+                                <div class="alert alert-info mb-4">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    Your ratings are saved. You can update them until voting is complete.
+                                </div>
+                            }
+
+                            <!-- Progress -->
+                            <div class="progress mb-4">
+                                <div class="progress-bar" style="width: @(TotalCategoryCount == 0 ? 0 : (RatedCount * 100 / TotalCategoryCount))%">
+                                    @RatedCount / @TotalCategoryCount categories rated
+                                </div>
+                            </div>
+
+                            @if (HasAttemptedSubmit && UnratedCategories.Any())
+                            {
+                                <div class="alert alert-danger mb-4">
+                                    <h5><i class="bi bi-exclamation-triangle me-2"></i>Please rate all categories before submitting</h5>
+                                    <p>You have @UnratedCategories.Count unrated categories:</p>
+                                    <div class="unrated-list">
+                                        @foreach (string category in UnratedCategories.Take(12))
+                                        {
+                                            <div>
+                                                <button type="button" class="btn btn-link p-0" @onclick="() => ScrollToCategory(category)">@category</button>
+                                            </div>
+                                        }
+                                        @if (UnratedCategories.Count > 12)
+                                        {
+                                            <div class="text-muted">...and @(UnratedCategories.Count - 12) more</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Rating Grid -->
+                            <div class="row">
+                                @foreach (string category in VotingEvent.GeneratedCategories)
+                                {
+                                    int currentRating = GetRatingForCategory(category);
+                                    bool isUnrated = currentRating < 0;
+                                    bool showWarning = HasAttemptedSubmit && isUnrated;
+
+                                    <div class="col-12 mb-3" id="category-@category.GetHashCode()">
+                                        <div class="card category-rating-card @(showWarning ? "border-danger border-2" : "")">
+                                            @if (showWarning)
+                                            {
+                                                <div class="card-header bg-danger text-white py-1">
+                                                    <small><i class="bi bi-exclamation-circle me-1"></i>Please rate this category</small>
+                                                </div>
+                                            }
+                                            <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                                <span class="category-name @(showWarning ? "text-danger fw-bold" : "")">@category</span>
+                                                <div class="btn-group rating-buttons">
+                                                    <button type="button" class="btn btn-sm @(currentRating < 0 ? "btn-secondary active" : "btn-outline-secondary")"
+                                                            @onclick="() => SetRating(category, -1)">
+                                                        Not Selected
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm @(currentRating == 0 ? "btn-danger active" : "btn-outline-danger")"
+                                                            @onclick="() => SetRating(category, 0)">
+                                                        Don't Like
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm @(currentRating == 1 ? "btn-warning active" : "btn-outline-warning")"
+                                                            @onclick="() => SetRating(category, 1)">
+                                                        Like
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm @(currentRating == 2 ? "btn-success active" : "btn-outline-success")"
+                                                            @onclick="() => SetRating(category, 2)">
+                                                        Love
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button class="btn btn-lg btn-success" @onclick="SubmitVotes"
+                                        disabled="@(UnratedCategories.Any() || IsSubmitting)">
+                                    @if (IsSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                        <span>Submitting...</span>
+                                    }
+                                    else if (UnratedCategories.Any())
+                                    {
+                                        <span>Rate @UnratedCategories.Count more categories to submit</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-2"></i>
+                                        <span>Submit Your Ratings</span>
+                                    }
+                                </button>
+                                @if (UnratedCategories.Any())
+                                {
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-warning" @onclick="AttemptSubmit">
+                                            <i class="bi bi-exclamation-triangle me-2"></i>Show missing categories
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+
+                    <!-- Results Section -->
+                    <div class="card mt-4" style="background-color: var(--surface-color); border: 1px solid var(--border-color);">
+                        <div class="card-header d-flex justify-content-between align-items-center"
+                             style="background-color: var(--surface-hover); border-bottom: 1px solid var(--border-color);">
+                            <h5 class="mb-0" style="color: var(--text-primary);">
+                                <i class="bi bi-bar-chart-fill me-2"></i>Current Vote Standings
+                            </h5>
+                            @if (!IsVotingComplete)
+                            {
+                                <button class="btn btn-sm btn-outline-primary" @onclick="ToggleResults">
+                                    @(ShowResults ? "Hide Results" : "Show Results")
+                                </button>
+                            }
+                        </div>
+                        @if (ShowResults || IsVotingComplete)
+                        {
+                            <div class="card-body">
+                                @if (!IsVotingComplete && !IsPasswordVerified)
+                                {
+                                    <div class="mb-3">
+                                        <label class="form-label">Enter password to view results:</label>
+                                        <div class="input-group" style="max-width: 300px;">
+                                            <input type="password" class="form-control" @bind="EnteredPassword"
+                                                   @bind:event="oninput" placeholder="Password" />
+                                            <button class="btn btn-primary" @onclick="VerifyPassword">
+                                                <i class="bi bi-unlock"></i>
+                                            </button>
+                                        </div>
+                                        @if (ShowPasswordError)
+                                        {
+                                            <small class="text-danger">Incorrect password</small>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    @if (VoteResults.Any())
+                                    {
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" style="color: var(--text-primary);">
+                                                <thead>
+                                                    <tr style="background-color: var(--surface-hover);">
+                                                        <th style="width: 50px;">#</th>
+                                                        <th>Category</th>
+                                                        <th style="width: 120px;">Total Points</th>
+                                                        <th style="width: 80px;">Love</th>
+                                                        <th style="width: 80px;">Like</th>
+                                                        <th style="width: 110px;">Don't Like</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @{ int rank = 1; }
+                                                    @foreach (CategoryVoteResult result in VoteResults.Take(IsVotingComplete ? 12 : 20))
+                                                    {
+                                                        bool isTop12 = rank <= 12;
+                                                        <tr style="@(isTop12 ? "background-color: rgba(var(--accent-primary-rgb), 0.1);" : "")">
+                                                            <td>
+                                                                @if (isTop12)
+                                                                {
+                                                                    <span class="badge bg-success">@rank</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span class="text-muted">@rank</span>
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                @if (isTop12)
+                                                                {
+                                                                    <strong>@result.CategoryName</strong>
+                                                                }
+                                                                else
+                                                                {
+                                                                    @result.CategoryName
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                <span class="badge @(isTop12 ? "bg-success" : "bg-secondary")">
+                                                                    @result.TotalPoints
+                                                                </span>
+                                                            </td>
+                                                            <td>@result.LoveCount</td>
+                                                            <td>@result.LikeCount</td>
+                                                            <td>@result.DontLikeCount</td>
+                                                        </tr>
+                                                        rank++;
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div class="text-muted text-center mt-2">
+                                            <small>Top 12 categories (highlighted in green) will be used for awards voting</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted text-center">No votes cast yet.</p>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .category-rating-card {
+        background-color: var(--surface-hover);
+        border: 1px solid var(--border-color);
+    }
+
+    .rating-buttons .btn {
+        min-width: 110px;
+    }
+
+    .unrated-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .highlight-pulse {
+        animation: pulse 0.5s ease-in-out 3;
+    }
+
+    @@keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        50% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+    }
+</style>

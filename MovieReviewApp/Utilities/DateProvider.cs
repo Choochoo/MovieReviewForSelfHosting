@@ -1,4 +1,4 @@
-﻿namespace MovieReviewApp.Utilities
+namespace MovieReviewApp.Utilities
 {
     public static class DateProvider
     {

@@ -29,15 +29,14 @@ public static class PhaseCalculator
 
         int phaseNumber = 1;
         int eventsInPhase = 0;
-        int consecutivePhases = 0;
+        int completedPhasesSinceLastAward = 0;
 
         while (currentMonth <= target)
         {
-            // Check if this is an awards month
+            // Check if this is an awards month (occurs after completing PhasesBeforeAward phases)
             bool isAwardsMonth = awardsSettings?.AwardsEnabled == true &&
                                  awardsSettings.PhasesBeforeAward > 0 &&
-                                 consecutivePhases > 0 &&
-                                 consecutivePhases % awardsSettings.PhasesBeforeAward == 0;
+                                 completedPhasesSinceLastAward >= awardsSettings.PhasesBeforeAward;
 
             if (isAwardsMonth)
             {
@@ -46,8 +45,9 @@ public static class PhaseCalculator
                     return phaseNumber;
 
                 // Don't increment phaseNumber - awards are gaps, not phases
+                // Reset the counter for next awards cycle
                 eventsInPhase = 0;
-                consecutivePhases++;
+                completedPhasesSinceLastAward = 0;
             }
             else
             {
@@ -62,7 +62,7 @@ public static class PhaseCalculator
                 {
                     phaseNumber++;
                     eventsInPhase = 0;
-                    consecutivePhases++;
+                    completedPhasesSinceLastAward++;
                 }
             }
 
@@ -92,7 +92,7 @@ public static class PhaseCalculator
         DateTime currentMonth = clubStartDate.StartOfMonth();
         int currentPhaseNumber = 1;
         int eventsInPhase = 0;
-        int consecutivePhases = 0;
+        int completedPhasesSinceLastAward = 0;
 
         DateTime? phaseStart = null;
         DateTime? phaseEnd = null;
@@ -103,11 +103,10 @@ public static class PhaseCalculator
 
         while (monthsChecked < maxMonthsToCheck)
         {
-            // Check if this is an awards month
+            // Check if this is an awards month (occurs after completing PhasesBeforeAward phases)
             bool isAwardsMonth = awardsSettings?.AwardsEnabled == true &&
                                  awardsSettings.PhasesBeforeAward > 0 &&
-                                 consecutivePhases > 0 &&
-                                 consecutivePhases % awardsSettings.PhasesBeforeAward == 0;
+                                 completedPhasesSinceLastAward >= awardsSettings.PhasesBeforeAward;
 
             if (currentPhaseNumber == phaseNumber)
             {
@@ -131,8 +130,9 @@ public static class PhaseCalculator
                 }
 
                 // Don't increment currentPhaseNumber - awards are gaps, not phases
+                // Reset the counter for next awards cycle
                 eventsInPhase = 0;
-                consecutivePhases++;
+                completedPhasesSinceLastAward = 0;
             }
             else
             {
@@ -150,7 +150,7 @@ public static class PhaseCalculator
 
                     currentPhaseNumber++;
                     eventsInPhase = 0;
-                    consecutivePhases++;
+                    completedPhasesSinceLastAward++;
                 }
             }
 
@@ -186,30 +186,32 @@ public static class PhaseCalculator
         DateTime target = targetMonth.StartOfMonth();
 
         int eventsInPhase = 0;
-        int consecutivePhases = 0;
+        int completedPhasesSinceLastAward = 0;
 
         while (currentMonth <= target)
         {
-            // Check if this is an awards month
-            bool isAwardsMonth = consecutivePhases > 0 &&
-                                 consecutivePhases % awardsSettings.PhasesBeforeAward == 0;
+            // Check if this is an awards month (occurs after completing PhasesBeforeAward phases)
+            bool isAwardsMonth = completedPhasesSinceLastAward >= awardsSettings.PhasesBeforeAward;
 
             if (currentMonth == target)
                 return isAwardsMonth;
 
             if (isAwardsMonth)
             {
+                // Awards month - reset the counter, don't count as a phase
                 eventsInPhase = 0;
-                consecutivePhases++;
+                completedPhasesSinceLastAward = 0;
             }
             else
             {
+                // Regular event month
                 eventsInPhase++;
 
                 if (eventsInPhase >= peoplePerPhase)
                 {
+                    // Completed a phase
                     eventsInPhase = 0;
-                    consecutivePhases++;
+                    completedPhasesSinceLastAward++;
                 }
             }
 
@@ -217,6 +219,28 @@ public static class PhaseCalculator
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Determines if a given month is the month BEFORE an awards month (pre-awards voting month)
+    /// </summary>
+    /// <param name="targetMonth">Month to check</param>
+    /// <param name="clubStartDate">Club start date</param>
+    /// <param name="peoplePerPhase">Number of people per phase</param>
+    /// <param name="awardsSettings">Awards configuration</param>
+    /// <returns>True if the NEXT month is an awards month</returns>
+    public static bool IsMonthBeforeAwards(
+        DateTime targetMonth,
+        DateTime clubStartDate,
+        int peoplePerPhase,
+        AwardSetting? awardsSettings)
+    {
+        if (awardsSettings?.AwardsEnabled != true)
+            return false;
+
+        // Check if NEXT month is an awards month
+        DateTime nextMonth = targetMonth.AddMonths(1);
+        return IsAwardsMonth(nextMonth, clubStartDate, peoplePerPhase, awardsSettings);
     }
 
     /// <summary>
@@ -237,20 +261,20 @@ public static class PhaseCalculator
         DateTime target = targetMonth.StartOfMonth();
 
         int eventsInPhase = 0;
-        int consecutivePhases = 0;
+        int completedPhasesSinceLastAward = 0;
 
         while (currentMonth <= target)
         {
-            // Check if this is an awards month
+            // Check if this is an awards month (occurs after completing PhasesBeforeAward phases)
             bool isAwardsMonth = awardsSettings?.AwardsEnabled == true &&
                                  awardsSettings.PhasesBeforeAward > 0 &&
-                                 consecutivePhases > 0 &&
-                                 consecutivePhases % awardsSettings.PhasesBeforeAward == 0;
+                                 completedPhasesSinceLastAward >= awardsSettings.PhasesBeforeAward;
 
             if (isAwardsMonth)
             {
+                // Awards month - reset counters
                 eventsInPhase = 0;
-                consecutivePhases++;
+                completedPhasesSinceLastAward = 0;
             }
             else
             {
@@ -259,7 +283,7 @@ public static class PhaseCalculator
                 if (eventsInPhase >= peoplePerPhase && currentMonth < target)
                 {
                     eventsInPhase = 0;
-                    consecutivePhases++;
+                    completedPhasesSinceLastAward++;
                 }
             }
 

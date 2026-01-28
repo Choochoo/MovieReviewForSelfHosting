@@ -43,6 +43,7 @@ namespace MovieReviewApp.Components.Pages
         public bool IsShowingPastEvent => _viewModel?.IsShowingPastEvent ?? false;
         public List<DiscussionQuestion> DiscussionQuestions => _viewModel?.DiscussionQuestions ?? new();
         public bool IsCurrentPhaseAwardPhase => _viewModel?.IsCurrentPhaseAwardPhase ?? false;
+        public bool IsPreAwardsVotingMonth => _viewModel?.IsPreAwardsVotingMonth ?? false;
         public AwardSetting? AwardSettings => _viewModel?.AwardSettings;
         public List<AwardEvent> AllAwardEvents => _viewModel?.AllAwardEvents ?? new();
         public AwardEvent? LastCompletedAward => _viewModel?.LastCompletedAward;

@@ -23,6 +23,7 @@ namespace MovieReviewApp.Application.Services
         private readonly DiscussionQuestionService _discussionQuestionService;
         private readonly SiteUpdateService _siteUpdateService;
         private readonly AwardVoteService _awardVoteService;
+        private readonly CategoryVotingService _categoryVotingService;
 
         public HomePageDataService(
             ILogger<HomePageDataService> logger,
@@ -33,7 +34,8 @@ namespace MovieReviewApp.Application.Services
             AwardQuestionService awardQuestionService,
             DiscussionQuestionService discussionQuestionService,
             SiteUpdateService siteUpdateService,
-            AwardVoteService awardVoteService)
+            AwardVoteService awardVoteService,
+            CategoryVotingService categoryVotingService)
         {
             _logger = logger;
             _settingService = settingService;
@@ -44,6 +46,7 @@ namespace MovieReviewApp.Application.Services
             _discussionQuestionService = discussionQuestionService;
             _siteUpdateService = siteUpdateService;
             _awardVoteService = awardVoteService;
+            _categoryVotingService = categoryVotingService;
         }
 
         /// <summary>
@@ -99,6 +102,9 @@ namespace MovieReviewApp.Application.Services
 
             // Determine current award phase
             await DetermineAwardPhaseAsync(viewModel);
+
+            // Determine if we're in a pre-awards voting month
+            await DeterminePreAwardsVotingAsync(viewModel);
 
             // Get award settings
             viewModel.AwardSettings = await GetAwardSettingsAsync(viewModel.Settings);
@@ -172,6 +178,48 @@ namespace MovieReviewApp.Application.Services
                 .FirstOrDefault(ae => ae.StartDate <= now && ae.EndDate >= now);
 
             viewModel.IsCurrentPhaseAwardPhase = currentAwardEvent != null;
+        }
+
+        private async Task DeterminePreAwardsVotingAsync(HomePageViewModel viewModel)
+        {
+            // Skip if we're already in an award phase
+            if (viewModel.IsCurrentPhaseAwardPhase)
+            {
+                _logger.LogInformation("DeterminePreAwardsVotingAsync: Skipping - already in award phase");
+                viewModel.IsPreAwardsVotingMonth = false;
+                return;
+            }
+
+            _logger.LogInformation("DeterminePreAwardsVotingAsync: Checking if pre-awards month for {Date}", DateProvider.Now);
+
+            // Check if we're in a pre-awards voting month
+            try
+            {
+                viewModel.IsPreAwardsVotingMonth = await _categoryVotingService.IsPreAwardsMonthAsync();
+                _logger.LogInformation("DeterminePreAwardsVotingAsync: IsPreAwardsMonthAsync returned {Result}", viewModel.IsPreAwardsVotingMonth);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DeterminePreAwardsVotingAsync: Error checking pre-awards month");
+                viewModel.IsPreAwardsVotingMonth = false;
+                return;
+            }
+
+            if (viewModel.IsPreAwardsVotingMonth)
+            {
+                _logger.LogInformation("Currently in pre-awards voting month");
+
+                // Get or create the category voting event (this will also generate categories if needed)
+                viewModel.CurrentCategoryVotingEvent = await _categoryVotingService.GetOrCreateCurrentEventAsync();
+
+                if (viewModel.CurrentCategoryVotingEvent != null)
+                {
+                    _logger.LogInformation(
+                        "Category voting event loaded: {EventId} with {CategoryCount} categories",
+                        viewModel.CurrentCategoryVotingEvent.Id,
+                        viewModel.CurrentCategoryVotingEvent.GeneratedCategories.Count);
+                }
+            }
         }
 
         private async Task<AwardSetting?> GetAwardSettingsAsync(List<Setting> settings)

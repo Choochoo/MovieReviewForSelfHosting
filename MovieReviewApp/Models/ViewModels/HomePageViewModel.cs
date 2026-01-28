@@ -10,6 +10,10 @@ namespace MovieReviewApp.Models.ViewModels
         public MovieEvent? NextEvent { get; set; }
         public bool IsShowingPastEvent { get; set; }
 
+        // Pre-awards voting data (month before awards)
+        public bool IsPreAwardsVotingMonth { get; set; }
+        public CategoryVotingEvent? CurrentCategoryVotingEvent { get; set; }
+
         // Award data
         public bool IsCurrentPhaseAwardPhase { get; set; }
         public AwardSetting? AwardSettings { get; set; }

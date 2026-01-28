@@ -66,6 +66,18 @@
                 </div>
             </div>
         }
+        else if (IsPreAwardsVotingMonth)
+        {
+            <div class="row">
+                <div class="col-12">
+                    <div class="alert alert-info mb-3">
+                        <h4>📋 Pre-Awards Category Voting!</h4>
+                        <p>Next month is awards month. Help us choose which categories to vote on!</p>
+                    </div>
+                    <CategoryVoting CurrentDate="DateProvider.Now" />
+                </div>
+            </div>
+        }
         else if (CurrentEvent != null)
         {
             @if (IsShowingPastEvent)

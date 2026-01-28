@@ -168,6 +168,13 @@ builder.Services.AddScoped<AwardEventService>();
 builder.Services.AddScoped<AwardQuestionService>();
 builder.Services.AddScoped<AwardVoteService>();
 
+// Register category voting services (pre-awards voting)
+builder.Services.AddScoped<CategoryVotingEventService>();
+builder.Services.AddScoped<CategoryVoteService>();
+builder.Services.AddScoped<VoterIdentityService>();
+builder.Services.AddScoped<CategoryGenerationService>();
+builder.Services.AddScoped<CategoryVotingService>();
+
 // Register Lazy<T> factory for circular dependency resolution
 builder.Services.AddScoped(provider => new Lazy<AwardQuestionService>(() => provider.GetRequiredService<AwardQuestionService>()));
 builder.Services.AddScoped<ImageStorageService>();

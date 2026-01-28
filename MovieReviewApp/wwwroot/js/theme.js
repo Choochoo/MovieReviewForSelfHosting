@@ -106,3 +106,12 @@ window.getStoredTheme = () => {
     document.documentElement.setAttribute('data-theme', combinedTheme);
     
 })(); 
+
+window.scrollToElement = (elementId) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('highlight-pulse');
+        setTimeout(() => element.classList.remove('highlight-pulse'), 2000);
+    }
+};
