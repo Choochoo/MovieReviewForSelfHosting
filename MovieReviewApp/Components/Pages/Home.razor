@@ -66,67 +66,71 @@
                 </div>
             </div>
         }
-        else if (IsPreAwardsVotingMonth)
+        else
         {
-            <div class="row">
-                <div class="col-12">
-                    <div class="alert alert-info mb-3">
-                        <h4>📋 Pre-Awards Category Voting!</h4>
-                        <p>Next month is awards month. Help us choose which categories to vote on!</p>
-                    </div>
-                    <CategoryVoting CurrentDate="DateProvider.Now" />
-                </div>
-            </div>
-        }
-        else if (CurrentEvent != null)
-        {
-            @if (IsShowingPastEvent)
+            @if (CurrentEvent != null)
             {
-                <div class="alert alert-info mb-3">
-                    <i class="bi bi-info-circle"></i> No current movie event scheduled. Showing the most recent past event.
+                @if (IsShowingPastEvent)
+                {
+                    <div class="alert alert-info mb-3">
+                        <i class="bi bi-info-circle"></i> No current movie event scheduled. Showing the most recent past event.
+                    </div>
+                }
+                <div class="row">
+                    <div class="col-md-6">
+                        <Phase MovieEvent="CurrentEvent" OnPersonSwapped="HandlePersonSwapped" />
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Review Questions</h5>
+                            </div>
+                            <div class="card-body">
+                                @if (DiscussionQuestions?.Any() == true)
+                                {
+                                    <ol>
+                                        @foreach (var question in DiscussionQuestions)
+                                        {
+                                            <li>@question.Question</li>
+                                        }
+                                    </ol>
+                                }
+                                else
+                                {
+                                    <ol>
+                                        <li>Did I like the movie?</li>
+                                        <li>Am I glad I watched the movie?</li>
+                                        <li>Do I think I'd ever watch it again?</li>
+                                        <li>Would you ever recommend this movie?</li>
+                                        <li>What was my favorite part of the movie?</li>
+                                        <li>What was my least favorite part of the movie?</li>
+                                        <li>What was my favorite line of the movie?</li>
+                                    </ol>
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <i class="bi bi-info-circle"></i>
+                                            These are the default questions. You can customize them in <a href="/settings">Settings</a>.
+                                        </small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
                 </div>
             }
-            <div class="row">
-                <div class="col-md-6">
-                    <Phase MovieEvent="CurrentEvent" OnPersonSwapped="HandlePersonSwapped" />
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Review Questions</h5>
+
+            @if (IsPreAwardsVotingMonth)
+            {
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="alert alert-info mb-3">
+                            <h4>📋 Pre-Awards Category Voting!</h4>
+                            <p>Next month is awards month. Help us choose which categories to vote on!</p>
                         </div>
-                        <div class="card-body">
-                            @if (DiscussionQuestions?.Any() == true)
-                            {
-                                <ol>
-                                    @foreach (var question in DiscussionQuestions)
-                                    {
-                                        <li>@question.Question</li>
-                                    }
-                                </ol>
-                            }
-                            else
-                            {
-                                <ol>
-                                    <li>Did I like the movie?</li>
-                                    <li>Am I glad I watched the movie?</li>
-                                    <li>Do I think I'd ever watch it again?</li>
-                                    <li>Would you ever recommend this movie?</li>
-                                    <li>What was my favorite part of the movie?</li>
-                                    <li>What was my least favorite part of the movie?</li>
-                                    <li>What was my favorite line of the movie?</li>
-                                </ol>
-                                <div class="mt-2">
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle"></i>
-                                        These are the default questions. You can customize them in <a href="/settings">Settings</a>.
-                                    </small>
-                                </div>
-                            }
-                        </div>
+                        <CategoryVoting CurrentDate="DateProvider.Now" />
                     </div>
                 </div>
-            </div>
+            }
         }
 
         @if (NextEvent != null)

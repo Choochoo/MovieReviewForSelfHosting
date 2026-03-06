@@ -38,7 +38,6 @@ public partial class CategoryVoting
 
     // User state
     private string? SelectedUser { get; set; }
-    private string? LockedIdentityName { get; set; }
     private bool HasVoted { get; set; }
     private Dictionary<string, int> UserCategoryRatings { get; set; } = new();
     private Dictionary<string, int> CategoryRatings { get; set; } = new();
@@ -59,6 +58,15 @@ public partial class CategoryVoting
     private List<string> UnratedCategories => VotingEvent?.GeneratedCategories
         .Where(c => !CategoryRatings.ContainsKey(c))
         .ToList() ?? new List<string>();
+    private bool HasPendingVote(string? personName)
+    {
+        if (string.IsNullOrWhiteSpace(personName))
+            return false;
+
+        return PendingVoters.Any(p => string.Equals(p.Name, personName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool CanSelectIdentity(string? personName) => !IsVotingLocked && HasPendingVote(personName);
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,21 +107,21 @@ public partial class CategoryVoting
                     IsPasswordVerified = true;
                 }
 
-                // Check for locked identity
-                string userIp = GetUserIp();
-                VoterIdentity? identity = await CategoryVotingService.GetIdentityByIpAsync(userIp);
-                if (identity != null)
-                {
-                    LockedIdentityName = identity.PersonName;
-                }
-
                 // Try to restore user from localStorage
                 SelectedUser = await GetStoredUser();
 
                 // If user is logged in, check if they've voted
                 if (!string.IsNullOrEmpty(SelectedUser))
                 {
-                    await LoadUserVoteStatus();
+                    if (CanSelectIdentity(SelectedUser))
+                    {
+                        await LoadUserVoteStatus();
+                    }
+                    else
+                    {
+                        await ClearStoredUser();
+                        SelectedUser = null;
+                    }
                 }
             }
         }
@@ -177,36 +185,33 @@ public partial class CategoryVoting
         }
     }
 
+    private async Task ClearStoredUser()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "categoryVoterName");
+        }
+        catch
+        {
+            // Handle storage errors
+        }
+    }
+
     private async Task SelectIdentity(string personName)
     {
-        string userIp = GetUserIp();
-
-        // Try to lock the identity
-        VoterIdentity? identity = await CategoryVotingService.LockIdentityAsync(userIp, personName);
-
-        if (identity == null)
+        if (!CanSelectIdentity(personName))
         {
-            // IP was already locked to a different person
-            await JS.InvokeVoidAsync("alert", $"This device is already registered to {LockedIdentityName}. Please use that identity or contact an admin.");
+            string message = IsVotingLocked
+                ? "Voting is complete and locked."
+                : $"{personName} has already finished voting and cannot be selected.";
+            await JS.InvokeVoidAsync("alert", message);
             return;
         }
 
         SelectedUser = personName;
-        LockedIdentityName = personName;
         await StoreUser(personName);
         await LoadUserVoteStatus();
         StateHasChanged();
-    }
-
-    private async Task UseLockedIdentity()
-    {
-        if (!string.IsNullOrEmpty(LockedIdentityName))
-        {
-            SelectedUser = LockedIdentityName;
-            await StoreUser(LockedIdentityName);
-            await LoadUserVoteStatus();
-            StateHasChanged();
-        }
     }
 
     private async Task LogOut()
@@ -217,14 +222,7 @@ public partial class CategoryVoting
         CategoryRatings = new Dictionary<string, int>();
         HasAttemptedSubmit = false;
 
-        try
-        {
-            await JS.InvokeVoidAsync("localStorage.removeItem", "categoryVoterName");
-        }
-        catch
-        {
-            // Handle storage errors
-        }
+        await ClearStoredUser();
 
         StateHasChanged();
     }
@@ -273,6 +271,13 @@ public partial class CategoryVoting
         if (VotingEvent == null || string.IsNullOrEmpty(SelectedUser))
             return;
 
+        if (!CanSelectIdentity(SelectedUser))
+        {
+            await JS.InvokeVoidAsync("alert", $"{SelectedUser} has already finished voting and cannot submit again.");
+            await LogOut();
+            return;
+        }
+
         HasAttemptedSubmit = true;
 
         if (UnratedCategories.Any())
@@ -316,6 +321,12 @@ public partial class CategoryVoting
                 }
 
                 await JS.InvokeVoidAsync("alert", "Your votes have been submitted successfully!");
+
+                // Lock out this identity from further selection once finished.
+                if (!string.IsNullOrEmpty(SelectedUser) && !CanSelectIdentity(SelectedUser))
+                {
+                    await LogOut();
+                }
             }
             else
             {

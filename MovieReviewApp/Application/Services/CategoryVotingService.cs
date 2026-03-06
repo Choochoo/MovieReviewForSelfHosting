@@ -281,6 +281,18 @@ public class CategoryVotingService
 
         // Validate all categories are rated with allowed point values
         int totalCategories = evt.GeneratedCategories.Count;
+
+        // Prevent re-voting once a member has submitted a complete ballot.
+        CategoryVote? existingVote = await _voteService.GetVoteByUserAsync(eventId, voterName);
+        if (existingVote != null && existingVote.CategoryRatings.Count == totalCategories)
+        {
+            _logger.LogWarning(
+                "Cannot cast vote - voter {VoterName} already completed voting for event {EventId}",
+                voterName,
+                eventId);
+            return null;
+        }
+
         if (categoryRatings.Count != totalCategories)
         {
             _logger.LogWarning(
