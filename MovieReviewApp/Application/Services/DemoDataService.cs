@@ -900,6 +900,7 @@ public class DemoDataService
             EndDate = phase.EndDate.AddDays(30),
             VotingStartDate = phase.EndDate.AddDays(7),
             VotingEndDate = phase.EndDate.AddDays(21),
+            MeetupDate = DateTime.SpecifyKind(GetLastFridayOfMonth(phase.EndDate).AddHours(19), DateTimeKind.Local),
             PhaseNumber = phase.Number
         };
         await _database.UpsertAsync(awardEvent);
@@ -1092,6 +1093,7 @@ public class DemoDataService
             EndDate = awardMonth.AddMonths(1).AddDays(-1),
             VotingStartDate = awardMonth.AddDays(7),  // Voting starts 1 week into the month
             VotingEndDate = awardMonth.AddDays(21),   // Voting ends 3 weeks into the month
+            MeetupDate = DateTime.SpecifyKind(GetLastFridayOfMonth(awardMonth).AddHours(19), DateTimeKind.Local),
             PhaseNumber = completedPhaseNumber
         };
         await _database.UpsertAsync(awardEvent);

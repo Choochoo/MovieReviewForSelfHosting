@@ -64,6 +64,14 @@ namespace MovieReviewApp.Components.Partials
         private int _totalVoters;
         private int _totalPossiblePoints;
 
+        // Meetup date editing state
+        private bool isEditingMeetup = false;
+        private bool meetupPasswordVerified = false;
+        private bool showMeetupPasswordError = false;
+        private string meetupPassword = string.Empty;
+        private DateTime? newMeetupDate;
+        private const string MEETUP_PASSWORD = "006514";
+
         private bool MeetupPassed =>
             awardEvent?.Questions.Any() == true &&
             allMovies.Any(m => m.MeetupTime.HasValue && m.MeetupTime.Value < DateTime.Now);
@@ -444,5 +452,52 @@ namespace MovieReviewApp.Components.Partials
         /// Gets the total possible points based on number of voters.
         /// </summary>
         public int totalPossiblePoints => _totalPossiblePoints;
+
+        private void ShowMeetupEdit()
+        {
+            isEditingMeetup = true;
+            meetupPasswordVerified = false;
+            showMeetupPasswordError = false;
+            meetupPassword = string.Empty;
+            newMeetupDate = awardEvent?.MeetupDate?.ToLocalTime() ?? DateTime.Now;
+            StateHasChanged();
+        }
+
+        private void CancelMeetupEdit()
+        {
+            isEditingMeetup = false;
+            meetupPasswordVerified = false;
+            showMeetupPasswordError = false;
+            meetupPassword = string.Empty;
+            StateHasChanged();
+        }
+
+        private void VerifyMeetupPassword()
+        {
+            if (meetupPassword == MEETUP_PASSWORD)
+            {
+                meetupPasswordVerified = true;
+                showMeetupPasswordError = false;
+            }
+            else
+            {
+                showMeetupPasswordError = true;
+            }
+            meetupPassword = string.Empty;
+            StateHasChanged();
+        }
+
+        private async Task SaveMeetupDate()
+        {
+            if (awardEvent == null || !newMeetupDate.HasValue)
+                return;
+
+            awardEvent.MeetupDate = DateTime.SpecifyKind(newMeetupDate.Value, DateTimeKind.Local).ToUniversalTime();
+            await AwardEventService.UpdateAsync(awardEvent);
+
+            isEditingMeetup = false;
+            meetupPasswordVerified = false;
+            StateHasChanged();
+        }
     }
 }

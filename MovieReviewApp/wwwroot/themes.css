@@ -483,14 +483,11 @@ h1, h2, h3, h4, h5, h6,
   font-family: var(--font-family-display) !important;
 }
 
-/* Theme-specific gradient animations for headings */
+/* Theme-specific gradient animations for headings - disabled for readability */
 h1, h2, h3, h4, h5, h6 {
-  background: var(--gradient-shift);
-  background-size: var(--gradient-shift-size);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: gradientShift 3s ease infinite;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
 }
 
 @keyframes gradientShift {
@@ -970,7 +967,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary) !important;
 }
 
-/* Cinema typography + glow overrides across themes */
+/* Cinema typography overrides across themes */
 :root,
 :root[data-theme] {
   --font-family-display: 'Bebas Neue', 'Arial Black', sans-serif;
@@ -985,7 +982,7 @@ h1, h2, h3, h4, h5, h6 {
 :root[data-theme] h6 {
   background: none !important;
   -webkit-text-fill-color: currentColor !important;
-  color: var(--accent-primary) !important;
-  text-shadow: 0 0 12px rgba(229, 9, 20, 0.35);
+  color: var(--text-primary) !important;
+  text-shadow: none;
   animation: none !important;
 }

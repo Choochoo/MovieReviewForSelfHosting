@@ -1,0 +1,55 @@
+@page "/present"
+@using MovieReviewApp.Application.Services
+@using MovieReviewApp.Models
+
+<PageTitle>Discussion Questions</PageTitle>
+
+@if (_isLoaded)
+{
+    <div class="presentation-mode" @onclick="AdvanceQuestion" @onkeydown="HandleKeyDown" tabindex="0" @ref="_container">
+        <div class="presentation-spotlight"></div>
+
+        <button class="presentation-close" @onclick="GoBack" @onclick:stopPropagation="true" title="Exit">
+            ✕
+        </button>
+
+        @if (_currentIndex == -1)
+        {
+            <!-- Title Card -->
+            <div class="presentation-title-card">
+                <h1>Review Questions</h1>
+                <p>Tap to begin</p>
+            </div>
+        }
+        else if (_currentIndex < _questions.Count)
+        {
+            <!-- Question Display -->
+            <div class="presentation-question-number">
+                Question @(_currentIndex + 1) of @_questions.Count
+            </div>
+            <div class="presentation-question-text" @key="_currentIndex">
+                @_questions[_currentIndex].Question
+            </div>
+        }
+        else
+        {
+            <!-- End Card -->
+            <div class="presentation-end">
+                <span class="end-icon">🎬</span>
+                <h2>That's a wrap!</h2>
+                <p>Tap to return home</p>
+            </div>
+        }
+
+        <!-- Progress Dots -->
+        <div class="presentation-progress">
+            @for (int i = 0; i < _questions.Count; i++)
+            {
+                int dotIndex = i;
+                <div class="presentation-dot @(dotIndex == _currentIndex ? "active" : dotIndex < _currentIndex ? "completed" : "")"></div>
+            }
+        </div>
+
+        <div class="presentation-nav-hint">Tap anywhere to advance</div>
+    </div>
+}

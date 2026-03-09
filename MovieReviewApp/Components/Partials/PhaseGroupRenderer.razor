@@ -1,30 +1,21 @@
 @using MovieReviewApp.Models.ViewModels
 @using MovieReviewApp.Extensions
 
-<div class="timeline-item phase-item"
-     style="background-color: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            margin-bottom: 2rem;">
+<div class="film-strip" style="margin-bottom: 2rem;">
 
     <!-- Phase Header -->
-    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
-        <i class="bi bi-calendar-event me-2"></i>
+    <h5 class="film-strip-header">
+        <i class="bi bi-film me-2"></i>
         Phase @Phase.PhaseNumber
         (@Phase.StartMonth.ToLocalDisplay().ToString("MMMM yyyy") -
          @Phase.EndMonth.ToLocalDisplay().ToString("MMMM yyyy"))
     </h5>
 
-    <!-- Individual month items -->
+    <!-- Individual month items as film frames -->
     @foreach (TimelineItem item in Phase.Items.Where(i =>
         i.State == TimelineItemState.Current || i.State == TimelineItemState.Future))
     {
-        <div class="timeline-content"
-             style="padding: 0.75rem;
-                    background-color: var(--background-secondary);
-                    border-radius: 0.5rem;
-                    margin-bottom: 0.5rem;">
+        <div class="film-strip-frame">
             <span class="date" style="color: var(--accent-secondary); font-weight: 600;">
                 @item.Month.ToLocalDisplay().ToString("MMMM yyyy")
             </span>

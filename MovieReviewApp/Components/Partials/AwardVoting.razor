@@ -2,6 +2,112 @@
 @using MovieReviewApp.Extensions
 
 <div class="row">
+    @if (awardEvent != null)
+    {
+        <!-- Meetup & Deadline Info Banner -->
+        <div class="col-12 mb-4">
+            <div class="card" style="background: linear-gradient(135deg, var(--surface-color), var(--surface-hover)); border: 2px solid var(--accent-primary); color: var(--text-primary);">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-around align-items-center gap-3 text-center">
+                        <div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;">Meetup Date</div>
+                            <div style="font-family: var(--font-family-display); font-size: 1.5rem; color: var(--accent-secondary);">
+                                @if (awardEvent.MeetupDate.HasValue)
+                                {
+                                    @awardEvent.MeetupDate.Value.ToLocalTime().ToString("dddd, MMMM d")
+                                    <div style="font-size: 1rem; color: var(--text-secondary);">
+                                        @awardEvent.MeetupDate.Value.ToLocalTime().ToString("h:mm tt")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--text-muted);">TBD</span>
+                                }
+                            </div>
+                            @if (!isEditingMeetup)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary mt-1" @onclick="ShowMeetupEdit" style="font-size: 0.75rem;">
+                                    <i class="bi bi-pencil me-1"></i>Change
+                                </button>
+                            }
+                        </div>
+                        <div style="width: 1px; height: 60px; background-color: var(--border-color);" class="d-none d-md-block"></div>
+                        <div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;">Voting Due By</div>
+                            <div style="font-family: var(--font-family-display); font-size: 1.5rem; color: var(--accent-secondary);">
+                                @if (awardEvent.MeetupDate.HasValue)
+                                {
+                                    @awardEvent.MeetupDate.Value.ToLocalTime().AddDays(-1).ToString("dddd, MMMM d")
+                                }
+                                else
+                                {
+                                    @awardEvent.VotingEndDate.ToLocalTime().ToString("dddd, MMMM d")
+                                }
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                @{
+                                    DateTime dueDate = awardEvent.MeetupDate.HasValue
+                                        ? awardEvent.MeetupDate.Value.ToLocalTime().AddDays(-1)
+                                        : awardEvent.VotingEndDate.ToLocalTime();
+                                    TimeSpan timeLeft = dueDate - DateTime.Now;
+                                }
+                                @if (timeLeft.TotalDays > 1)
+                                {
+                                    <span>@((int)timeLeft.TotalDays) days remaining</span>
+                                }
+                                else if (timeLeft.TotalHours > 0)
+                                {
+                                    <span style="color: var(--warning-color);">@((int)timeLeft.TotalHours) hours remaining</span>
+                                }
+                                else
+                                {
+                                    <span style="color: var(--error-color);">Voting closed</span>
+                                }
+                            </div>
+                        </div>
+                        <div style="width: 1px; height: 60px; background-color: var(--border-color);" class="d-none d-md-block"></div>
+                        <div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em;">Voters</div>
+                            <div style="font-family: var(--font-family-display); font-size: 1.5rem; color: var(--accent-secondary);">
+                                @(allVoters.Count - incompleteVoters.Count) / @allVoters.Count
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted);">completed</div>
+                        </div>
+                    </div>
+
+                    @if (isEditingMeetup)
+                    {
+                        <div class="mt-3 p-3 rounded" style="background-color: var(--surface-color); border: 1px solid var(--border-color);">
+                            @if (!meetupPasswordVerified)
+                            {
+                                <div class="d-flex align-items-center gap-2" style="max-width: 400px;">
+                                    <input type="password" class="form-control form-control-sm" @bind="meetupPassword" @bind:event="oninput"
+                                           placeholder="Enter password" style="margin-bottom: 0;" />
+                                    <button class="btn btn-sm btn-primary" @onclick="VerifyMeetupPassword">Unlock</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelMeetupEdit">Cancel</button>
+                                </div>
+                                @if (showMeetupPasswordError)
+                                {
+                                    <small class="text-danger mt-1 d-block">Incorrect password</small>
+                                }
+                            }
+                            else
+                            {
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <label class="form-label mb-0" style="font-size: 0.85rem;">New meetup date:</label>
+                                    <input type="datetime-local" class="form-control form-control-sm" @bind="newMeetupDate"
+                                           style="max-width: 250px; margin-bottom: 0;" />
+                                    <button class="btn btn-sm btn-success" @onclick="SaveMeetupDate">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelMeetupEdit">Cancel</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
     @if (!meetupPassed)
     {
         <!-- Voting Section -->

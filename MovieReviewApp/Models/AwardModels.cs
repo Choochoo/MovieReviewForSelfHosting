@@ -14,6 +14,7 @@ namespace MovieReviewApp.Models
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public DateTime VotingStartDate { get; set; }
         public DateTime VotingEndDate { get; set; }
+        public DateTime? MeetupDate { get; set; }
         public int PhaseNumber { get; set; }
     }
 

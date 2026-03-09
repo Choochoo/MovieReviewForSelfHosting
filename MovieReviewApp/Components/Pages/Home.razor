@@ -81,9 +81,12 @@
                         <Phase MovieEvent="CurrentEvent" OnPersonSwapped="HandlePersonSwapped" />
                     </div>
                     <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
+                        <div class="card review-questions-card">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                 <h5 class="mb-0">Review Questions</h5>
+                                <a href="/present" class="present-btn">
+                                    <span class="btn-icon">🎬</span> Present
+                                </a>
                             </div>
                             <div class="card-body">
                                 @if (DiscussionQuestions?.Any() == true)
@@ -163,7 +166,7 @@
                                         border-radius: 0.75rem;
                                         padding: 1.5rem;
                                         margin-bottom: 2rem;">
-                                <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+                                <h5 class="accent-heading" style="margin-bottom: 1rem;">
                                     <i class="bi bi-trophy-fill me-2"></i>
                                     Awards Event @award.AwardsEventNumber
                                 </h5>
@@ -217,7 +220,7 @@
                                             border-radius: 0.75rem;
                                             padding: 1.5rem;
                                             margin-bottom: 2rem;">
-                                    <h5 style="color: var(--accent-primary); margin-bottom: 1rem;">
+                                    <h5 class="accent-heading" style="margin-bottom: 1rem;">
                                         <i class="bi bi-trophy-fill me-2"></i>
                                         Awards Event @item.Award.AwardsEventNumber
                                     </h5>

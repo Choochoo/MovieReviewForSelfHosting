@@ -176,6 +176,7 @@ public class MonthlyDataGenerationService : BackgroundService
             EndDate = awardMonth.AddMonths(1).AddDays(-1),
             VotingStartDate = awardMonth.AddDays(7),
             VotingEndDate = awardMonth.AddDays(21),
+            MeetupDate = DateTime.SpecifyKind(GetLastFridayOfMonth(awardMonth).AddHours(19), DateTimeKind.Local),
             PhaseNumber = lastPhase.Number
         };
         await database.UpsertAsync(awardEvent);
