@@ -24,35 +24,25 @@ BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.CSharpLe
 ConventionPack conventionPack = new ConventionPack { new IgnoreExtraElementsConvention(true) };
 ConventionRegistry.Register("IgnoreExtraElements", conventionPack, type => true);
 
-// Determine if running under IIS or command line
-bool isIISHosted = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_HTTPAUTH"));
+// Determine startup settings from either IIS environment variables or command line args.
+string[] startupArgs = Environment.GetCommandLineArgs().Skip(1).ToArray();
+CommandLineArgs cmdArgs = CommandLineParser.Parse(startupArgs);
+string? envInstanceName = Environment.GetEnvironmentVariable("MOVIEREVIEW_INSTANCE");
+string? envPortValue = Environment.GetEnvironmentVariable("MOVIEREVIEW_PORT");
+bool hasIisHostingMarker =
+    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_IIS_HTTPAUTH")) ||
+    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_PORT")) ||
+    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_APPL_PATH"));
+bool hasHostedInstanceConfiguration =
+    !string.IsNullOrEmpty(envInstanceName) ||
+    !string.IsNullOrEmpty(envPortValue);
+bool isIISHosted = hasIisHostingMarker || hasHostedInstanceConfiguration;
 string? instanceName = null;
 int? overridePort = null;
 
-if (isIISHosted)
+if (!isIISHosted)
 {
-    // Running under IIS - get instance info from environment variables
-    // FIXED: Use MOVIEREVIEW_INSTANCE to match your InstanceManager
-    instanceName = Environment.GetEnvironmentVariable("MOVIEREVIEW_INSTANCE");
-    if (string.IsNullOrEmpty(instanceName))
-    {
-        instanceName = "Default";
-    }
-
-    // For IIS, port is handled by IIS binding, but we might want it for display
-    if (int.TryParse(Environment.GetEnvironmentVariable("MOVIEREVIEW_PORT"), out int envPort))
-    {
-        overridePort = envPort;
-    }
-
-    Console.WriteLine($"Running under IIS - Instance: {instanceName}");
-}
-else
-{
-    // Running from command line - parse command line arguments
-    CommandLineArgs cmdArgs = CommandLineParser.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
-
-    // Handle special commands
+    // Handle special commands only for direct command-line runs.
     if (cmdArgs.ShowHelp)
     {
         CommandLineParser.ShowHelp();
@@ -64,17 +54,46 @@ else
         CommandLineParser.ListInstances();
         return;
     }
+}
 
-    // Initialize instance manager with command line instance name or default to "Default"
-    instanceName = cmdArgs.InstanceName;
-    if (string.IsNullOrEmpty(instanceName))
-    {
-        instanceName = "Default";
-    }
+string startupConfigSource;
+if (!string.IsNullOrEmpty(envInstanceName) || !string.IsNullOrEmpty(envPortValue))
+{
+    startupConfigSource = "environment variables";
+}
+else if (!string.IsNullOrEmpty(cmdArgs.InstanceName) || cmdArgs.Port.HasValue)
+{
+    startupConfigSource = "command line arguments";
+}
+else
+{
+    startupConfigSource = "default values";
+}
 
+instanceName = !string.IsNullOrEmpty(envInstanceName) ? envInstanceName : cmdArgs.InstanceName;
+if (string.IsNullOrEmpty(instanceName))
+{
+    instanceName = "Default";
+}
+
+if (!string.IsNullOrEmpty(envPortValue) && int.TryParse(envPortValue, out int envPort))
+{
+    overridePort = envPort;
+}
+else
+{
     overridePort = cmdArgs.Port;
+}
+
+if (isIISHosted)
+{
+    Console.WriteLine($"Running under IIS - Instance: {instanceName}");
+}
+else
+{
     Console.WriteLine($"Running from command line - Instance: {instanceName}");
 }
+Console.WriteLine($"Startup configuration source: {startupConfigSource}");
 
 // Initialize instance manager with determined instance name
 InstanceManager instanceManager = new InstanceManager(instanceName);
@@ -94,7 +113,7 @@ if (overridePort.HasValue)
 instanceConfig.LastUsed = DateTime.UtcNow;
 instanceManager.SaveInstanceConfig(instanceConfig);
 
-WebApplicationBuilder builder = WebApplication.CreateBuilder(Environment.GetCommandLineArgs());
+WebApplicationBuilder builder = WebApplication.CreateBuilder(startupArgs);
 
 // Set the port from instance configuration (only for command line hosting)
 if (!isIISHosted)
