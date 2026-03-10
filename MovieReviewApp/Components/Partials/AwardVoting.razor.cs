@@ -35,6 +35,9 @@ namespace MovieReviewApp.Components.Partials
         [Inject]
         private IJSRuntime JS { get; set; } = default!;
 
+        [Inject]
+        private MessengerNotificationService MessengerNotification { get; set; } = default!;
+
         private string? selectedUser;
         private string tempUserName = string.Empty;
         private bool meetupPassed = false;
@@ -244,6 +247,14 @@ namespace MovieReviewApp.Components.Partials
                 votes = await AwardVoteService.GetVotesAsync(awardEvent.Id);
                 selectedMovies[questionId] = Guid.Empty;
                 await LoadUserData();
+
+                bool voterDone = remainingVotes.Count == 0 || remainingVotes.Values.All(v => v <= 0);
+                if (voterDone)
+                {
+                    bool wasLastVoter = incompleteVoters.Count == 0;
+                    _ = MessengerNotification.NotifyAwardVotingDoneAsync(selectedUser, wasLastVoter);
+                }
+
                 StateHasChanged();
             }
         }

@@ -26,6 +26,9 @@ public partial class CategoryVoting
     [Inject]
     private IJSRuntime JS { get; set; } = default!;
 
+    [Inject]
+    private MessengerNotificationService MessengerNotification { get; set; } = default!;
+
     // State
     private bool IsLoading { get; set; } = true;
     private bool IsSubmitting { get; set; } = false;
@@ -319,6 +322,8 @@ public partial class CategoryVoting
                     ShowResults = true;
                     IsPasswordVerified = true;
                 }
+
+                _ = MessengerNotification.NotifyCategoryVotingDoneAsync(SelectedUser, PendingVoters.Count == 0);
 
                 await JS.InvokeVoidAsync("alert", "Your votes have been submitted successfully!");
 

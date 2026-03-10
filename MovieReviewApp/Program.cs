@@ -258,16 +258,14 @@ builder.Services.AddHostedService<MovieReviewApp.Application.Services.CoverBackf
 builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FileProcessingService>();
 builder.Services.AddScoped<FileUploadService>();
 
-// Configure Facebook settings from secure config  
+// Configure Facebook Messenger notification settings
 builder.Services.Configure<FacebookSettings>(options =>
 {
-    string chatUrl = secretsManager.GetSecret("Facebook:ChatUrl");
-
-    if (!string.IsNullOrEmpty(chatUrl))
-    {
-        options.ChatUrl = chatUrl;
-    }
+    options.ChatUrl = "https://www.messenger.com/t/26643114841946048";
+    options.ApiBaseUrl = "http://localhost:5014";
+    options.ApiKey = "jk23h4i2h34h344lj3h4lihcnion897a9s8d7f987fasdf89sd7f9s8f";
 });
+builder.Services.AddScoped<MessengerNotificationService>();
 
 // Configure Kestrel
 builder.WebHost.ConfigureKestrel(serverOptions =>

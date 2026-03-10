@@ -171,3 +171,24 @@ jobs:
         Write-Host "View in Octopus: ${{ secrets.OCTOPUS_SERVER_URL }}" -ForegroundColor Cyan
         Write-Host ""
       shell: powershell
+
+    - name: Notify Messenger - Deploy Complete
+      if: success()
+      shell: powershell
+      run: |
+        $commitMsg = "${{ github.event.head_commit.message }}" -replace '"', '\"'
+        $body = @{
+          Url = "https://www.messenger.com/t/26643114841946048"
+          Message = "Movie Club Update - New version deployed! $commitMsg - go check it out! http://ourfilmclub.duckdns.org:5010/"
+        } | ConvertTo-Json
+
+        try {
+          Invoke-RestMethod -Uri "http://localhost:5014/api/notify" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Headers @{ "X-API-Key" = "jk23h4i2h34h344lj3h4lihcnion897a9s8d7f987fasdf89sd7f9s8f" } `
+            -Body $body
+          Write-Host "Messenger notification sent!"
+        } catch {
+          Write-Warning "Messenger notification failed: $_"
+        }

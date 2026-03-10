@@ -52,6 +52,9 @@ namespace MovieReviewApp.Components.Partials
         [Inject]
         private TmdbService TmdbService { get; set; } = default!;
 
+        [Inject]
+        private MessengerNotificationService MessengerNotification { get; set; } = default!;
+
         private bool showMarkdownPreview = false;
         private bool isLoading = false;
         private bool isSpicing = false;
@@ -383,6 +386,11 @@ namespace MovieReviewApp.Components.Partials
 
                             StateHasChanged();
 
+                            if (!string.IsNullOrEmpty(MovieEvent?.Movie))
+                            {
+                                _ = MessengerNotification.NotifyMovieAddedAsync(MovieEvent.Person);
+                            }
+
                             // Notify parent component to refresh timeline
                             await OnPersonSwapped.InvokeAsync();
 
@@ -391,6 +399,11 @@ namespace MovieReviewApp.Components.Partials
                     }
 
                     await Task.Run(() => MovieEventService.UpsertAsync(MovieEvent));
+
+                    if (!string.IsNullOrEmpty(MovieEvent.Movie))
+                    {
+                        _ = MessengerNotification.NotifyMovieAddedAsync(MovieEvent.Person);
+                    }
 
                     MovieEvent? updatedMovieEvent = await MovieEventService.GetByIdAsync(MovieEvent.Id);
                     if (updatedMovieEvent != null)

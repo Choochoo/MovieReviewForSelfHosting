@@ -32,4 +32,4 @@ public class SiteUpdateService : BaseService<SiteUpdate>
         List<SiteUpdate> updates = await GetAllAsync();
         return updates.Where(u => u.Timestamp > lastVisit).ToList();
     }
-} 
+}
