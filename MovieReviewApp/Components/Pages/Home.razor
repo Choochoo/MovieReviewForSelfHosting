@@ -81,6 +81,22 @@
                         <Phase MovieEvent="CurrentEvent" OnPersonSwapped="HandlePersonSwapped" />
                     </div>
                     <div class="col-md-6">
+                        @if (OratorRules?.Any() == true)
+                        {
+                            <div class="card review-questions-card mb-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Orator Rules</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ol>
+                                        @foreach (OratorRule rule in OratorRules)
+                                        {
+                                            <li>@rule.Text</li>
+                                        }
+                                    </ol>
+                                </div>
+                            </div>
+                        }
                         <div class="card review-questions-card">
                             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                 <h5 class="mb-0">Review Questions</h5>

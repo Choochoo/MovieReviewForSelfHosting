@@ -21,6 +21,7 @@ namespace MovieReviewApp.Application.Services
         private readonly AwardEventService _awardEventService;
         private readonly AwardQuestionService _awardQuestionService;
         private readonly DiscussionQuestionService _discussionQuestionService;
+        private readonly OratorRuleService _oratorRuleService;
         private readonly SiteUpdateService _siteUpdateService;
         private readonly AwardVoteService _awardVoteService;
         private readonly CategoryVotingService _categoryVotingService;
@@ -33,6 +34,7 @@ namespace MovieReviewApp.Application.Services
             AwardEventService awardEventService,
             AwardQuestionService awardQuestionService,
             DiscussionQuestionService discussionQuestionService,
+            OratorRuleService oratorRuleService,
             SiteUpdateService siteUpdateService,
             AwardVoteService awardVoteService,
             CategoryVotingService categoryVotingService)
@@ -44,6 +46,7 @@ namespace MovieReviewApp.Application.Services
             _awardEventService = awardEventService;
             _awardQuestionService = awardQuestionService;
             _discussionQuestionService = discussionQuestionService;
+            _oratorRuleService = oratorRuleService;
             _siteUpdateService = siteUpdateService;
             _awardVoteService = awardVoteService;
             _categoryVotingService = categoryVotingService;
@@ -66,6 +69,7 @@ namespace MovieReviewApp.Application.Services
 
             // Basic data fetching tasks using domain services
             Task<List<DiscussionQuestion>> discussionQuestionsTask = GetActiveDiscussionQuestionsAsync();
+            Task<List<OratorRule>> oratorRulesTask = _oratorRuleService.GetAllRulesAsync();
             Task<List<Person>> peopleTask = _personService.GetAllAsync();
             Task<List<Setting>> settingsTask = _settingService.GetAllAsync();
             Task<List<MovieEvent>> eventsTask = _movieEventService.GetByDateRangeAsync(rangeStart, rangeEnd);
@@ -76,6 +80,7 @@ namespace MovieReviewApp.Application.Services
 
             // Add all tasks to list
             tasks.Add(Task.Run(async () => viewModel.DiscussionQuestions = await discussionQuestionsTask));
+            tasks.Add(Task.Run(async () => viewModel.OratorRules = await oratorRulesTask));
             tasks.Add(Task.Run(async () => viewModel.AllPeople = await peopleTask));
             tasks.Add(Task.Run(async () => viewModel.Settings = await settingsTask));
             tasks.Add(Task.Run(async () => viewModel.ExistingEvents = await eventsTask));

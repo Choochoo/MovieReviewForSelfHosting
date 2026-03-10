@@ -27,6 +27,9 @@ namespace MovieReviewApp.Components.Pages
         private DiscussionQuestionService discussionQuestionsService { get; set; } = default!;
 
         [Inject]
+        private OratorRuleService oratorRuleService { get; set; } = default!;
+
+        [Inject]
         private ThemeService themeService { get; set; } = default!;
         
         [Inject]
@@ -52,6 +55,9 @@ namespace MovieReviewApp.Components.Pages
         public string SelectedGroupTheme { get; set; } = "cyberpunk";
         public bool IsDarkMode { get; set; } = false;
 
+        private List<OratorRule> OratorRules { get; set; } = new();
+        public string NewRuleText { get; set; } = "";
+
         private List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public string NewQuestionText { get; set; } = "";
         public bool NewQuestionIsActive { get; set; } = true;
@@ -64,6 +70,7 @@ namespace MovieReviewApp.Components.Pages
         private bool showGeneral = true;
         private bool showPeople = false;
         private bool showAwards = false;
+        private bool showOratorRules = false;
         private bool showQuestions = false;
         private string openAIApiKey = "";
         private string claudeApiKey = "";
@@ -128,6 +135,7 @@ namespace MovieReviewApp.Components.Pages
             await EnsurePersonOrdersAsync();
 
             DiscussionQuestions = await discussionQuestionsService.GetAllQuestionsAsync();
+            OratorRules = await oratorRuleService.GetAllRulesAsync();
 
             // Load current themes
             SelectedGroupTheme = await themeService.GetGroupThemeAsync();
@@ -357,6 +365,121 @@ namespace MovieReviewApp.Components.Pages
             }
         }
 
+        // Orator Rules Management
+        private async Task AddRule()
+        {
+            if (!demoProtection.TryValidateNotDemo("Add orator rule", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(NewRuleText)) return;
+
+            int newRuleOrder = OratorRules.Count + 1;
+            _ = await oratorRuleService.CreateAsync(new OratorRule { Text = NewRuleText, Order = newRuleOrder });
+            NewRuleText = "";
+            OratorRules = await oratorRuleService.GetAllRulesAsync();
+        }
+
+        private void EditRule(OratorRule rule)
+        {
+            rule.IsEditing = true;
+        }
+
+        private async Task CancelRuleEdit(OratorRule rule)
+        {
+            rule.IsEditing = false;
+            OratorRules = await oratorRuleService.GetAllRulesAsync();
+        }
+
+        private async Task SaveRule(OratorRule rule)
+        {
+            if (!demoProtection.TryValidateNotDemo("Save orator rule", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
+            _ = await oratorRuleService.UpdateAsync(rule);
+            rule.IsEditing = false;
+        }
+
+        private async Task DeleteRule(OratorRule rule)
+        {
+            if (!demoProtection.TryValidateNotDemo("Delete orator rule", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
+            _ = await oratorRuleService.DeleteAsync(rule.Id);
+            OratorRules = await oratorRuleService.GetAllRulesAsync();
+
+            for (int i = 0; i < OratorRules.Count; i++)
+            {
+                if (OratorRules[i].Order != i + 1)
+                {
+                    OratorRules[i].Order = i + 1;
+                    _ = await oratorRuleService.UpdateAsync(OratorRules[i]);
+                }
+            }
+        }
+
+        private async Task MoveRuleUp(OratorRule rule)
+        {
+            if (!demoProtection.TryValidateNotDemo("Reorder orator rules", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
+            if (rule.Order <= 1) return;
+
+            OratorRule? ruleAbove = OratorRules.FirstOrDefault(r => r.Order == rule.Order - 1);
+            if (ruleAbove != null)
+            {
+                ruleAbove.Order = rule.Order;
+                rule.Order = rule.Order - 1;
+
+                _ = await oratorRuleService.UpdateAsync(rule);
+                _ = await oratorRuleService.UpdateAsync(ruleAbove);
+                OratorRules = await oratorRuleService.GetAllRulesAsync();
+            }
+        }
+
+        private async Task MoveRuleDown(OratorRule rule)
+        {
+            if (!demoProtection.TryValidateNotDemo("Reorder orator rules", out string errorMessage))
+            {
+                apiMessage = errorMessage;
+                apiMessageIsError = true;
+                StateHasChanged();
+                return;
+            }
+
+            if (rule.Order >= OratorRules.Count) return;
+
+            OratorRule? ruleBelow = OratorRules.FirstOrDefault(r => r.Order == rule.Order + 1);
+            if (ruleBelow != null)
+            {
+                ruleBelow.Order = rule.Order;
+                rule.Order = rule.Order + 1;
+
+                _ = await oratorRuleService.UpdateAsync(rule);
+                _ = await oratorRuleService.UpdateAsync(ruleBelow);
+                OratorRules = await oratorRuleService.GetAllRulesAsync();
+            }
+        }
+
         // Discussion Questions Management
         private async Task AddQuestion()
         {
@@ -497,6 +620,11 @@ namespace MovieReviewApp.Components.Pages
         private void ToggleAwards()
         {
             showAwards = !showAwards;
+        }
+
+        private void ToggleOratorRules()
+        {
+            showOratorRules = !showOratorRules;
         }
 
         private void ToggleQuestions()

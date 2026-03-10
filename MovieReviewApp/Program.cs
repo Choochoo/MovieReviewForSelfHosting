@@ -221,6 +221,7 @@ builder.Services.AddScoped<MovieSessionService>();
 builder.Services.AddScoped<AudioClipService>();
 builder.Services.AddScoped<AudioFileOrganizer>();
 builder.Services.AddScoped<DiscussionQuestionService>();
+builder.Services.AddScoped<OratorRuleService>();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<InstanceTypeService>();
 builder.Services.AddScoped<ICurrentEventService, CurrentEventService>();

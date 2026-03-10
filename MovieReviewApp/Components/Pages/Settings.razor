@@ -1,5 +1,6 @@
 @page "/settings"
 @using MovieReviewApp.Components.Partials
+@using MovieReviewApp.Models
 
 <PageTitle>Settings</PageTitle>
 <h1>Settings</h1>
@@ -176,6 +177,103 @@
         @if (showAwards)
         {
             <AwardSettings />
+        }
+    </div>
+
+    <!-- Orator Rules Section -->
+    <div class="settings-section">
+        <h3 class="section-title" @onclick="ToggleOratorRules" style="cursor: pointer;">
+            <i class="bi @(showOratorRules ? "bi-chevron-down" : "bi-chevron-right")"></i>
+            Orator Rules
+        </h3>
+
+        @if (showOratorRules)
+        {
+            <div class="questions-table">
+                <table class="table table-compact">
+                    <thead>
+                        <tr>
+                            <th class="col-order">Order</th>
+                            <th class="col-question">Rule</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (OratorRules != null && OratorRules.Any())
+                        {
+                            @foreach (OratorRule rule in OratorRules)
+                            {
+                                @if (rule != null)
+                                {
+                                    <tr>
+                                        <td class="col-order">
+                                            <div class="order-controls">
+                                                <span class="order-number">@rule.Order</span>
+                                                <div class="order-buttons">
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveRuleUp(rule)"
+                                                            disabled="@(rule.Order <= 1)">
+                                                        ↑
+                                                    </button>
+                                                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                                                            @onclick="async () => await MoveRuleDown(rule)"
+                                                            disabled="@(rule.Order >= OratorRules.Count)">
+                                                        ↓
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="col-question">
+                                            @if (rule.IsEditing)
+                                            {
+                                                <input type="text" @bind="rule.Text" class="form-control form-control-sm" />
+                                            }
+                                            else
+                                            {
+                                                <span class="question-text">@rule.Text</span>
+                                            }
+                                        </td>
+                                        <td class="col-actions">
+                                            @if (rule.IsEditing)
+                                            {
+                                                <i class="bi bi-check text-success" @onclick="async () => await SaveRule(rule)" title="Save" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-x text-secondary" @onclick="async () => await CancelRuleEdit(rule)" title="Cancel" style="cursor: pointer; font-size: 1.2rem;"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-pencil text-secondary" @onclick="() => EditRule(rule)" title="Edit" style="cursor: pointer; margin-right: 0.5rem; font-size: 1.2rem;"></i>
+                                                <i class="bi bi-trash text-danger" @onclick="async () => await DeleteRule(rule)" title="Delete" style="cursor: pointer; font-size: 1.2rem;"></i>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">No orator rules added yet</td>
+                            </tr>
+                        }
+                        <tr class="add-row">
+                            <td class="col-order"></td>
+                            <td class="col-question">
+                                <input type="text" @bind="@NewRuleText" class="form-control form-control-sm" placeholder="Enter new rule" />
+                            </td>
+                            <td class="col-actions">
+                                <i class="bi bi-plus text-primary" @onclick="async () => await AddRule()" title="Add Rule" style="cursor: pointer; font-size: 1.2rem;"></i>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-2">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    These rules will be displayed on the Home page above the review questions.
+                </small>
+            </div>
         }
     </div>
 

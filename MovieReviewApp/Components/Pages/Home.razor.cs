@@ -41,6 +41,7 @@ namespace MovieReviewApp.Components.Pages
         public MovieEvent? CurrentEvent => _viewModel?.CurrentEvent;
         public MovieEvent? NextEvent => _viewModel?.NextEvent;
         public bool IsShowingPastEvent => _viewModel?.IsShowingPastEvent ?? false;
+        public List<OratorRule> OratorRules => _viewModel?.OratorRules ?? new();
         public List<DiscussionQuestion> DiscussionQuestions => _viewModel?.DiscussionQuestions ?? new();
         public bool IsCurrentPhaseAwardPhase => _viewModel?.IsCurrentPhaseAwardPhase ?? false;
         public bool IsPreAwardsVotingMonth => _viewModel?.IsPreAwardsVotingMonth ?? false;

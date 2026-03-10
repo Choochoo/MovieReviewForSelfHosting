@@ -23,6 +23,7 @@ namespace MovieReviewApp.Models.ViewModels
         public Dictionary<(Guid, Guid), List<QuestionResult>> QuestionResults { get; set; } = new();
 
         // Basic data
+        public List<OratorRule> OratorRules { get; set; } = new();
         public List<DiscussionQuestion> DiscussionQuestions { get; set; } = new();
         public List<Person> AllPeople { get; set; } = new();
         public List<Setting> Settings { get; set; } = new();
