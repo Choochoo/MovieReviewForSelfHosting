@@ -19,6 +19,8 @@ public partial class FirstRunSetup : ComponentBase
     private string gladiaKey = "";
     private string openaiKey = "";
     private string facebookChatUrl = "";
+    private string facebookApiBaseUrl = "http://localhost:5014";
+    private string facebookApiKey = "";
     private string groupName = "";
     private string contentType = "General";
 
@@ -127,8 +129,18 @@ public partial class FirstRunSetup : ComponentBase
             {
                 ["TMDB:ApiKey"] = tmdbKey.Trim(),
                 ["MongoDB:ConnectionString"] = mongoConnection.Trim(),
-                ["Facebook:ChatUrl"] = facebookChatUrl.Trim()
+                ["Facebook:ApiBaseUrl"] = facebookApiBaseUrl.Trim()
             };
+
+            if (!string.IsNullOrWhiteSpace(facebookChatUrl))
+            {
+                secrets["Facebook:ChatUrl"] = facebookChatUrl.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(facebookApiKey))
+            {
+                secrets["Facebook:ApiKey"] = facebookApiKey.Trim();
+            }
 
             // Add Gladia key only if provided
             if (!string.IsNullOrWhiteSpace(gladiaKey))

@@ -36,6 +36,7 @@
                                placeholder="Enter your TMDB API key" />
                         <small class="help-text">Used for movie information and posters. <a href="https://www.themoviedb.org/settings/api" target="_blank">Get your free key here</a></small>
                     </div>
+
                 </div>
 
                 <div class="setup-section">
@@ -108,6 +109,20 @@
                         <input type="url" id="facebookChatUrl" @bind="facebookChatUrl" class="form-control" 
                                placeholder="https://www.facebook.com/messages/t/..." />
                         <small class="help-text">Facebook Messenger chat URL for this instance's movie discussions</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="facebookApiBaseUrl">Messenger API Base URL</label>
+                        <input type="url" id="facebookApiBaseUrl" @bind="facebookApiBaseUrl" class="form-control"
+                               placeholder="http://localhost:5014" />
+                        <small class="help-text">Base URL for your local notification service. Defaults to the local machine.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="facebookApiKey">Messenger API Key</label>
+                        <input type="password" id="facebookApiKey" @bind="facebookApiKey" class="form-control"
+                               placeholder="Enter API key for your local notification service" />
+                        <small class="help-text">Stored locally outside the repo and sent as the <code>X-API-Key</code> header.</small>
                     </div>
                 </div>
 

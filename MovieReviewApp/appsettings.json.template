@@ -30,8 +30,9 @@
   
   // Facebook Integration - Configured via secure setup
   "Facebook": {
-    "AdultChatUrl": "CONFIGURED_VIA_SECURE_SETUP",
-    "KidChatUrl": "CONFIGURED_VIA_SECURE_SETUP"
+    "ChatUrl": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL",
+    "ApiBaseUrl": "http://localhost:5014",
+    "ApiKey": "CONFIGURED_VIA_SECURE_SETUP_OPTIONAL"
   },
   
   // App Settings

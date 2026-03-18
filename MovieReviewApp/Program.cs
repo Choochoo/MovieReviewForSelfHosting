@@ -259,11 +259,13 @@ builder.Services.AddScoped<MovieReviewApp.Application.Services.Processing.FilePr
 builder.Services.AddScoped<FileUploadService>();
 
 // Configure Facebook Messenger notification settings
-builder.Services.Configure<FacebookSettings>(options =>
+builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection("Facebook"));
+builder.Services.PostConfigure<FacebookSettings>(options =>
 {
-    options.ChatUrl = "https://www.messenger.com/t/26643114841946048";
-    options.ApiBaseUrl = "http://localhost:5014";
-    options.ApiKey = "jk23h4i2h34h344lj3h4lihcnion897a9s8d7f987fasdf89sd7f9s8f";
+    if (string.IsNullOrWhiteSpace(options.ApiBaseUrl))
+    {
+        options.ApiBaseUrl = "http://localhost:5014";
+    }
 });
 builder.Services.AddScoped<MessengerNotificationService>();
 

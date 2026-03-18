@@ -24,6 +24,8 @@ namespace MovieReviewApp.Infrastructure.Configuration
                 "MongoDB:ConnectionString",
                 "Gladia:ApiKey",
                 "Facebook:ChatUrl",
+                "Facebook:ApiBaseUrl",
+                "Facebook:ApiKey",
                 "App:DisplayName"
             };
 
