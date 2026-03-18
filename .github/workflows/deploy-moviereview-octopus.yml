@@ -60,7 +60,8 @@ jobs:
   deploy-via-octopus:
     if: github.event_name == 'push'  # Only deploy on push to main/master
     runs-on: self-hosted
-    name: Deploy via Octopus (All Instances)
+    environment: staging
+    name: Deploy via Octopus (Friends)
     needs: build-and-test
 
     steps:
@@ -110,21 +111,6 @@ jobs:
           --replace-existing
       shell: powershell
 
-    - name: Deploy to Demo Instance
-      run: |
-        Write-Host "Creating release for Demo instance..." -ForegroundColor Cyan
-        octo create-release `
-          --project "${{ env.OCTOPUS_PROJECT_DEMO }}" `
-          --version ${{ env.PACKAGE_VERSION }} `
-          --packageVersion ${{ env.PACKAGE_VERSION }} `
-          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
-          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
-          --space "${{ env.OCTOPUS_SPACE }}" `
-          --deployTo "Production" `
-          --progress `
-          --ignoreexisting
-      shell: powershell
-
     - name: Deploy to Friends Instance
       run: |
         Write-Host "Creating release for Friends instance..." -ForegroundColor Cyan
@@ -140,33 +126,16 @@ jobs:
           --ignoreexisting
       shell: powershell
 
-    - name: Deploy to Kids Instance
-      run: |
-        Write-Host "Creating release for Kids instance..." -ForegroundColor Cyan
-        octo create-release `
-          --project "${{ env.OCTOPUS_PROJECT_KIDS }}" `
-          --version ${{ env.PACKAGE_VERSION }} `
-          --packageVersion ${{ env.PACKAGE_VERSION }} `
-          --server ${{ secrets.OCTOPUS_SERVER_URL }} `
-          --apiKey ${{ secrets.OCTOPUS_API_KEY }} `
-          --space "${{ env.OCTOPUS_SPACE }}" `
-          --deployTo "Production" `
-          --progress `
-          --ignoreexisting
-      shell: powershell
-
     - name: Deployment Summary
       run: |
         Write-Host ""
         Write-Host "========================================" -ForegroundColor Cyan
-        Write-Host " All Instances Deployed!" -ForegroundColor Green
+        Write-Host " Friends Instance Deployed!" -ForegroundColor Green
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host ""
         Write-Host "Version: ${{ env.PACKAGE_VERSION }}" -ForegroundColor White
-        Write-Host "Instances:" -ForegroundColor White
-        Write-Host "  - Demo (port 5015): C:\inetpub\wwwroot\MovieReview_demo" -ForegroundColor Gray
+        Write-Host "Instance:" -ForegroundColor White
         Write-Host "  - Friends (port 5010): C:\inetpub\wwwroot\MovieReview_friends" -ForegroundColor Gray
-        Write-Host "  - Kids (port 5012): C:\inetpub\wwwroot\MovieReview_kids" -ForegroundColor Gray
         Write-Host ""
         Write-Host "View in Octopus: ${{ secrets.OCTOPUS_SERVER_URL }}" -ForegroundColor Cyan
         Write-Host ""
